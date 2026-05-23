@@ -1625,6 +1625,7 @@ export class Dice3D {
      * Remove a persistent die from the tabletop.
      */
     async removePersistentDie(persistentId, synchronize = true) {
+        await this._waitForThrowFinalize();
         const wasLocal = this._persistentDiceData.has(persistentId);
         await this.box.removePersistentDie(persistentId);
         if (this.box.persistentDiceList.length === 0 && !this.box.rolling) {
@@ -1641,32 +1642,32 @@ export class Dice3D {
         }
     }
 
+    //fast-forward a throw mid-replay so handlePersistentThrowCompletion fires
+    //before the dice get removed, otherwise pt.roll.toMessage never runs and
+    //the chat card is lost
+    async _waitForThrowFinalize() {
+        const box = this.box;
+        if (!box?.rolling) return;
+        const engine = box.throwEngine;
+        engine.iteration = Math.max(engine.iterationsNeeded || 0, engine.minIterations || 0) + 1;
+        await new Promise(resolve => {
+            const poll = () => {
+                if (!box.rolling) resolve();
+                else requestAnimationFrame(poll);
+            };
+            poll();
+        });
+    }
+
     /**
      * Dismiss all ephemeral (non-persistent) dice currently on the board.
-     * If a roll is still animating, the replay is fast-forwarded to its end
-     * so the natural finalization path runs - which fires result events,
-     * runs SFX init, and reveals the chat message - before the dice are cleared.
-     * Persistent dice are left untouched.
      * @returns {Promise<boolean>} true if something was dismissed, false otherwise.
      */
     async dismissEphemeralDice() {
         const box = this.box;
         if (!box) return false;
 
-        //a roll in flight needs to finalize naturally so the chat message reveal fires
-        if (box.rolling) {
-            const engine = box.throwEngine;
-            //push iteration past throwFinished's threshold - next animateThrow tick
-            //will run fireResultEvents => handleSpecialEffectsInit => callback => rolling=false
-            engine.iteration = Math.max(engine.iterationsNeeded || 0, engine.minIterations || 0) + 1;
-            await new Promise(resolve => {
-                const poll = () => {
-                    if (!box.rolling) resolve();
-                    else requestAnimationFrame(poll);
-                };
-                poll();
-            });
-        }
+        await this._waitForThrowFinalize();
 
         const engine = box.throwEngine;
         const hasEphemeral = (engine?.diceList?.length > 0) || (engine?.deadDiceList?.length > 0);
@@ -1683,6 +1684,7 @@ export class Dice3D {
      * Clear persistent dice. Pass { ownerUserId } to limit to one user.
      */
     async clearPersistentDice(opts = {}, synchronize = true) {
+        await this._waitForThrowFinalize();
         await this.box.clearPersistentDice(opts);
         if (!this.box.rolling) {
             this._afterShow();
@@ -1704,6 +1706,7 @@ export class Dice3D {
      * Remove selected persistent dice (respects ownership).
      */
     async removeSelectedPersistentDice() {
+        await this._waitForThrowFinalize();
         const removedPids = await this.box.removeSelectedPersistentDice();
         if (!this.box.rolling && this.box.persistentDiceList.length === 0) {
             this._afterShow();
