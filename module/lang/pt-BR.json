@@ -526,10 +526,11 @@
     "DICESONICE.glyphPicker.empty": "Nenhum glifo corresponde à sua pesquisa.",
     "DICESONICE.CustomDiceTermDenominationConflict": "Essa denominação já está em uso.",
     "DICESONICE.sfxFormulaPlaceholder": "ex: d20 == 1,20 or success(d6cs=3) > 2",
-    "DICESONICE.sfxFormulaErrorBadKeyword": "Palavra-chave \"{kw}\" desconhecida. Use: success, failure, discarded, rerolled, exploded",
+    "DICESONICE.sfxFormulaErrorBadKeyword": "Palavra-chave \"{kw}\" desconhecida. Use: success, failure, discarded, rerolled, exploded, count",
     "DICESONICE.TourMainContentGotoDsnSidebar": "Clique na aba lateral Dice So Nice. Este é o seu acesso rápido para gerar dados, gerenciar dados persistentes e abrir suas configurações.",
     "DICESONICE.editorBlendMode": "Modo de Mesclagem",
     "DICESONICE.glyphPicker.nativeHint": "Dica: você também pode colar qualquer emoji do seletor do seu sistema operacional - <kbd>Win</kbd>+<kbd>.</kbd> no Windows, <kbd>Ctrl</kbd>+<kbd>Cmd</kbd>+<kbd>Space</kbd> no macOS, <kbd>Super</kbd>+<kbd>.</kbd> no Linux.",
     "DICESONICE.CustomDiceTermConfigTitle": "Termos de Dados Personalizados",
-    "DICESONICE.CustomDiceTermImportInvalidFormat": "O arquivo não é um termo de exportação válido do Dice So Nice."
+    "DICESONICE.CustomDiceTermImportInvalidFormat": "O arquivo não é um termo de exportação válido do Dice So Nice.",
+    "DICESONICE.sfxFormulaErrorCountPredicate": "Fórmula count() inválida. Esperado: count(<count>d<faces>[modifier] <operator> <value>) <operator> <value>. Exemplo: count(3d20 == 20) >= 2"
 }
