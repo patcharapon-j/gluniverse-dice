@@ -16,16 +16,29 @@ export class SFXFormulaMatcher {
 	static parse(formula) {
 		if (typeof formula !== 'string' || !formula.trim()) return null;
 
-		const key = formula;
-		const cached = parseCache.get(key);
+		const normalized = SFXFormulaMatcher._normalizeWhitespace(formula);
+		const cached = parseCache.get(normalized);
 		if (cached !== undefined) return cached;
 
-		const result = SFXFormulaMatcher._doParse(formula.trim());
-		if (result) parseCache.set(key, result);
+		const result = SFXFormulaMatcher._doParse(normalized);
+		if (result) parseCache.set(normalized, result);
 		return result;
 	}
 
+	//make whitespace around formula-level comparisons optional.
+	static _normalizeWhitespace(formula) {
+		return formula
+			.replace(/==/g, ' == ')
+			.replace(/(?<!cs|cf|kh|kl|dl|dh)(>=|<=|>|<)/g, ' $1 ')
+			.replace(/\s+/g, ' ')
+			.trim();
+	}
+
 	static _doParse(formula) {
+		if (formula.startsWith('count(')) {
+			return SFXFormulaMatcher._parseCountPredicate(formula);
+		}
+
 		const tokens = formula.split(/\s+/);
 
 		if (tokens[0] === 'total') {
@@ -105,15 +118,79 @@ export class SFXFormulaMatcher {
 		return values.length > 0 ? values : null;
 	}
 
+	static _findMatchingParen(str, openIdx) {
+		let depth = 1;
+		for (let i = openIdx + 1; i < str.length; i++) {
+			if (str[i] === '(') depth++;
+			else if (str[i] === ')') {
+				depth--;
+				if (depth === 0) return i;
+			}
+		}
+		return -1;
+	}
+
+	static _parseCountPredicate(formula) {
+		const openIdx = formula.indexOf('(');
+		const closeIdx = SFXFormulaMatcher._findMatchingParen(formula, openIdx);
+		if (closeIdx === -1) return null;
+
+		const inner = formula.slice(openIdx + 1, closeIdx).trim();
+		if (!inner) return null;
+
+		const innerParsed = SFXFormulaMatcher._doParse(inner);
+		if (!innerParsed) return null;
+		//inner must be a term-scoped dice predicate: explicit count or *, with an operator
+		if (innerParsed.type !== 'dice') return null;
+		if (innerParsed.count === null) return null;
+		if (!innerParsed.operator || !innerParsed.values) return null;
+
+		const tail = formula.slice(closeIdx + 1).trim();
+		if (!tail) return null;
+
+		const tailTokens = tail.split(/\s+/);
+		if (tailTokens.length !== 2) return null;
+		if (!OPERATORS.includes(tailTokens[0])) return null;
+		const values = SFXFormulaMatcher._parseValues(tailTokens[1]);
+		if (!values) return null;
+		if (tailTokens[0] !== '==' && values.length > 1) return null;
+
+		return {
+			type: 'count_predicate',
+			inner: innerParsed,
+			operator: tailTokens[0],
+			values
+		};
+	}
+
+	static _validateCountPredicate(trimmed) {
+		const openIdx = trimmed.indexOf('(');
+		const closeIdx = SFXFormulaMatcher._findMatchingParen(trimmed, openIdx);
+		if (closeIdx !== -1) {
+			const tail = trimmed.slice(closeIdx + 1).trim();
+			if (tail) {
+				const tailTokens = tail.split(/\s+/);
+				if (tailTokens.length === 2 && !OPERATORS.includes(tailTokens[0])) {
+					return { valid: false, error: game.i18n.format("DICESONICE.sfxFormulaErrorBadOperator", { op: tailTokens[0] }) };
+				}
+			}
+		}
+		return { valid: false, error: game.i18n.localize("DICESONICE.sfxFormulaErrorCountPredicate") };
+	}
+
 	static validate(formula) {
 		if (typeof formula !== 'string' || !formula.trim()) {
 			return { valid: false, error: game.i18n.localize("DICESONICE.sfxFormulaErrorEmpty") };
 		}
 
-		const trimmed = formula.trim();
+		const trimmed = SFXFormulaMatcher._normalizeWhitespace(formula);
 		const parsed = SFXFormulaMatcher.parse(trimmed);
 
 		if (!parsed) {
+			if (trimmed.startsWith('count(')) {
+				return SFXFormulaMatcher._validateCountPredicate(trimmed);
+			}
+
 			const tokens = trimmed.split(/\s+/);
 
 			if (tokens[0] === 'total') {
@@ -131,7 +208,7 @@ export class SFXFormulaMatcher {
 			}
 
 			const kwMatch = tokens[0].match(/^!?([a-z]+)\(/);
-			if (kwMatch && !COUNT_KEYWORDS.includes(kwMatch[1])) {
+			if (kwMatch && !COUNT_KEYWORDS.includes(kwMatch[1]) && kwMatch[1] !== 'count') {
 				return { valid: false, error: game.i18n.format("DICESONICE.sfxFormulaErrorBadKeyword", { kw: kwMatch[1] }) };
 			}
 
@@ -175,6 +252,10 @@ export class SFXFormulaMatcher {
 
 		if (parsed.type === 'count') {
 			return SFXFormulaMatcher._matchCount(parsed, dice);
+		}
+
+		if (parsed.type === 'count_predicate') {
+			return SFXFormulaMatcher._matchCountPredicate(parsed, dice);
 		}
 
 		if (parsed.count === null) {
@@ -236,6 +317,46 @@ export class SFXFormulaMatcher {
 
 			return true;
 		});
+	}
+
+	static _matchCountPredicate(parsed, dice) {
+		const inner = parsed.inner;
+		const formulaType = 'd' + inner.faces;
+
+		//group by term, same as aggregate mode
+		const termGroups = new Map();
+		for (const d of dice) {
+			if (d.options?.ghost) continue;
+			if (d.termIndex == null) continue;
+			if (!termGroups.has(d.termIndex)) termGroups.set(d.termIndex, []);
+			termGroups.get(d.termIndex).push(d);
+		}
+
+		const matched = [];
+		for (const [, group] of termGroups) {
+			const rep = group[0];
+
+			if (rep.termFaces !== inner.faces) continue;
+			if (inner.count !== '*' && rep.termNumber !== inner.count) continue;
+
+			if (inner.modifier) {
+				if (!SFXFormulaMatcher._matchModifier(inner.modifier, rep.termModifiers)) continue;
+			}
+
+			//count the dice that pass the inner per-die predicate
+			const passes = group.filter(d => {
+				const result = (d.compositeType && d.compositeType === formulaType)
+					? d.compositeResult
+					: d.result;
+				return SFXFormulaMatcher._compare(result, inner.operator, inner.values);
+			});
+
+			if (!SFXFormulaMatcher._compare(passes.length, parsed.operator, parsed.values)) continue;
+
+			for (const d of passes) matched.push(d);
+		}
+
+		return matched;
 	}
 
 	static _matchAggregate(parsed, dice) {

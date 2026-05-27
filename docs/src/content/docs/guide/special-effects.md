@@ -92,6 +92,22 @@ Use `!` to negate (match dice without the flag):
 
 Without an operator, the effect triggers on each matching die. With an operator, it checks the count and triggers on all matching dice only if the condition is met.
 
+### Count of Matching Dice
+
+Use `count(...)` to fire when at least N dice in a specific term satisfy a per-die condition. Useful for "two of three d20s rolled a 20" cases that the keywords above can't express without a roll-side modifier.
+
+```
+count(3d20 == 20) >= 2
+count(3d20 == 1,20) >= 2
+count(*d20 == 20) >= 2
+count(4d6 >= 5) > 2
+count(3d20kh == 20) >= 1
+```
+
+The inner expression must include a dice count (`3d20`) or wildcard (`*d20`) and a comparison. Matching is term-scoped: `count(3d20 == 20) >= 2` only fires on a `3d20` term, not on a `2d20` or `4d20` term. Use `*d20` to match any pool size.
+
+The effect plays only on the dice that pass the inner condition. In a `3d20` roll of [20, 20, 5], only the two 20s receive the effect.
+
 ### Modifiers
 
 Formulas can include Foundry dice modifiers: `kh`, `kl`, `dh`, `dl`, `cs`, `cf`. Modifiers can include a comparison: `cs=3`, `cf<3`, `kh>=5`. DnD 5e `adv`/`dis` modifiers are recognized automatically.
@@ -112,6 +128,7 @@ Formulas can include Foundry dice modifiers: `kh`, `kl`, `dh`, `dl`, `cs`, `cf`.
 | `success(d6cs=3) > 2` | More than 2 successes |
 | `exploded(d6) >= 3` | 3+ dice exploded |
 | `d20kh == 20` | Nat 20 on a keep-highest d20 |
+| `count(3d20 == 20) >= 2` | 2+ of three d20s show a 20 |
 
 ## Effects
 
