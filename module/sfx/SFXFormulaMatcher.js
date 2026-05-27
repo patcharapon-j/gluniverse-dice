@@ -25,8 +25,7 @@ export class SFXFormulaMatcher {
 		return result;
 	}
 
-	//make whitespace around formula-level comparisons optional. modifiers (cs>=5, kh<=2, ...)
-	//stay attached to their die term because the lookbehind excludes them
+	//make whitespace around formula-level comparisons optional.
 	static _normalizeWhitespace(formula) {
 		return formula
 			.replace(/==/g, ' == ')
@@ -36,7 +35,6 @@ export class SFXFormulaMatcher {
 	}
 
 	static _doParse(formula) {
-		//count(...) has spaces inside the parens, so handle it before tokenizing
 		if (formula.startsWith('count(')) {
 			return SFXFormulaMatcher._parseCountPredicate(formula);
 		}
@@ -166,8 +164,6 @@ export class SFXFormulaMatcher {
 	}
 
 	static _validateCountPredicate(trimmed) {
-		//tail operator/value errors reuse the generic strings so they read consistently
-		//with other formula forms; structural errors share one count()-specific message
 		const openIdx = trimmed.indexOf('(');
 		const closeIdx = SFXFormulaMatcher._findMatchingParen(trimmed, openIdx);
 		if (closeIdx !== -1) {
@@ -191,7 +187,6 @@ export class SFXFormulaMatcher {
 		const parsed = SFXFormulaMatcher.parse(trimmed);
 
 		if (!parsed) {
-			//count(...) has spaces inside the parens, handle before tokenizing
 			if (trimmed.startsWith('count(')) {
 				return SFXFormulaMatcher._validateCountPredicate(trimmed);
 			}
