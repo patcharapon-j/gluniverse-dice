@@ -219,6 +219,17 @@ export class Dice3D {
     }
 
     /**
+     * Register default appearances for damage types.
+     * @param {Object} mapping - map of damage type id to default, shape
+     *   `{ <id>: { colorset?: String, preset?: String, label?: String } }`.
+     *   `colorset` is a registered colorset/theme id, `preset` a registered system id,
+     *   `label` a display name used for new ids
+     */
+    addDamageTypeDefaults(mapping) {
+        this.DiceFactory.addDamageTypeDefaults(mapping);
+    }
+
+    /**
      * Force preload of every dice preset registered under a given system id.
      * Useful for systems/modules that register internal dice presets that
      * users may never select in their appearance settings - without this,

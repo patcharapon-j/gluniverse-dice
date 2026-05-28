@@ -424,29 +424,38 @@ r.toMessage();
 // Both d6s will use the "fire" appearance
 ```
 
-### GM-Configurable Mapping
+### Developer Default Mapping
 
-The damage type to appearance mapping is configurable by the GM via the **Damage Type Mapping** button in the DsN settings menu.
+Systems and modules can ship their own default appearance for damage types, so a sensible look is applied out of the box without the GM configuring anything. A developer default sits between the built-in colorset fallback and the GM override:
 
-For programmatic access, the mapping is stored in the `dice-so-nice.damageTypeMap` world setting:
+```
+built-in fallback  <  developer default  <  GM override
+```
+
+Register defaults from the `diceSoNiceReady` hook with `dice3d.addDamageTypeDefaults`. This works both for the built-in damage types listed below and for brand-new damage type ids your system introduces.
 
 ```javascript
-// Read the current mapping
-const map = game.settings.get('dice-so-nice', 'damageTypeMap');
-
-// Structure:
-// { <damageTypeId>: {
-//     preset?: <systemId>,
-//     colorset?: <colorsetId>,
-//     label?: <displayName>
-// } }
+Hooks.once('diceSoNiceReady', (dice3d) => {
+    dice3d.addDamageTypeDefaults({
+        // override a built-in damage type with your own registered system/preset
+        fire: { preset: 'mysystem' },
+        // map a brand-new damage type your system introduces
+        sacred: { colorset: 'radiant', label: 'Sacred' }
+    });
+});
 ```
+
+Each entry accepts these optional fields:
+
+- `colorset` - a registered colorset/theme id
+- `preset` - a registered system id
+- `label` - a display name shown in the GM's Damage Type Mapping table for damage types that are not built in.
 
 ### Built-in Damage Types
 
 The following damage types have built-in colorset fallbacks: `fire`, `acid`, `cold`, `radiant`, `poison`, `thunder`, `lightning`, `air`, `water`, `earth`, `force`, `psychic`, `necrotic`, `ice`.
 
-When no GM override is configured, these fall back to their matching colorset automatically.
+When no GM override or developer default is configured, these fall back to their matching colorset automatically.
 
 ## Preloading Presets
 

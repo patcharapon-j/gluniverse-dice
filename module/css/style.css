@@ -1089,6 +1089,11 @@
     cursor: not-allowed;
 }
 
+.damage-type-config .col-actions button:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
 /* mask initiative cells while the 3D roll is still animating */
 .combatant.dsn-initiative-pending .token-initiative {
     position: relative;
