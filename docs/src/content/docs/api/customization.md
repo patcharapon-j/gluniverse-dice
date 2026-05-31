@@ -275,6 +275,8 @@ These two properties let you ship one set of label or background images and regi
 - `'tint'` flat-colorizes the image to the driving color, preserving transparency
 - `'multiply'` darkens toward the driving color (works best on opaque source images)
 
+- **textureComposite** (Optional) Canvas blend mode for the colorset's own **texture** (the whole-die texture set in `texture`), overriding the blend mode baked into that texture. This lets you reuse a built-in texture, like `skulls`, with a different blend than its default. Default: the texture's own composite. Accepts any canvas `globalCompositeOperation` value (e.g. `'multiply'`, `'soft-light'`, `'overlay'`, `'screen'`), plus `'hueshift'` (the CSS-filter variant described under "Adding a custom texture"). Note this is distinct from `backgroundComposite`, which recolors per-face background label images.
+
 **Note 1:** If you provide an array of texture ID instead of a single ID, a random texture will be used for each face of the dice.
 **Note 2:** If you omit some of these attributes, Dice So Nice! will use the player config instead. For example, omitting "material" uses each player's selected material. This lets users customize slightly even with your colorset. To lock down appearance completely, set every attribute.
 ### Examples

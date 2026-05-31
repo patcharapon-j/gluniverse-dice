@@ -2314,6 +2314,13 @@ export class DiceFactory {
 		materialData.labelComposite = colorsetData.labelComposite || 'source-over';
 		materialData.backgroundComposite = colorsetData.backgroundComposite || 'source-over';
 
+		//colorset can override its texture's blend mode. the damage-type mapping bakes the colorset into
+		//appearance (leaving appearance.colorset unset), so also read it from appearance
+		const textureComposite = colorsetData.textureComposite || appearance.textureComposite;
+		if(textureComposite && materialData.texture?.name && materialData.texture.name !== "none"){
+			materialData.texture = Object.assign({}, materialData.texture, { composite: textureComposite });
+		}
+
 		//per-face overrides from dice library
 		if(appearance.libraryDieId) {
 			let libraryDie = null;
@@ -2390,7 +2397,7 @@ export class DiceFactory {
 		}
 
 		let cacheExtra = materialData.libraryDieId ? (appearance.libraryDieOwner || "") + materialData.libraryDieId + materialData.libraryDieUpdatedAt : "";
-		materialData.cacheString = appearance.system+materialData.background+materialData.foreground+materialData.outline+materialData.texture.name+materialData.edge+materialData.material+materialData.font+materialData.isGhost+materialData.emissiveLabels+materialData.labelComposite+materialData.backgroundComposite+cacheExtra;
+		materialData.cacheString = appearance.system+materialData.background+materialData.foreground+materialData.outline+materialData.texture.name+(materialData.texture.composite||'')+materialData.edge+materialData.material+materialData.font+materialData.isGhost+materialData.emissiveLabels+materialData.labelComposite+materialData.backgroundComposite+cacheExtra;
 		return materialData;
 	}
 
