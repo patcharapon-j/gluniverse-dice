@@ -932,6 +932,18 @@ export class Dice3D {
         });
     }
 
+    _stampAppearance(roll) {
+        this._walkRollScopes(roll, (scope) => {
+            if (!scope.options?.appearance) return;
+            //post-order walk: inner scopes merge first, outer scopes win, all win over the die's own appearance
+            for (const die of scope.dice ?? []) {
+                if (!die.options) die.options = {};
+                if (!die.options.appearance) die.options.appearance = {};
+                die.options.appearance = foundry.utils.mergeObject(die.options.appearance, scope.options.appearance);
+            }
+        });
+    }
+
     /**
      * Returns a die with _number/_faces Roll dependencies that have been collapsed to their primitive values.
      * Returns the original die unchanged when no dependencies are present.
@@ -959,7 +971,10 @@ export class Dice3D {
         this._assignDependentRollOrder(rolls);
 
         //must stamp before buildRollList flattens the pool structure away
-        for (const roll of rolls ?? []) this._stampDamageType(roll);
+        for (const roll of rolls ?? []) {
+            this._stampDamageType(roll);
+            this._stampAppearance(roll);
+        }
 
         const animId = chatMessage._dice3dCurrentAnimId;
         const showMessage = () => {
@@ -1070,15 +1085,6 @@ export class Dice3D {
                             if (orderedDiceList[index] == null) {
                                 orderedDiceList[index] = [];
                             }
-                        }
-
-                        //In order to allow for custom appearance and the roll level, we merge the roll appearance in the dice term
-                        if (roll.options?.appearance) {
-                            if (!diceTerm.options)
-                                diceTerm.options = {};
-                            if (!diceTerm.options.appearance)
-                                diceTerm.options.appearance = {};
-                            diceTerm.options.appearance = foundry.utils.mergeObject(diceTerm.options.appearance, roll.options.appearance);
                         }
 
                         if (roll.data?.actorId) {
@@ -1223,25 +1229,9 @@ export class Dice3D {
             context.roll.secret = true;
         }
 
-        //If the showForRoll method was called directly from the API, we didn't get the chance to retrieve a roll appearance
-        const applyAppearance = (roll) => {
-            if (roll.rolls) { // Is PoolTerm
-                roll.rolls.forEach(applyAppearance);
-                return;
-            }
-            if (roll.options?.appearance) { // Is Roll with appearance
-                roll.dice.forEach(diceTerm => {
-                    if (!diceTerm.options)
-                        diceTerm.options = {};
-                    if (!diceTerm.options.appearance)
-                        diceTerm.options.appearance = {};
-                    diceTerm.options.appearance = foundry.utils.mergeObject(diceTerm.options.appearance, roll.options.appearance);
-                });
-            }
-        };
-        applyAppearance(context.roll);
         //direct API callers skip renderRolls, so stamp here on the original roll
         this._stampDamageType(context.roll);
+        this._stampAppearance(context.roll);
 
         if (speaker) {
             let actor = ChatMessage.getSpeakerActor(speaker);
