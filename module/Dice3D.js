@@ -219,6 +219,17 @@ export class Dice3D {
     }
 
     /**
+     * Register default appearances for damage types.
+     * @param {Object} mapping - map of damage type id to default, shape
+     *   `{ <id>: { colorset?: String, preset?: String, label?: String } }`.
+     *   `colorset` is a registered colorset/theme id, `preset` a registered system id,
+     *   `label` a display name used for new ids
+     */
+    addDamageTypeDefaults(mapping) {
+        this.DiceFactory.addDamageTypeDefaults(mapping);
+    }
+
+    /**
      * Force preload of every dice preset registered under a given system id.
      * Useful for systems/modules that register internal dice presets that
      * users may never select in their appearance settings - without this,
@@ -878,6 +889,61 @@ export class Dice3D {
         }
     }
 
+    //post-order so a parent scope never overwrites a more specific child stamp
+    _walkRollScopes(roll, cb) {
+        if (!roll) return;
+        const ParentheticalTerm = foundry.dice.terms.ParentheticalTerm;
+        const PoolTerm = foundry.dice.terms.PoolTerm;
+        const FunctionTerm = foundry.dice.terms.FunctionTerm;
+        for (const term of roll.terms ?? []) {
+            if ((term instanceof PoolTerm || term instanceof FunctionTerm) && term.rolls) {
+                for (const sub of term.rolls) this._walkRollScopes(sub, cb);
+            } else if (term instanceof ParentheticalTerm && term.roll) {
+                this._walkRollScopes(term.roll, cb);
+            }
+        }
+        cb(roll);
+    }
+
+    _stampDamageType(roll) {
+        this._walkRollScopes(roll, (scope) => {
+            const props = scope.getDSNProperties?.();
+            //stamp the marker even when the value is empty so the dice opt out of legacy detection
+            if (props && typeof props.damageType === "string") {
+                const value = foundry.utils.getProperty(scope, props.damageType);
+                for (const die of scope.dice ?? []) {
+                    if (!die.options) die.options = {};
+                    die.options.dsnDamageTypeManaged = true;
+                    if (value != null && value !== "" && die.options.dsnDamageType == null)
+                        die.options.dsnDamageType = value;
+                }
+                return;
+            }
+            //the top scope reproduces the old flat broadcast; deeper scopes win, so never overwrite a die's own value
+            if (scope.options?.type || scope.options?.flavor) {
+                for (const die of scope.dice ?? []) {
+                    if (!die.options) die.options = {};
+                    if (!die.options.type && scope.options.type)
+                        die.options.type = scope.options.type;
+                    if (!die.options.flavor && scope.options.flavor)
+                        die.options.flavor = scope.options.flavor;
+                }
+            }
+        });
+    }
+
+    _stampAppearance(roll) {
+        this._walkRollScopes(roll, (scope) => {
+            if (!scope.options?.appearance) return;
+            //post-order walk: inner scopes merge first, outer scopes win, all win over the die's own appearance
+            for (const die of scope.dice ?? []) {
+                if (!die.options) die.options = {};
+                if (!die.options.appearance) die.options.appearance = {};
+                die.options.appearance = foundry.utils.mergeObject(die.options.appearance, scope.options.appearance);
+            }
+        });
+    }
+
     /**
      * Returns a die with _number/_faces Roll dependencies that have been collapsed to their primitive values.
      * Returns the original die unchanged when no dependencies are present.
@@ -903,6 +969,12 @@ export class Dice3D {
     renderRolls(chatMessage, rolls) {
         //sequence dependent dice like (1d4)d6 so the inner roll resolves before the outer one spawns
         this._assignDependentRollOrder(rolls);
+
+        //must stamp before buildRollList flattens the pool structure away
+        for (const roll of rolls ?? []) {
+            this._stampDamageType(roll);
+            this._stampAppearance(roll);
+        }
 
         const animId = chatMessage._dice3dCurrentAnimId;
         const showMessage = () => {
@@ -1013,25 +1085,6 @@ export class Dice3D {
                             if (orderedDiceList[index] == null) {
                                 orderedDiceList[index] = [];
                             }
-                        }
-
-                        //In order to allow for custom appearance and the roll level, we merge the roll appearance in the dice term
-                        if (roll.options?.appearance) {
-                            if (!diceTerm.options)
-                                diceTerm.options = {};
-                            if (!diceTerm.options.appearance)
-                                diceTerm.options.appearance = {};
-                            diceTerm.options.appearance = foundry.utils.mergeObject(diceTerm.options.appearance, roll.options.appearance);
-                        }
-
-                        //backfill damage type from roll options so term-level detection catches it
-                        //per-term values always win over whole-roll values
-                        if (roll.options?.type || roll.options?.flavor) {
-                            if (!diceTerm.options) diceTerm.options = {};
-                            if (!diceTerm.options.type && roll.options.type)
-                                diceTerm.options.type = roll.options.type;
-                            if (!diceTerm.options.flavor && roll.options.flavor)
-                                diceTerm.options.flavor = roll.options.flavor;
                         }
 
                         if (roll.data?.actorId) {
@@ -1176,33 +1229,9 @@ export class Dice3D {
             context.roll.secret = true;
         }
 
-        //If the showForRoll method was called directly from the API, we didn't get the chance to retrieve a roll appearance
-        const applyAppearance = (roll) => {
-            if (roll.rolls) { // Is PoolTerm
-                roll.rolls.forEach(applyAppearance);
-                return;
-            }
-            if (roll.options?.appearance) { // Is Roll with appearance
-                roll.dice.forEach(diceTerm => {
-                    if (!diceTerm.options)
-                        diceTerm.options = {};
-                    if (!diceTerm.options.appearance)
-                        diceTerm.options.appearance = {};
-                    diceTerm.options.appearance = foundry.utils.mergeObject(diceTerm.options.appearance, roll.options.appearance);
-                });
-            }
-            //backfill damage type from roll options so term-level detection catches it
-            if (roll.options?.type || roll.options?.flavor) {
-                roll.dice.forEach(diceTerm => {
-                    if (!diceTerm.options) diceTerm.options = {};
-                    if (!diceTerm.options.type && roll.options.type)
-                        diceTerm.options.type = roll.options.type;
-                    if (!diceTerm.options.flavor && roll.options.flavor)
-                        diceTerm.options.flavor = roll.options.flavor;
-                });
-            }
-        };
-        applyAppearance(context.roll);
+        //direct API callers skip renderRolls, so stamp here on the original roll
+        this._stampDamageType(context.roll);
+        this._stampAppearance(context.roll);
 
         if (speaker) {
             let actor = ChatMessage.getSpeakerActor(speaker);

@@ -16,11 +16,11 @@
                 {{#each rows as |row|}}
                 <tr class="damage-type-row" data-key="{{row.key}}">
                     <td class="col-label">
-                        {{#if row.isBuiltin}}
+                        {{#if row.isCustom}}
+                            <input type="text" name="label-{{row.key}}" value="{{row.label}}" placeholder="{{localize 'DICESONICE.DamageTypeLabelPlaceholder'}}" />
+                        {{else}}
                             <span class="builtin-label">{{row.label}}</span>
                             <span class="damage-type-id">{{row.id}}</span>
-                        {{else}}
-                            <input type="text" name="label-{{row.key}}" value="{{row.label}}" placeholder="{{localize 'DICESONICE.DamageTypeLabelPlaceholder'}}" />
                         {{/if}}
                     </td>
                     <td class="col-preset">
@@ -56,8 +56,8 @@
                         </select>
                     </td>
                     <td class="col-actions">
-                        {{#if row.isBuiltin}}
-                            <button type="button" data-action="resetRow" data-key="{{row.key}}" data-tooltip="{{localize 'DICESONICE.DamageTypeReset'}}" aria-label="{{localize 'DICESONICE.DamageTypeReset'}}">
+                        {{#if row.showReset}}
+                            <button type="button" data-action="resetRow" data-key="{{row.key}}" data-tooltip="{{localize 'DICESONICE.DamageTypeReset'}}" aria-label="{{localize 'DICESONICE.DamageTypeReset'}}" {{#if row.resetDisabled}}disabled{{/if}}>
                                 <i class="fa-solid fa-rotate-left"></i>
                             </button>
                         {{else}}

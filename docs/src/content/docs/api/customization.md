@@ -275,6 +275,8 @@ These two properties let you ship one set of label or background images and regi
 - `'tint'` flat-colorizes the image to the driving color, preserving transparency
 - `'multiply'` darkens toward the driving color (works best on opaque source images)
 
+- **textureComposite** (Optional) Canvas blend mode for the colorset's own **texture** (the whole-die texture set in `texture`), overriding the blend mode baked into that texture. This lets you reuse a built-in texture, like `skulls`, with a different blend than its default. Default: the texture's own composite. Accepts any canvas `globalCompositeOperation` value (e.g. `'multiply'`, `'soft-light'`, `'overlay'`, `'screen'`), plus `'hueshift'` (the CSS-filter variant described under "Adding a custom texture"). Note this is distinct from `backgroundComposite`, which recolors per-face background label images.
+
 **Note 1:** If you provide an array of texture ID instead of a single ID, a random texture will be used for each face of the dice.
 **Note 2:** If you omit some of these attributes, Dice So Nice! will use the player config instead. For example, omitting "material" uses each player's selected material. This lets users customize slightly even with your colorset. To lock down appearance completely, set every attribute.
 ### Examples
@@ -424,29 +426,44 @@ r.toMessage();
 // Both d6s will use the "fire" appearance
 ```
 
-### GM-Configurable Mapping
+### Declaring a damage type source on a Roll class
 
-The damage type to appearance mapping is configurable by the GM via the **Damage Type Mapping** button in the DsN settings menu.
+When a system keeps the damage type on its own Roll subclass instead of on the die terms (sometimes nested in pools or grouped sub-rolls, or behind a flavor that carries extra qualifiers like PF2e's `"persistent,fire"`), the three detection paths above never see the right value. A Roll class can instead declare where DsN should read its damage type through the `getDSNProperties()` convention. Declaring it makes DsN ignore `.type` and `.flavor` for that roll's dice and trust the declared source only.
 
-For programmatic access, the mapping is stored in the `dice-so-nice.damageTypeMap` world setting:
+See [Declaring Roll properties with `getDSNProperties`](/foundryvtt-dice-so-nice/api/roll/#declaring-roll-properties-with-getdsnproperties) for the full convention. Note that it only changes which damage type id is detected; the GM mapping and developer defaults below still decide the final appearance.
+
+### Developer Default Mapping
+
+Systems and modules can ship their own default appearance for damage types, so a sensible look is applied out of the box without the GM configuring anything. A developer default sits between the built-in colorset fallback and the GM override:
+
+```
+built-in fallback  <  developer default  <  GM override
+```
+
+Register defaults from the `diceSoNiceReady` hook with `dice3d.addDamageTypeDefaults`. This works both for the built-in damage types listed below and for brand-new damage type ids your system introduces.
 
 ```javascript
-// Read the current mapping
-const map = game.settings.get('dice-so-nice', 'damageTypeMap');
-
-// Structure:
-// { <damageTypeId>: {
-//     preset?: <systemId>,
-//     colorset?: <colorsetId>,
-//     label?: <displayName>
-// } }
+Hooks.once('diceSoNiceReady', (dice3d) => {
+    dice3d.addDamageTypeDefaults({
+        // override a built-in damage type with your own registered system/preset
+        fire: { preset: 'mysystem' },
+        // map a brand-new damage type your system introduces
+        sacred: { colorset: 'radiant', label: 'Sacred' }
+    });
+});
 ```
+
+Each entry accepts these optional fields:
+
+- `colorset` - a registered colorset/theme id
+- `preset` - a registered system id
+- `label` - a display name shown in the GM's Damage Type Mapping table for damage types that are not built in.
 
 ### Built-in Damage Types
 
 The following damage types have built-in colorset fallbacks: `fire`, `acid`, `cold`, `radiant`, `poison`, `thunder`, `lightning`, `air`, `water`, `earth`, `force`, `psychic`, `necrotic`, `ice`.
 
-When no GM override is configured, these fall back to their matching colorset automatically.
+When no GM override or developer default is configured, these fall back to their matching colorset automatically.
 
 ## Preloading Presets
 

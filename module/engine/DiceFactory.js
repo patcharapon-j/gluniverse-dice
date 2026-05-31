@@ -60,6 +60,7 @@ export class DiceFactory {
 		this.baseMaterialCache = {};
 
 		this.systems = new Map();
+		this.damageTypeDefaults = new Map();
 		this.systems.set("standard", new DiceSystem("standard", game.i18n.localize("DICESONICE.System.Standard"), "default"));
 		this.systems.set("spectrum", new DiceSystem("spectrum", game.i18n.localize("DICESONICE.System.SpectrumDice"), "default", "Dice So Nice!"));
 		this.systems.set("foundry_vtt", new DiceSystem("foundry_vtt", game.i18n.localize("DICESONICE.System.FoundryVTT"), "default", "Dice So Nice!"));
@@ -590,6 +591,28 @@ export class DiceFactory {
 
 	//{id: 'standard', name: game.i18n.localize("DICESONICE.System.Standard")}
 	//Internal use, legacy
+	//See dice3d.addDamageTypeDefaults for public API
+	addDamageTypeDefaults(mapping){
+		if(!mapping || typeof mapping !== "object") return;
+		for(const [id, def] of Object.entries(mapping)){
+			const colorset = def?.colorset ?? null;
+			const preset = def?.preset ?? null;
+			const label = def?.label ?? null;
+			if(colorset && !COLORSETS[colorset])
+				console.warn(`Dice So Nice! | addDamageTypeDefaults: damage type "${id}" references unknown colorset "${colorset}"`);
+			if(preset && !this.systems.has(preset))
+				console.warn(`Dice So Nice! | addDamageTypeDefaults: damage type "${id}" references unknown preset "${preset}"`);
+			this.damageTypeDefaults.set(id, { colorset, preset, label });
+		}
+	}
+
+	getEffectiveDamageTypeDefault(id){
+		const dev = this.damageTypeDefaults.get(id);
+		if(dev)
+			return { preset: dev.preset || "standard", colorset: dev.colorset || "" };
+		return { preset: "standard", colorset: "" };
+	}
+
 	//See dice3d.addSystem for public API
 	addSystem(system, mode="default"){
 		if(system.constructor.name === 'DiceSystem'){ //note: do not use instanceof, it breaks on The Forge
@@ -2116,6 +2139,8 @@ export class DiceFactory {
 	//gate is handled in DiceNotation.js - if flavor/type made it here, the user setting allows it
 	detectDamageType(dicenotation){
 		if(!dicenotation?.options) return null;
+		if(dicenotation.options.dsnDamageTypeManaged)
+			return dicenotation.options.dsnDamageType ?? null;
 		const type = dicenotation.options.type;
 		if(type && typeof type === "string") return type;
 		const flavor = dicenotation.options.flavor;
@@ -2124,7 +2149,7 @@ export class DiceFactory {
 	}
 
 	//resolve a damage type id to a mapping entry {colorset?, preset?} or {saveName, saveOwner}
-	//checks the GM-configured damageTypeMap first, then falls back to the legacy name==colorset match
+	//order: GM override (damageTypeMap) > dev default (damageTypeDefaults) > legacy name==colorset match
 	resolveDamageTypeMapping(detectedType){
 		if(!detectedType) return null;
 		let map = {};
@@ -2138,6 +2163,8 @@ export class DiceFactory {
 			if(entry.saveName && entry.saveOwner) return { saveName: entry.saveName, saveOwner: entry.saveOwner };
 			if(entry.preset || entry.colorset) return entry;
 		}
+		const dev = this.damageTypeDefaults.get(detectedType);
+		if(dev && (dev.preset || dev.colorset)) return { preset: dev.preset ?? null, colorset: dev.colorset ?? null };
 		if(COLORSETS[detectedType]) return { colorset: detectedType, preset: null };
 		return null;
 	}
@@ -2287,6 +2314,13 @@ export class DiceFactory {
 		materialData.labelComposite = colorsetData.labelComposite || 'source-over';
 		materialData.backgroundComposite = colorsetData.backgroundComposite || 'source-over';
 
+		//colorset can override its texture's blend mode. the damage-type mapping bakes the colorset into
+		//appearance (leaving appearance.colorset unset), so also read it from appearance
+		const textureComposite = colorsetData.textureComposite || appearance.textureComposite;
+		if(textureComposite && materialData.texture?.name && materialData.texture.name !== "none"){
+			materialData.texture = Object.assign({}, materialData.texture, { composite: textureComposite });
+		}
+
 		//per-face overrides from dice library
 		if(appearance.libraryDieId) {
 			let libraryDie = null;
@@ -2363,7 +2397,7 @@ export class DiceFactory {
 		}
 
 		let cacheExtra = materialData.libraryDieId ? (appearance.libraryDieOwner || "") + materialData.libraryDieId + materialData.libraryDieUpdatedAt : "";
-		materialData.cacheString = appearance.system+materialData.background+materialData.foreground+materialData.outline+materialData.texture.name+materialData.edge+materialData.material+materialData.font+materialData.isGhost+materialData.emissiveLabels+materialData.labelComposite+materialData.backgroundComposite+cacheExtra;
+		materialData.cacheString = appearance.system+materialData.background+materialData.foreground+materialData.outline+materialData.texture.name+(materialData.texture.composite||'')+materialData.edge+materialData.material+materialData.font+materialData.isGhost+materialData.emissiveLabels+materialData.labelComposite+materialData.backgroundComposite+cacheExtra;
 		return materialData;
 	}
 

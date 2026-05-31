@@ -46,37 +46,65 @@ export class DamageTypeConfig extends HandlebarsApplicationMixin(ApplicationV2) 
         super(options);
         //working rows carry a stable row key separate from the editable damage-type id
         //this lets the user rename a custom entry's id without breaking form field names
-        //row shape: { key, id, label, preset, colorset, isBuiltin }
+        //row shape: { key, id, kind, label, preset, colorset, saveName, saveOwner, isBuiltin }
+        //kind: "builtin" | "dev" | "custom"
         this._rows = null;
         this._customCounter = 0;
     }
 
     _initRowsFromSetting() {
         const stored = game.settings.get("dice-so-nice", "damageTypeMap") ?? {};
+        const df = game.dice3d.DiceFactory;
+        const devRegistry = df.damageTypeDefaults;
         const builtinIds = Object.entries(COLORSETS)
             .filter(([, cs]) => cs.category === "DICESONICE.DamageTypes")
             .map(([key]) => key);
 
         const rows = [];
+        //builtins: show the stored GM override if present, else the effective default
         for (const id of builtinIds) {
             const entry = stored[id] || {};
+            const hasStored = !!(entry.preset || entry.colorset || entry.saveName);
+            const eff = df.getEffectiveDamageTypeDefault(id);
             rows.push({
                 key: `builtin_${id}`,
                 id,
+                kind: "builtin",
                 label: game.i18n.localize(COLORSETS[id].description),
-                preset: entry.preset || "standard",
-                colorset: entry.colorset || "",
+                preset: hasStored ? (entry.preset || "standard") : eff.preset,
+                colorset: hasStored ? (entry.colorset || "") : eff.colorset,
                 saveName: entry.saveName || "",
                 saveOwner: entry.saveOwner || "",
                 isBuiltin: true
             });
         }
+        //dev rows: brand-new ids registered by a system/module, not builtin
+        for (const [id, dev] of devRegistry) {
+            if (builtinIds.includes(id)) continue;
+            const entry = stored[id] || {};
+            const hasStored = !!(entry.preset || entry.colorset || entry.saveName);
+            const eff = df.getEffectiveDamageTypeDefault(id);
+            rows.push({
+                key: `dev_${id}`,
+                id,
+                kind: "dev",
+                label: game.i18n.localize(dev.label || id),
+                preset: hasStored ? (entry.preset || "standard") : eff.preset,
+                colorset: hasStored ? (entry.colorset || "") : eff.colorset,
+                saveName: entry.saveName || "",
+                saveOwner: entry.saveOwner || "",
+                isBuiltin: false
+            });
+        }
+
         for (const [id, entry] of Object.entries(stored)) {
             if (builtinIds.includes(id)) continue;
+            if (devRegistry.has(id)) continue;
             this._customCounter++;
             rows.push({
                 key: `custom_${this._customCounter}`,
                 id,
+                kind: "custom",
                 label: entry.label || id,
                 preset: entry.preset || "standard",
                 colorset: entry.colorset || "",
@@ -86,6 +114,13 @@ export class DamageTypeConfig extends HandlebarsApplicationMixin(ApplicationV2) 
             });
         }
         this._rows = rows;
+    }
+
+    //true when the row's live value matches its effective default
+    _rowEqualsEffectiveDefault(row) {
+        if (row.saveName) return false;
+        const eff = game.dice3d.DiceFactory.getEffectiveDamageTypeDefault(row.id);
+        return (row.preset || "standard") === eff.preset && (row.colorset || "") === eff.colorset;
     }
 
     async _prepareContext(options) {
@@ -130,6 +165,10 @@ export class DamageTypeConfig extends HandlebarsApplicationMixin(ApplicationV2) 
                 id: r.id,
                 label: r.label,
                 isBuiltin: r.isBuiltin,
+                kind: r.kind,
+                isCustom: r.kind === "custom",
+                showReset: r.kind === "builtin" || r.kind === "dev",
+                resetDisabled: this._rowEqualsEffectiveDefault(r),
                 presets: presetOptions.map(p => ({ ...p, selected: p.id === r.preset })),
                 colorsetGroups: colorsetGroupList.map(g => ({
                     group: g.group,
@@ -178,6 +217,10 @@ export class DamageTypeConfig extends HandlebarsApplicationMixin(ApplicationV2) 
             }
             this._captureForm();
             this._syncRowInterlock(row);
+
+            const r = this._rows.find(rw => rw.key === row.dataset.key);
+            const resetBtn = row.querySelector("button[data-action='resetRow']");
+            if (r && resetBtn) resetBtn.disabled = this._rowEqualsEffectiveDefault(r);
         });
     }
 
@@ -213,11 +256,11 @@ export class DamageTypeConfig extends HandlebarsApplicationMixin(ApplicationV2) 
             r.colorset = row.querySelector(`[name='colorset-${r.key}']`)?.value || "";
             r.saveName = row.querySelector(`[name='save-${r.key}']`)?.value || "";
             r.saveOwner = r.saveName ? game.user.id : "";
-            if (!r.isBuiltin) {
+
+            if (r.kind === "custom") {
                 const labelInput = row.querySelector(`[name='label-${r.key}']`);
                 if (labelInput) {
                     r.label = labelInput.value || "";
-                    //id is derived from the label - single source of truth for custom rows
                     r.id = labelInput.value.trim().toLowerCase();
                 }
             }
@@ -231,6 +274,7 @@ export class DamageTypeConfig extends HandlebarsApplicationMixin(ApplicationV2) 
         this._rows.push({
             key: `custom_${this._customCounter}`,
             id: "",
+            kind: "custom",
             label: game.i18n.localize("DICESONICE.DamageTypeNewEntry"),
             preset: "standard",
             colorset: "",
@@ -257,8 +301,10 @@ export class DamageTypeConfig extends HandlebarsApplicationMixin(ApplicationV2) 
         this._captureForm();
         const row = this._rows.find(r => r.key === key);
         if (row) {
-            row.preset = "standard";
-            row.colorset = "";
+            //reset lands on the effective default (dev default if registered, else core)
+            const eff = game.dice3d.DiceFactory.getEffectiveDamageTypeDefault(row.id);
+            row.preset = eff.preset;
+            row.colorset = eff.colorset;
             row.saveName = "";
             row.saveOwner = "";
         }
@@ -270,10 +316,9 @@ export class DamageTypeConfig extends HandlebarsApplicationMixin(ApplicationV2) 
 
         const final = {};
         for (const r of this._rows) {
-            //skip rows still at default (standard preset + no theme + no save)
-            const isDefault = (r.preset === "standard" || !r.preset) && !r.colorset && !r.saveName;
-            if (isDefault) continue;
-            if (!r.isBuiltin && !r.id) {
+            //skip rows equal to their effective default (save refs are never equal, always written)
+            if (this._rowEqualsEffectiveDefault(r)) continue;
+            if (r.kind === "custom" && !r.id) {
                 ui.notifications.warn(game.i18n.localize("DICESONICE.DamageTypeMissingId"));
                 continue;
             }
@@ -285,7 +330,8 @@ export class DamageTypeConfig extends HandlebarsApplicationMixin(ApplicationV2) 
                 if (r.preset && r.preset !== "standard") entry.preset = r.preset;
                 if (r.colorset) entry.colorset = r.colorset;
             }
-            if (!r.isBuiltin && r.label) entry.label = r.label;
+
+            if (r.kind === "custom" && r.label) entry.label = r.label;
             final[r.id] = entry;
         }
 
