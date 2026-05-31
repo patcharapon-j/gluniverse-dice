@@ -53,6 +53,42 @@ The `synchronize` parameter, when set to true, sends a socket event to start the
 
 The ChatSpeakerData schema can be [found here](https://foundryvtt.com/api/interfaces/foundry.documents.types.ChatSpeakerData.html).
 
+## Declaring Roll properties with `getDSNProperties`
+
+Systems often hold semantic information about a roll on their own `Roll` subclass rather than on the individual dice terms, sometimes nested inside pools or grouped sub-rolls. `getDSNProperties()` is a declarative hook a Roll class can implement to tell Dice So Nice! where to read those properties, so DsN never has to hardcode system-specific knowledge.
+
+Implement it as a non-static instance method that returns an object. Each key names a property Dice So Nice! understands, and each value is a property path resolved against the roll instance with `foundry.utils.getProperty`.
+
+```javascript
+class MyRoll extends Roll {
+    getDSNProperties() {
+        return {
+            damageType: "options.damageType"
+        };
+    }
+}
+```
+
+When Dice So Nice! processes a roll, it walks the roll tree before flattening it, descending into pool terms, function terms and parentheticals. At each roll scope it calls `getDSNProperties()` and resolves every declared path against that scope, then applies the result to the dice that belong to that scope. Because resolution happens per scope, a roll made of several sub-rolls (for example several damage instances of different types) resolves each property to the right dice with no extra bookkeeping on your side.
+
+There is nothing to register. Dice So Nice! discovers the method via `roll.getDSNProperties?.()` at parse time on the rolling client, where your system's classes are always loaded. A class that does not implement it is unaffected and keeps using DsN's default detection.
+
+### Supported properties
+
+| Key | Value | Description |
+|-----|-------|-------------|
+| `damageType` | path to a string | The damage type id used for [Damage Type Detection and Mapping](/foundryvtt-dice-so-nice/api/customization/#damage-type-detection-and-mapping). |
+
+Only `damageType` is read today. The return value is an object on purpose so the convention can grow: declare only the keys you support, and Dice So Nice! ignores any key it does not yet understand. Returning an unknown key now is harmless and forward-compatible.
+
+### `damageType`
+
+Resolve the path to the damage type id Dice So Nice! should use for the roll's dice (for example `"fire"`). The path is resolved at each roll scope, so a value that lives on a sub-roll lands on that sub-roll's own dice.
+
+Declaring `damageType` is an opt-out. Once a roll's class declares it, Dice So Nice! stops reading `.options.type` and `options.flavor` fields for that roll's dice entirely, even when the declared path resolves to nothing.
+
+It only decides which damage type id is detected. The GM's Damage Type Mapping and any defaults registered with `addDamageTypeDefaults` still decide the final appearance for that id. See [Damage Type Detection and Mapping](/foundryvtt-dice-so-nice/api/customization/#damage-type-detection-and-mapping) for the full resolution chain.
+
 ## Using a custom Roll system
 If the `Roll` class is not used, you can alternatively call the `game.dice3d.show` method.
 ```javascript

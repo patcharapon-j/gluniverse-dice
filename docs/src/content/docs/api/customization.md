@@ -424,6 +424,12 @@ r.toMessage();
 // Both d6s will use the "fire" appearance
 ```
 
+### Declaring a damage type source on a Roll class
+
+When a system keeps the damage type on its own Roll subclass instead of on the die terms (sometimes nested in pools or grouped sub-rolls, or behind a flavor that carries extra qualifiers like PF2e's `"persistent,fire"`), the three detection paths above never see the right value. A Roll class can instead declare where DsN should read its damage type through the `getDSNProperties()` convention. Declaring it makes DsN ignore `.type` and `.flavor` for that roll's dice and trust the declared source only.
+
+See [Declaring Roll properties with `getDSNProperties`](/foundryvtt-dice-so-nice/api/roll/#declaring-roll-properties-with-getdsnproperties) for the full convention. Note that it only changes which damage type id is detected; the GM mapping and developer defaults below still decide the final appearance.
+
 ### Developer Default Mapping
 
 Systems and modules can ship their own default appearance for damage types, so a sensible look is applied out of the box without the GM configuring anything. A developer default sits between the built-in colorset fallback and the GM override:

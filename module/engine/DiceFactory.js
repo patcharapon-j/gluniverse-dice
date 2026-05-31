@@ -2139,6 +2139,8 @@ export class DiceFactory {
 	//gate is handled in DiceNotation.js - if flavor/type made it here, the user setting allows it
 	detectDamageType(dicenotation){
 		if(!dicenotation?.options) return null;
+		if(dicenotation.options.dsnDamageTypeManaged)
+			return dicenotation.options.dsnDamageType ?? null;
 		const type = dicenotation.options.type;
 		if(type && typeof type === "string") return type;
 		const flavor = dicenotation.options.flavor;
