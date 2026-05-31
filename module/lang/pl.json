@@ -508,7 +508,7 @@
     "DICESONICE.CustomDiceTermImportConflictTitle": "Konflikt nominałów",
     "DICESONICE.CustomDiceTermImportConflictContent": "<strong>{denomination}</strong> już istnieje. Czy chcesz go zastąpić?",
     "DICESONICE.sfxModeToggle": "Przełączaj się między trybem podstawowym a zaawansowanym",
-    "DICESONICE.sfxFormulaErrorBadKeyword": "Nieznane słowo kluczowe „{kw}”. Użyj: success, failure, discarded, rerolled, exploded",
+    "DICESONICE.sfxFormulaErrorBadKeyword": "Nieznane słowo kluczowe „{kw}”. Użyj: success, failure, discarded, rerolled, exploded, count",
     "DICESONICE.sfxFormulaErrorBadStart": "Formuła musi zaczynać się od określenia kości (np. d20), słowa „total” lub słowa kluczowego (np. success(d6cs=3))",
     "DICESONICE.CustomDiceTermDenomination": "Nominał",
     "DICESONICE.CustomDiceTermNone": "Nie zdefiniowano jeszcze żadnych warunków dotyczących niestandardowych kości.",
@@ -531,5 +531,6 @@
     "DICESONICE.ColorRoyalVelvet": "Królewski aksamit",
     "DICESONICE.MaterialResin": "Żywica",
     "DICESONICE.MaterialFrosted": "Matowe",
-    "DICESONICE.MaterialVelvet": "Aksamit"
+    "DICESONICE.MaterialVelvet": "Aksamit",
+    "DICESONICE.sfxFormulaErrorCountPredicate": "Niespójna formuła count(). Oczekiwana: count(<count>d<faces>[modifier] <operator> <value>) <operator> <value>. Przykład: count(3d20 == 20) >= 2"
 }
