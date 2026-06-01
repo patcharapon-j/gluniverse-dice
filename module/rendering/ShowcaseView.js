@@ -108,6 +108,7 @@ export class ShowcaseView {
 				sceneObject.castShadow = this.dicefactory.shadows;
 
 				sceneObject.userData = selectordice[count];
+				dicemesh.userData = selectordice[count];
 
 				this.diceList.push(sceneObject);
 				this.diceScene.scene.add(sceneObject);
