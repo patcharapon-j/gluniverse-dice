@@ -309,7 +309,7 @@ Hooks.once('init', () => {
     //register sidebar tab unless GM disabled it
     if (!game.settings.get("dice-so-nice", "hideSidebarTab")) {
         CONFIG.ui["dice-so-nice"] = DsnSidebarTab;
-        const sidebarClass = foundry.applications.sidebar.Sidebar;
+        const sidebarClass = CONFIG.ui.sidebar;
         if (sidebarClass?.TABS) {
             const dsnTab = { icon: "fa-solid fa-dice-d20", tooltip: "DICESONICE.sidebarTabTitle" };
             const settingsTab = sidebarClass.TABS.settings;

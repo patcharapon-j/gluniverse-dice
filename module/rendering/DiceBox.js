@@ -544,6 +544,7 @@ export class DiceBox {
 		if (this.inputHandler) this.inputHandler.clearPendingThrowDice();
 		await this.throwEngine.startUnifiedBatch(throws, persistentThrowData, callback);
 		this._preparingThrow = false;
+		this.isVisible = true;
 		this.last_time = 0;
 		Utils.removeTicker(this.animateThrow);
 		canvas.app.ticker.add(this.animateThrow, this);

@@ -393,6 +393,8 @@ export class Dice3D {
         };
 
         this.hiddenAnimationQueue = [];
+        //dev escape hatch: set game.dice3d.disableAutoRebuild = true to stop the resize handler from rebuilding the box.
+        this.disableAutoRebuild = false;
         this._messageUpdateHideSelector = ".dice-roll";
         this.defaultShowExtraDice = Dice3D.DEFAULT_OPTIONS.showExtraDice;
 
@@ -575,6 +577,7 @@ export class Dice3D {
         this._timeout = false;
 
         const resizeHandler = () => {
+            if (this.disableAutoRebuild) return;
             //resize ended probably, lets update the canvas once the current animation is complete
             this._currentAnimation.then(() => this.resizeAndRebuild());
         }
