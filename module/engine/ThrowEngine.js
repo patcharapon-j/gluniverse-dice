@@ -388,17 +388,21 @@ export class ThrowEngine {
 				if (this.onClearAll) await this.onClearAll();
 			}
 
-			this.minIterations = (throws.length - 1) * this.nbIterationsBetweenRolls;
-
 			const workerSpecs = [];
-			for (let j = 0; j < throws.length; j++) {
+			let spawned = 0;
+			let lastGroup = 0;
+			for (let j = 0; j < throws.length && spawned < maxDiceNumber; j++) {
 				let notationVectors = throws[j];
-				for (let i = 0, len = notationVectors.dice.length; i < len; ++i) {
+				for (let i = 0, len = notationVectors.dice.length; i < len && spawned < maxDiceNumber; ++i) {
 					notationVectors.dice[i].startAtIteration = j * this.nbIterationsBetweenRolls;
 					let appearance = this.dicefactory.getAppearanceForDice(notationVectors.dsnConfig.appearance, notationVectors.dice[i].type, notationVectors.dice[i]);
 					await this.spawnDiceMesh(notationVectors.dice[i], appearance, notationVectors.dsnConfig.diceLibrary, workerSpecs);
+					spawned++;
+					lastGroup = j;
 				}
 			}
+			//base the stagger floor on groups that actually spawned, so dropped tail groups don't reserve dead iterations
+			this.minIterations = lastGroup * this.nbIterationsBetweenRolls;
 			if (workerSpecs.length > 0) {
 				await this.physicsWorker.exec('createDiceBatch', workerSpecs);
 			}
