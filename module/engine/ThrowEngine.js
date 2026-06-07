@@ -603,14 +603,16 @@ export class ThrowEngine {
 	//Check if there's an animated dice to reduce render loop complexity if there's none
 	async checkForAnimatedDice() {
 		let animatedDiceDetected = false;
-		for (let i = 0, len = this.diceList.length; i < len; ++i) {
-			let dicemesh = this.diceList[i];
-			if (!dicemesh) continue;
-			dicemesh.traverse(obj => {
-				if(obj.mixer || obj.material?.mixer){
-					animatedDiceDetected = true;
-				}
-			});
+		for (const list of [this.diceList, this.persistentDiceList]) {
+			for (let i = 0, len = list.length; i < len; ++i) {
+				let dicemesh = list[i];
+				if (!dicemesh) continue;
+				dicemesh.traverse(obj => {
+					if(obj.mixer || obj.material?.mixer){
+						animatedDiceDetected = true;
+					}
+				});
+			}
 		}
 
 		return animatedDiceDetected;

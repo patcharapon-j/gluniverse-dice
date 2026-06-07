@@ -1,3 +1,4 @@
+import { Group } from 'three';
 import { ShaderUtils } from './ShaderUtils';
 import { AssetsLoader } from '../AssetsLoader.js';
 
@@ -319,12 +320,20 @@ export class DicePreset {
 							Hooks.callAll("diceSoNiceOnMaterialReady", node.material, null);
 						}
 					});
-					//cannon-es Cylinder axis is Y; d2 model geometry has flat faces along Z
+					//cannon-es Cylinder axis is Y; d2 models author flat faces along Z
 					if (this.shape === 'd2') {
-						gltf.scene.traverse(node => {
-							if (node.isMesh && node.geometry)
-								node.geometry.rotateX(Math.PI / 2);
-						});
+						const root = gltf.scene.children[0];
+						if (root.children.length) {
+							const orientationGroup = new Group();
+							orientationGroup.rotation.x = Math.PI / 2;
+							while (root.children.length)
+								orientationGroup.add(root.children[0]);
+							root.add(orientationGroup);
+						}
+						//single-mesh export with geometry on the root node: no child to wrap,
+						//so the vertex rotation is the right orientation for it
+						if (root.isMesh && root.geometry)
+							root.geometry.rotateX(Math.PI / 2);
 					}
 
 					this.model = gltf;
