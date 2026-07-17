@@ -15,6 +15,12 @@
             <option value="none" {{#if visibilityNone}}selected{{/if}}>{{localize "DICESONICE.visibilityNone"}}</option>
         </select>
     </div>
+    {{#if persistentDiceEnabled}}
+    <label class="dsn-toolbox-protect-row" title="{{localize "DICESONICE.protectPersistentHint"}}">
+        <input type="checkbox" data-action="setProtectPersistent" {{#if protectPersistent}}checked{{/if}}>
+        <span>{{localize "DICESONICE.protectPersistent"}}</span>
+    </label>
+    {{/if}}
 </section>
 
 {{#if persistentDiceEnabled}}

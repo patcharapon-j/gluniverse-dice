@@ -147,6 +147,8 @@
     "DICESONICE.visibilityAll": "Show all players' dice",
     "DICESONICE.visibilityMine": "Show only mine",
     "DICESONICE.visibilityNone": "Hide all",
+    "DICESONICE.protectPersistent": "Protect my persistent dice",
+    "DICESONICE.protectPersistentHint": "Prevent other players from grabbing or throwing your persistent dice. The GM can always grab them.",
     "DICESONICE.sidebarTabSavesTitle": "Saved Profiles",
     "DICESONICE.sidebarTabLoadSave": "Load",
     "DICESONICE.sidebarTabPersistentDiceTitle": "Persistent Dice",

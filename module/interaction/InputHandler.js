@@ -139,8 +139,9 @@ export class InputHandler {
 					}
 					if (this.onSelectionChanged) this.onSelectionChanged();
 				}
-				let heldDice = this.persistentDiceManager.getSelectedPersistentDice();
-				if (heldDice.length === 0 && pending.root) {
+				let heldDice = this.persistentDiceManager.getSelectedPersistentDice()
+					.filter(d => !this._isPersistentGrabBlocked(d));
+				if (heldDice.length === 0 && pending.root && !this._isPersistentGrabBlocked(pending.root)) {
 					//defensive fallback
 					heldDice = [pending.root];
 				}
@@ -253,6 +254,15 @@ export class InputHandler {
 		}
 	}
 
+	_isPersistentGrabBlocked(root) {
+		if (root.userData?.pendingReplay) return true;
+		if (root.userData?.lockedBy && root.userData.lockedBy !== game.user?.id) return true;
+		const ownerUserId = root.userData?.ownerUserId;
+		if (!ownerUserId || ownerUserId === game.user?.id || game.user?.isGM) return false;
+		const settings = game.users.get(ownerUserId)?.getFlag("dice-so-nice", "settings");
+		return !!settings?.protectPersistent;
+	}
+
 	async onMouseDown(event, ndc) {
 		this.mouse.pos.x = ndc.x;
 		this.mouse.pos.y = ndc.y;
@@ -275,8 +285,7 @@ export class InputHandler {
 
 			//Ctrl+click: arm tentative grab, toggle on release unless promoted to drag
 			if (isPersistent && multiSelectKey) {
-				if (root.userData?.pendingReplay ||
-					(root.userData?.lockedBy && root.userData.lockedBy !== game.user?.id)) return false;
+				if (this._isPersistentGrabBlocked(root)) return false;
 				event.stopPropagation();
 				event.preventDefault();
 				this.mouse.pendingGrab = {
@@ -299,8 +308,7 @@ export class InputHandler {
 
 			try {
 				if (isPersistent) {
-					if (root.userData?.pendingReplay ||
-						(root.userData?.lockedBy && root.userData.lockedBy !== game.user?.id)) {
+					if (this._isPersistentGrabBlocked(root)) {
 						this.mouse.constraintDown = false;
 						if (canvas.mouseInteractionManager)
 							canvas.mouseInteractionManager.activate();
@@ -309,7 +317,9 @@ export class InputHandler {
 					//if in selection, grab all selected; otherwise clear and grab just this one
 					let heldDice;
 					if (this.persistentDiceManager.selectedPersistentDiceIds.has(root.id)) {
-						heldDice = this.persistentDiceManager.getSelectedPersistentDice();
+						//a selection can hold dice whose owner protected them after they were selected
+						heldDice = this.persistentDiceManager.getSelectedPersistentDice()
+							.filter(d => !this._isPersistentGrabBlocked(d));
 					} else {
 						this.persistentDiceManager.clearPersistentSelection();
 						//grab the whole link group (d100 pair)

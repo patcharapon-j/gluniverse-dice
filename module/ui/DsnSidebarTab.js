@@ -115,6 +115,7 @@ export class DsnSidebarTab extends HandlebarsApplicationMixin(AbstractSidebarTab
             visibilityAll: visibility === "all",
             visibilityMine: visibility === "mine",
             visibilityNone: visibility === "none",
+            protectPersistent: box ? !!Dice3D.CONFIG().protectPersistent : false,
             saves: {
                 hasSaves: saveNames.length > 0,
                 list: saveNames
@@ -128,6 +129,13 @@ export class DsnSidebarTab extends HandlebarsApplicationMixin(AbstractSidebarTab
         if (select) {
             select.addEventListener("change", (ev) => {
                 game.dice3d?.setVisibility(ev.currentTarget.value);
+            });
+        }
+
+        const protect = this.element.querySelector("[data-action=setProtectPersistent]");
+        if (protect) {
+            protect.addEventListener("change", (ev) => {
+                game.dice3d?.setProtectPersistent(ev.currentTarget.checked);
             });
         }
 
