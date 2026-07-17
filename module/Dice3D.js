@@ -1654,8 +1654,6 @@ export class Dice3D {
         this.box?.applyVisibility(mode);
     }
 
-    //per-user pref: block other players from grabbing my persistent dice
-    //user flags replicate natively so other clients read the new value at grab time
     async setProtectPersistent(enabled) {
         const settings = game.user.getFlag("dice-so-nice", "settings") || {};
         await game.user.setFlag("dice-so-nice", "settings", { ...settings, protectPersistent: !!enabled });
