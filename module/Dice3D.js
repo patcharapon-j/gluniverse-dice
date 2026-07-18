@@ -58,6 +58,7 @@ export class Dice3D {
         }
         return {
             visibility: "all",
+            protectPersistent: false,
             showExtraDice: game.dice3d && game.dice3d.hasOwnProperty("defaultShowExtraDice") ? game.dice3d.defaultShowExtraDice : false,
             hideAfterRoll: true,
             timeBeforeHide: 2000,
@@ -1651,6 +1652,11 @@ export class Dice3D {
         }
 
         this.box?.applyVisibility(mode);
+    }
+
+    async setProtectPersistent(enabled) {
+        const settings = game.user.getFlag("dice-so-nice", "settings") || {};
+        await game.user.setFlag("dice-so-nice", "settings", { ...settings, protectPersistent: !!enabled });
     }
 
     /**
