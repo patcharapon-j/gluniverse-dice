@@ -532,5 +532,7 @@
     "DICESONICE.MaterialResin": "Żywica",
     "DICESONICE.MaterialFrosted": "Matowe",
     "DICESONICE.MaterialVelvet": "Aksamit",
-    "DICESONICE.sfxFormulaErrorCountPredicate": "Niespójna formuła count(). Oczekiwana: count(<count>d<faces>[modifier] <operator> <value>) <operator> <value>. Przykład: count(3d20 == 20) >= 2"
+    "DICESONICE.sfxFormulaErrorCountPredicate": "Niespójna formuła count(). Oczekiwana: count(<count>d<faces>[modifier] <operator> <value>) <operator> <value>. Przykład: count(3d20 == 20) >= 2",
+    "DICESONICE.protectPersistent": "Zabezpiecz moje trwałe kości",
+    "DICESONICE.protectPersistentHint": "Nie pozwól innym graczom chwytać ani rzucać twoimi stałymi kośćmi. MG zawsze może je chwycić."
 }
