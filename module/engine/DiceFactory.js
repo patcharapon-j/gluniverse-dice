@@ -2203,7 +2203,7 @@ export class DiceFactory {
 
 	//walk the term-level options looking for a damage type signal
 	//roll-level options are merged down into dice terms by Dice3D before we get here
-	//gate is handled in DiceNotation.js - if flavor/type made it here, the user setting allows it
+	//gate is handled in DiceNotation.js - if flavor/type/dsnDamageType made it here, the user setting allows it
 	detectDamageType(dicenotation){
 		if(!dicenotation?.options) return null;
 		if(dicenotation.options.dsnDamageTypeManaged)

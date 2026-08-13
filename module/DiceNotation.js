@@ -169,6 +169,10 @@ export class DiceNotation {
 			if(dsnDie.options.type) delete dsnDie.options.type;
 		}
 
+		//the managed damage type bypasses flavor/type so we remove it here if needed
+		if(this.userConfig && !this.userConfig.enableFlavorColorset)
+			delete dsnDie.options.dsnDamageType;
+
 		dsnDie.termIndex = termIndex;
 		dsnDie.termNumber = fvttDie.number ?? null;
 		dsnDie.termTotal = fvttDie.total ?? null;
