@@ -72,3 +72,29 @@ dice3d.addDicePreset({
     system: 'my_system'
 });
 ```
+
+## Models with a non-standard physical shape
+
+Everything above assumes your model has the same silhouette as the standard die of its type: the preset inherits the standard collision shape, so a model that deviates from it (say a rhombic dodecahedron d12) would clip through the floor, bounce off invisible edges, and land reading the wrong face.
+
+For those models, register a custom physics shape with [`addDiceShape`](/foundryvtt-dice-so-nice/api/customization/#adding-a-custom-physics-shape) and pass its name as the `shape` argument of `addDicePreset`:
+
+```javascript
+dice3d.addDiceShape({
+    name: 'my_module.my_custom_shape',
+    /* ... full shape bundle ... */
+});
+
+dice3d.addDicePreset({
+    type: 'd12',
+    modelFile: 'modules/my_module/my_custom_shape.glb',
+    system: 'my_system'
+}, 'my_module.my_custom_shape');
+```
+
+The workflow changes in one important way: there is **no 'Dice So Nice!' template to align to**. Instead, your model must be aligned to the collider you registered:
+- model faces must sit exactly on the collider faces (same orientation, same face order as `faceValues`)
+- the collider vertices are used as authored and only scaled uniformly, so author your model and your `vertices` in the same coordinate space
+- the scale reference stays the same as standard dice
+
+Keep in mind the [supported envelope](/foundryvtt-dice-so-nice/api/customization/#what-is-supported): top-read convex polyhedra only, and every rotation in the table must be a rotational symmetry of the solid.

@@ -79,7 +79,9 @@ Note: the texture files size have to be **256*256 pixels**
  * Register a new dice preset
  * @param {Object} data: The informations on the new dice preset (see below)
  * @param {String} (Optional) shape: should be explicit when using a custom die term.
- *        Supported shapes are d2,d4,d6,d8,d10,d12,d14,d16,d20,d24,d30
+ *        Supported shapes are d2,d4,d6,d8,d10,d12,d14,d16,d20,d24,d30,
+ *        or the name of a custom physics shape registered with addDiceShape
+ *        (requires a modelFile, see "Adding a custom physics shape" below)
  */
 dice3d.addDicePreset(data, (shape = null));
 ```
@@ -197,6 +199,56 @@ This only works with Foundry VTT v14+ which bundles Font Awesome 7 Pro. For olde
 
 
 [Check the demo pages for more examples](/foundryvtt-dice-so-nice/api/demos/)
+
+## Adding a custom physics shape
+
+By default, a DicePreset with a custom 3D model inherits the collision shape of its die type: a rhombic dodecahedron model would still tumble and land like the standard d12. `addDiceShape` registers a named collision shape, and a preset with a custom 3D model can reference it through the `shape` argument of `addDicePreset`. The die then rolls on its own collider, lands flush on its own faces, and reads results from them.
+
+```javascript
+/**
+ * Register a custom physics shape
+ * @param {Object} bundle: the fully explicit shape bundle (see below)
+ * @returns {Boolean} true if the shape was registered, false if it was rejected
+ */
+dice3d.addDiceShape(bundle);
+```
+
+The `bundle` parameter has the following attributes:
+- **name** is the unique shape name. Prefix it with your module or system id (e.g. `mymodule.my_custom_shape`) to avoid collisions
+- **type** must be `"ConvexPolyhedron"` for now
+- **vertices** is an array of `[x, y, z]` vertex coordinates
+- **faces** is an array of faces, each an array of vertex indices wound **counter-clockwise seen from outside** (face normals must point outward)
+- (Optional) **skipLastFaceIndex** set to true if each face entry carries a trailing face id that should be ignored (usually false, exist because of DsN historic)
+- **faceValues** is the value shown by each face, in face order, read from the **top** face when the die lands. Do not use `0` (it means a non-scoring face) and do not duplicate values
+- **rotationCombinations** is the rotation table: for every pair of face values, the Euler angles `[x, y, z]` (in degrees) that rotate one face onto the other, keyed `"low,high"`. Every pair of distinct face values must be covered
+- (Optional) **mass**, **inertia**, **scaleModifier** override the physics values inherited from the die type
+
+```javascript
+dice3d.addDiceShape({
+    name: "mymodule.my_custom_shape",
+    type: "ConvexPolyhedron",
+    vertices: [[x, y, z], /* ... */],
+    faces: [[i0, i1, i2, i3, faceId], /* ... */],
+    skipLastFaceIndex: false,
+    faceValues: [7, 5, 3, 11, 12, 9, 4, 1, 2, 10, 8, 6],
+    rotationCombinations: { "1,2": [x, y, z], /* ... every value pair */ }
+});
+
+dice3d.addDicePreset({
+    type: "d12",
+    modelFile: "modules/mymodule/my_custom_shape.glb",
+    system: "mymodule"
+}, "mymodule.my_custom_shape");
+```
+
+### What is supported
+
+- Custom shapes are for presets with a **custom 3D model** only: the preset must have a `modelFile`, and the shape's `faceValues` must cover every value the die type can produce
+- Only **top-read convex polyhedra** are supported.
+- **Every rotation in `rotationCombinations` must be a rotational symmetry of the polyhedron.** Dice So Nice applies a single quaternion to the visual mesh to force the rolled result: if a rotation is not a symmetry of the collider, the mesh will visibly clips or floats.
+
+See also [models with a non-standard physical shape](/foundryvtt-dice-so-nice/api/3d-models/#models-with-a-non-standard-physical-shape).
+
 ## Adding a custom texture
 A background texture is displayed on every face of a die on top of the dice color.
 You can use any blending mode supported by HTMLCanvas2D.

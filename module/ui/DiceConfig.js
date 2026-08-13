@@ -1618,7 +1618,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         delete formData.appearance;
         let settings = foundry.utils.mergeObject(Dice3D.CONFIG(), formData, { insertKeys: false, insertValues: false, applyOperators: true });
 
-        // preserve settings that have no field in this form
+        //preserve settings that have no field in this form
         settings.rollingArea = currentSettings.rollingArea;
         settings.protectPersistent = currentSettings.protectPersistent;
 

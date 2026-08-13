@@ -8,7 +8,7 @@ import {
 import { DiceScene } from '../engine/DiceScene.js';
 import { LEGACY_TO_METERS } from '../engine/SceneConstants.js';
 import { Dice3D } from '../Dice3D.js';
-import { DICE_SHAPE } from '../engine/DiceModels.js';
+import { DiceShapeLibrary } from '../engine/DiceShapeLibrary.js';
 import { Utils } from '../Utils.js';
 
 //wraps a DiceScene with manual mesh rotation + face raycasting
@@ -127,7 +127,7 @@ export class DiceEditorPreview {
         });
     }
 
-    //compare hit triangle normal against known face normals from DICE_SHAPE
+    //compare hit triangle normal against known face normals from the shape library
     _hitToFaceValue(hit) {
         if (!this._faceNormals) return null;
 
@@ -149,7 +149,7 @@ export class DiceEditorPreview {
     _buildFaceNormals(diceobj) {
         this._faceNormals = null;
         this._shapeToTypeValue = {};
-        const shapeData = DICE_SHAPE[diceobj.shape];
+        const shapeData = DiceShapeLibrary.get(diceobj.shape);
         if (!shapeData) return;
 
         this._faceNormals = [];

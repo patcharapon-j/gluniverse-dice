@@ -392,6 +392,9 @@ const setupDiceSoNice = () => {
             else
                 logger.warn("Dice So Nice! is disabled because the user has activated the 'No-Canvas' mode");
         }
+    }).catch((err) => {
+        logger.error("Dice So Nice! settings migration failed", err);
+        ui.notifications.error(game.i18n.localize("DICESONICE.migrateMessageError"));
     });
 };
 

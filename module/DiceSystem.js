@@ -357,15 +357,15 @@ export class DiceSystem {
     }
 
     /**
-     * Retrieves a dice object from the dice array based on the given shape and values.
+     * Retrieves a dice object from the dice array compatible with the given value domain.
      *
-     * @param {string} shape - The shape of the dice.
+     * @param {string} shape - The shape of the dice (unused, kept for compatibility).
      * @param {Array} values - The values of the dice.
      * @return {Object|null} The dice object if found, or null if not found.
      */
     getDiceByShapeAndValues(shape, values) {
         for (let dice of this.dice.values()) {
-            if (dice.shape == shape && dice.values.length == values.length) {
+            if (dice.values.length == values.length && dice.values.every((v, i) => v == values[i])) {
                 return dice;
             }
         }

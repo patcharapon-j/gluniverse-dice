@@ -220,6 +220,29 @@ export class Dice3D {
     }
 
     /**
+     * Register a custom physics shape under a name. Presets with a custom 3D model
+     * can then reference it through the `shape` argument of `addDicePreset`, so the
+     * die tumbles, lands, and reads on its own collision geometry instead of the
+     * standard shape of its die type.
+     *
+     * @param {Object} bundle - the shape bundle
+     * @param {String} bundle.name - unique shape name (prefix with your module id, e.g. "mymodule.rhombic_d12")
+     * @param {String} bundle.type - collider type, only "ConvexPolyhedron" is supported for now
+     * @param {Array<Array<Number>>} bundle.vertices - [x, y, z] per vertex, as-authored coordinates
+     * @param {Array<Array<Number>>} bundle.faces - vertex indices per face, counter-clockwise from outside
+     * @param {Boolean} [bundle.skipLastFaceIndex] - true if each face entry carries a trailing face id to ignore
+     * @param {Array<Number>} bundle.faceValues - value shown by each face (top read), no 0
+     * @param {Object} bundle.rotationCombinations - Euler degrees [x, y, z] keyed "low,high" for every pair of face values
+     * @param {Number} [bundle.mass] - overrides the mass inherited from the die type
+     * @param {Number} [bundle.inertia] - overrides the inertia inherited from the die type
+     * @param {Number} [bundle.scaleModifier] - overrides the default scale modifier of presets using this shape
+     * @returns {Boolean} true if the shape was registered, false if the bundle was rejected (see console)
+     */
+    addDiceShape(bundle) {
+        return this.DiceFactory.addDiceShape(bundle);
+    }
+
+    /**
      * Register default appearances for damage types.
      * @param {Object} mapping - map of damage type id to default, shape
      *   `{ <id>: { colorset?: String, preset?: String, label?: String } }`.

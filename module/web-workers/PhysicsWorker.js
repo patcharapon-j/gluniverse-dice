@@ -1,5 +1,4 @@
 import { World, Material, NaiveBroadphase, ContactMaterial, Body, Plane, Vec3, Sphere, PointToPointConstraint, Cylinder, ConvexPolyhedron } from 'cannon-es';
-import { DICE_SHAPE } from '../engine/DiceModels.js';
 import { Vector3 } from 'three';
 import { LEGACY_TO_METERS } from '../engine/SceneConstants.js';
 import RegisterPromise from 'webworker-promise/lib/register';
@@ -13,6 +12,7 @@ const DEBUG_SIMULATION_PERF = false;
 class PhysicsWorker {
     constructor() {
         this.shapeList = new Map();
+        this.shapeDefs = new Map();
         this.host = RegisterPromise()
             .operation('init', this.init.bind(this))
             .operation('addConstraint', this.addConstraint.bind(this))
@@ -432,19 +432,19 @@ class PhysicsWorker {
         }
     }
 
-    createShape({type, radius}){
+    createShape({name, radius, definition}){
         const legacyRadius = radius * METERS_TO_LEGACY;
-        const data = DICE_SHAPE[type];
-        switch(data.type){
+        switch(definition.type){
             case "ConvexPolyhedron":
-                this.shapeList.set(type, this.loadGeom(data.vertices, data.faces, legacyRadius, data.skipLastFaceIndex));
+                this.shapeList.set(name, this.loadShape(definition.vertices, definition.faces, legacyRadius, definition.skipLastFaceIndex));
                 break;
             case "Cylinder":
-                this.shapeList.set(type, new Cylinder(legacyRadius*data.radiusTop, legacyRadius*data.radiusBottom, legacyRadius*data.height, data.numSegments));
+                this.shapeList.set(name, new Cylinder(legacyRadius*definition.radiusTop, legacyRadius*definition.radiusBottom, legacyRadius*definition.height, definition.numSegments));
                 break;
             default:
-                throw new Error("Unknown shape type: " + data.type);
+                throw new Error("Unknown shape type: " + definition.type);
         }
+        this.shapeDefs.set(name, definition);
     }
 
     loadShape(vertices, faces, radius, skipLastFaceIndex = false) {
@@ -453,23 +453,13 @@ class PhysicsWorker {
 
         for (let i = 0; i < vertices.length; ++i) {
             const v = vertices[i];
-            cv[i] = new Vec3(v.x * radius, v.y * radius, v.z * radius);
+            cv[i] = new Vec3(v[0] * radius, v[1] * radius, v[2] * radius);
         }
 
         for (let i = 0; i < faces.length; ++i) {
             cf[i] = skipLastFaceIndex ? faces[i].slice(0, faces[i].length - 1) : faces[i];
         }
         return new ConvexPolyhedron({ vertices: cv, faces: cf });
-    }
-
-    loadGeom(vertices, faces, radius, skipLastFaceIndex = false) {
-        const vectors = new Array(vertices.length);
-
-        for (let i = 0; i < vertices.length; ++i) {
-            vectors[i] = (new Vector3).fromArray(vertices[i]).normalize();
-        }
-
-        return this.loadShape(vectors, faces, radius, skipLastFaceIndex);
     }
 
     getDiceValue(id){
@@ -480,12 +470,14 @@ class PhysicsWorker {
         if(dice.result)
             return dice.result;
 
+        const faceValues = this.shapeDefs.get(dice.diceShape).faceValues;
+
         //d4 reads from bottom face, everything else from top
         const vector = new Vector3(0, dice.diceShape == 'd4' ? -1 : 1, 0);
         const faceCannon = new Vector3();
         let closest_face, closest_angle = Math.PI * 2;
         for (let i = 0, l = dice.shapes[0].faceNormals.length; i < l; ++i) {
-            if(DICE_SHAPE[dice.diceShape].faceValues[i] == 0)
+            if(faceValues[i] == 0)
                 continue;
             faceCannon.copy(dice.shapes[0].faceNormals[i]);
 
@@ -495,7 +487,7 @@ class PhysicsWorker {
                 closest_face = i;
             }
         }
-        const dieValue = DICE_SHAPE[dice.diceShape].faceValues[closest_face];
+        const dieValue = faceValues[closest_face];
         dice.result = dieValue;
         this.diceList.set(id, dice);
 

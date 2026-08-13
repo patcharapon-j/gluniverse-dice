@@ -10,9 +10,14 @@ export const COMPOUND_DICE = {
 
 export class DiceNotation {
 
+	//fvtt min/max modifiers flag discarded value as rerolled, but it is not a real dice reroll
+	static isRealReroll(r) {
+		return !!r?.rerolled && !r.active && !r.discarded;
+	}
+
 	/**
-	 * A roll object from Foundry 
-	 * @param {Roll} rolls 
+	 * A roll object from Foundry
+	 * @param {Roll} rolls
 	 */
 	constructor(rolls, userConfig = null, user = game.user) {
 		this.throws = [{dice:[]}];
@@ -26,7 +31,7 @@ export class DiceNotation {
 			//We only are able to handle this list of number of face in 3D for now
 			if([2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16, 20, 24, 30, 100, 1000, 10000].includes(die.faces)) {
 				//We flag every single die with a throw number, to queue exploded dice
-				let cnt = die.results.filter(r => !r.rerolled && !r.exploded).length;
+				let cnt = die.results.filter(r => !DiceNotation.isRealReroll(r) && !r.exploded).length;
 				let countExtraDice = 0;
 				let localNbThrow = 0;
 
@@ -36,7 +41,7 @@ export class DiceNotation {
 					if(localNbThrow >= this.throws.length)
 						this.throws.push({dice:[]});
 
-					if(die.results[i].exploded || die.results[i].rerolled)
+					if(die.results[i].exploded || DiceNotation.isRealReroll(die.results[i]))
 						countExtraDice++;
 					die.results[i].indexThrow = localNbThrow;
 					/*
@@ -241,7 +246,7 @@ export class DiceNotation {
 							manualResultTrigger = true;
 						if(sfx.onResult.includes("x") && dsnDie.fvttResult?.exploded)
 							manualResultTrigger = true;
-						if(sfx.onResult.includes("r") && dsnDie.fvttResult?.rerolled)
+						if(sfx.onResult.includes("r") && DiceNotation.isRealReroll(dsnDie.fvttResult))
 							manualResultTrigger = true;
 
 						if(manualResultTrigger)

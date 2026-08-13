@@ -1,4 +1,4 @@
-import { DICE_MODELS } from './DiceModels.js';
+import { DiceShapeLibrary } from './DiceShapeLibrary.js';
 import { DiceSFXManager } from '../sfx/DiceSFXManager.js';
 import { DiceSystem } from '../DiceSystem.js';
 import { LEGACY_TO_METERS } from './SceneConstants.js';
@@ -67,7 +67,8 @@ export class ThrowEngine {
 
 		for (let i = 0; i < notationVectors.dice.length; i++) {
 
-			const diceobj = this.dicefactory.get(notationVectors.dice[i].type);
+			const appearance = this.dicefactory.getAppearanceForDice(notationVectors.dsnConfig.appearance, notationVectors.dice[i].type, notationVectors.dice[i]);
+			const diceobj = this.dicefactory.resolvePreset(notationVectors.dice[i].type, appearance);
 
 			let vec = this.vectorRand(vector);
 
@@ -161,7 +162,12 @@ export class ThrowEngine {
 		if (value == result) return;
 
 		let rotIndex = value > result ? result + "," + value : value + "," + result;
-		let rotationDegrees = DICE_MODELS[dicemesh.shape].rotationCombinations[rotIndex];
+		const shapeDef = DiceShapeLibrary.get(dicemesh.shape);
+		if (!shapeDef?.rotationCombinations) {
+			console.error(`[Dice So Nice] No rotation table for shape "${dicemesh.shape}" - face swap skipped`);
+			return;
+		}
+		let rotationDegrees = shapeDef.rotationCombinations[rotIndex];
 		if (!rotationDegrees) {
 			console.log(`[Dice So Nice] No dice rotation found for ${dicemesh.shape} ${value} ${result}`);
 			rotationDegrees = [0, 0, 0];
@@ -189,7 +195,7 @@ export class ThrowEngine {
 
 	//create a dice mesh (shared setup for ephemeral and persistent)
 	async createDiceMesh(type, appearance, diceLibrary = null, scopedTextureCache = null) {
-		const diceobj = this.dicefactory.get(type);
+		const diceobj = this.dicefactory.resolvePreset(type, appearance);
 		if (!diceobj) return null;
 
 		let dicemesh = await this.dicefactory.create(scopedTextureCache || this.diceScene.renderer.scopedTextureCache, diceobj.type, appearance, diceLibrary);

@@ -1,5 +1,5 @@
 import { DicePreset } from './DicePreset.js';
-import { DICE_SHAPE } from './DiceModels.js';
+import { DiceShapeLibrary } from './DiceShapeLibrary.js';
 
 /**
  * Manages custom dice term registration, preset creation, and synchronization.
@@ -9,10 +9,12 @@ export class CustomDiceTerms {
     static _registeredDenominations = new Set();
 
     static getValidShapes() {
-        return Object.keys(DICE_SHAPE);
+        return DiceShapeLibrary.getBuiltinNames();
     }
 
     static getShapeFaceCount(shape) {
+        const def = DiceShapeLibrary.get(shape);
+        if (def) return def.faceValues.filter(v => v !== 0).length;
         return parseInt(shape.substring(1), 10) || 0;
     }
 

@@ -7,7 +7,8 @@ export const AMBIANCE_LIST = {
 import {DicePreset, D4_TRIPLET_VALUES} from './DicePreset.js';
 import {BASE_PRESETS_LIST, EXTRA_PRESETS_LIST} from './DiceDefaultPresets.js';
 import {DiceColors, DICE_SCALE, COLORSETS} from './DiceColors.js';
-import {DICE_MODELS, DICE_SHAPE} from './DiceModels.js';
+import {DICE_MODELS} from './DiceModels.js';
+import {DiceShapeLibrary} from './DiceShapeLibrary.js';
 import {DiceSystem} from '../DiceSystem.js';
 import {DiceLibrary} from './DiceLibrary.js';
 import {TARGET_D6_EDGE_METERS} from './SceneConstants.js';
@@ -628,16 +629,63 @@ export class DiceFactory {
 			this.preferredSystem = system.id;
 	}
 
+	//stores a shape bundle in the shape library.
+	addDiceShape(bundle){
+		const fail = (msg) => {
+			console.error(`Dice So Nice | addDiceShape: ${msg}`);
+			return false;
+		};
+		if(!bundle || typeof bundle !== "object")
+			return fail("bundle must be an object");
+		const name = bundle.name;
+		if(typeof name !== "string" || !name.length)
+			return fail("a shape needs a non-empty string name");
+		if(DiceShapeLibrary.has(name))
+			return fail(`"${name}" is already registered`);
+		if(this.systems.get("standard").dice.has(name))
+			return fail(`"${name}" collides with a registered die type - prefix the name with your module id`);
+		if(bundle.type !== "ConvexPolyhedron")
+			return fail(`"${name}": type must be "ConvexPolyhedron"`);
+		if(!Array.isArray(bundle.vertices) || !Array.isArray(bundle.faces))
+			return fail(`"${name}": vertices and faces must be arrays`);
+		if(!Array.isArray(bundle.faceValues) || bundle.faceValues.length !== bundle.faces.length)
+			return fail(`"${name}": faceValues length must match the face count`);
+		if(!bundle.rotationCombinations || typeof bundle.rotationCombinations !== "object")
+			return fail(`"${name}": rotationCombinations must be an object`);
+
+		const definition = {
+			type: "ConvexPolyhedron",
+			vertices: bundle.vertices,
+			faces: bundle.faces,
+			skipLastFaceIndex: !!bundle.skipLastFaceIndex,
+			faceValues: bundle.faceValues,
+			rotationCombinations: bundle.rotationCombinations
+		};
+		for(const hint of ["mass", "inertia", "scaleModifier"]){
+			if(bundle[hint] !== undefined)
+				definition[hint] = bundle[hint];
+		}
+		DiceShapeLibrary.register(name, definition);
+		return true;
+	}
+
 	//{type:"",labels:[],system:""}
 	//Should have been called "addDicePresetFromModel" but ¯\_(ツ)_/¯
 	addDicePreset(dice, shape = null){
+		const customShapeDef = (shape && !DiceShapeLibrary.isBuiltin(shape)) ? DiceShapeLibrary.get(shape) : null;
 		let model = this.systems.get("standard").dice.get(dice.type);
-		if(!model || !model.internalAdd){
-			if(!shape)
-				shape = dice.type;
-			model = this.systems.get("standard").dice.get(shape);
+		let presetShape;
+		if(customShapeDef){
+			presetShape = shape;
+		} else {
+			if(!model || !model.internalAdd){
+				if(!shape)
+					shape = dice.type;
+				model = this.systems.get("standard").dice.get(shape);
+			}
+			presetShape = model.shape;
 		}
-		let preset = new DicePreset(dice.type, model.shape);
+		let preset = new DicePreset(dice.type, presetShape);
 		let denominator = dice.type.substring(1,dice.type.length);
 
 		preset.term = isNaN(denominator) ? CONFIG.Dice.terms[denominator].name : "Die";
@@ -659,16 +707,17 @@ export class DiceFactory {
 		if(dice.valueMap){
 			preset.valueMap = dice.valueMap;
 		}
-		preset.mass = model.mass;
-		preset.scaleModifier = dice.scaleModifier ?? 1;
+	
+		preset.mass = customShapeDef?.mass ?? model.mass;
+		preset.scaleModifier = dice.scaleModifier ?? customShapeDef?.scaleModifier ?? 1;
 		preset.scale = model.scale * preset.scaleModifier;
-		preset.inertia = model.inertia;
+		preset.inertia = customShapeDef?.inertia ?? model.inertia;
 		preset.system = dice.system;
 		preset.font = dice.font;
 		preset.fontScale = dice.fontScale || null;
 		preset.colorset = dice.colorset || null;
 		//If it overrides an existing model that isn't a numbered die, set a font scale to prevent undesired fontScale from previous model
-		if(!preset.fontScale && !["d2","d4","d6","d8","d10","d12","d14","d16","d20","d24","d30","d100","d1000","d10000"].includes(dice.type) && this.systems.get("standard").dice.has(dice.type))
+		if(!customShapeDef && !preset.fontScale && !["d2","d4","d6","d8","d10","d12","d14","d16","d20","d24","d30","d100","d1000","d10000"].includes(dice.type) && this.systems.get("standard").dice.has(dice.type))
 			preset.fontScale = DICE_SCALE[shape];
 		
 		if(dice.bumpMaps && dice.bumpMaps.length)
@@ -855,10 +904,11 @@ export class DiceFactory {
 		let diceobj = null;
 		if(system != "standard"){
 			if(this.systems.has(system)){
-				// If it exists, we look for a similar shape
-				diceobj = this.systems.get(system).dice.get(type)?.shape == model.shape ? this.systems.get(system).dice.get(type) : null;
+				//value-domain compatibility: same die type and same values count, shape may differ
+				const candidate = this.systems.get(system).dice.get(type);
+				diceobj = candidate && candidate.values.length == model.values.length ? candidate : null;
 				if(!diceobj && !['Coin', 'FateDie', 'Die'].includes(model.term)){
-					//If it doesn't exist and is not a core DiceTerm, we look for a similar shape and values
+					//If it doesn't exist and is not a core DiceTerm, we look for a compatible value domain
 					if(!model.colorset)
 						diceobj = this.systems.get(system).getDiceByShapeAndValues(model.shape, model.values);
 					else
@@ -873,11 +923,17 @@ export class DiceFactory {
 		return diceobj;
 	}
 
-	async create(scopedTextureCache, type, appearance, diceLibrary = null) {
+	//shared preset resolution for mesh and physics
+	//ghost rolls fall back to the standard die so custom models never leak the appearance
+	resolvePreset(type, appearance){
 		let diceobj = this.getPresetBySystem(type, appearance.system);
-		if(diceobj.model && appearance.isGhost){
+		if(diceobj?.modelFile && appearance.isGhost)
 			diceobj = this.getPresetBySystem(type, "standard");
-		}
+		return diceobj;
+	}
+
+	async create(scopedTextureCache, type, appearance, diceLibrary = null) {
+		let diceobj = this.resolvePreset(type, appearance);
 		let scopedScale = (scopedTextureCache.type == "board" || scopedTextureCache.type == "persistent") ? this.baseScale : this.showcaseScale;
 		if (!diceobj) return null;
 
@@ -892,17 +948,28 @@ export class DiceFactory {
 				await diceobj.loadTextures();
 		}
 		let dicemesh;
-		
-		let geom = this.geometries[type+scopedScale];
-		if(!geom) {
-			geom = await this.createGeometry(diceobj.shape, diceobj.scale, scopedScale);
-			this.geometries[type+scopedScale] = geom;
+
+		//standard geometry only serves the texture pipeline: model presets bring
+		//their own mesh, and a registered shape has no standard geometry to build
+		let geom = null;
+		if(!diceobj.modelFile){
+			geom = this.geometries[diceobj.shape+scopedScale];
+			if(!geom) {
+				geom = await this.createGeometry(diceobj.shape, diceobj.scale, scopedScale);
+				this.geometries[diceobj.shape+scopedScale] = geom;
+			}
+			if (!geom) return null;
 		}
-		if (!geom) return null;
 
 		// If we're on the board, we also create the shape in the physics worker
 		if(scopedTextureCache.type == "board" || scopedTextureCache.type == "persistent"){
-			await this.physicsWorker.exec("createShape", { type:diceobj.shape, radius:diceobj.scale * scopedScale });
+			//the worker has no shape data of its own: the full definition travels
+			//with the message so a fresh worker after a rebuild knows every shape
+			await this.physicsWorker.exec("createShape", {
+				name: diceobj.shape,
+				radius: diceobj.scale * scopedScale,
+				definition: DiceShapeLibrary.getWorkerDefinition(diceobj.shape)
+			});
 		}
 
 		if(diceobj.model){
@@ -1268,7 +1335,7 @@ export class DiceFactory {
 				if(materialData.perFaceOverrides) {
 					const baseHasEmissive = !!materialData.baseEmissive;
 					const glowFaces = new Set();
-					const shapeData = DICE_SHAPE[diceobj.shape];
+					const shapeData = DiceShapeLibrary.get(diceobj.shape);
 					const shapeFaceCount = shapeData ? shapeData.faceValues.filter(v => v !== 0).length : diceobj.values.length;
 					for(const [fv, ov] of Object.entries(materialData.perFaceOverrides)) {
 						if(ov.emissive) glowFaces.add(String(fv));

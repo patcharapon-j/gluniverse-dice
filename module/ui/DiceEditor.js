@@ -1,7 +1,7 @@
 import { DiceEditorPreview } from '../rendering/DiceEditorPreview.js';
 import { DiceLibrary } from '../engine/DiceLibrary.js';
 import { DiceColors, TEXTURELIST } from '../engine/DiceColors.js';
-import { DICE_SHAPE } from '../engine/DiceModels.js';
+import { DiceShapeLibrary } from '../engine/DiceShapeLibrary.js';
 import { Utils } from '../Utils.js';
 import { GlyphPicker } from '../glyph-picker/GlyphPicker.js';
 
@@ -127,7 +127,7 @@ export class DiceEditor extends HandlebarsApplicationMixin(ApplicationV2) {
             const diceobj = factory.getPresetBySystem(dieType, resolved.system || "standard");
             if (diceobj && diceobj.emissive && diceobj.emissive !== 0x000000) {
                 this.libraryDie.baseAppearance.emissive = true;
-                const shapeData = DICE_SHAPE[diceobj.shape];
+                const shapeData = DiceShapeLibrary.get(diceobj.shape);
                 const shapeFaceCount = shapeData ? shapeData.faceValues.filter(v => v !== 0).length : diceobj.values.length;
                 for (let f = 1; f <= shapeFaceCount; f++) {
                     this.libraryDie.faces[String(f)] = { emissive: true };
