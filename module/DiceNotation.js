@@ -10,6 +10,20 @@ export const COMPOUND_DICE = {
 
 export class DiceNotation {
 
+	static SUPPORTED_FACES = [2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16, 20, 24, 30, 100, 1000, 10000];
+
+	static applyCompoundResult(primary, secondaries, rawResult, places, setFace) {
+		setFace(primary, Math.floor(rawResult / places[0].divisor) % 10);
+		primary.notation.compositeResult = rawResult;
+		primary.notation.compositeType = primary.notation.type;
+		for (const sec of secondaries) {
+			const dp = sec.userData?.digitPlace;
+			if (dp != null && places[dp]) setFace(sec, Math.floor(rawResult / places[dp].divisor) % 10);
+			sec.notation.compositeResult = rawResult;
+			sec.notation.compositeType = primary.notation.type;
+		}
+	}
+
 	//fvtt min/max modifiers flag discarded value as rerolled, but it is not a real dice reroll
 	static isRealReroll(r) {
 		return !!r?.rerolled && !r.active && !r.discarded;
@@ -29,7 +43,7 @@ export class DiceNotation {
 		//First we need to prepare the data
 		rolls.dice.forEach(die => {
 			//We only are able to handle this list of number of face in 3D for now
-			if([2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16, 20, 24, 30, 100, 1000, 10000].includes(die.faces)) {
+			if(DiceNotation.SUPPORTED_FACES.includes(die.faces)) {
 				//We flag every single die with a throw number, to queue exploded dice
 				let cnt = die.results.filter(r => !DiceNotation.isRealReroll(r) && !r.exploded).length;
 				let countExtraDice = 0;
@@ -72,7 +86,7 @@ export class DiceNotation {
 		//Then we can create the throws
 		rolls.dice.some(die => {
 			//We only are able to handle this list of number of face in 3D for now
-			if([2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16, 20, 24, 30, 100, 1000, 10000].includes(die.faces)) {
+			if(DiceNotation.SUPPORTED_FACES.includes(die.faces)) {
 				let options = {};
 				for(let i =0; i< die.results.length; i++){
 					if(++diceNumber >= maxDiceNumber)
@@ -122,6 +136,7 @@ export class DiceNotation {
 
 		dsnDie.result = dieValue;
 		dsnDie.fvttResult = fvttDie.results[index];
+		dsnDie.resultIndex = index;
 
 		const Die = foundry.dice.terms.Die;
 		const denomination = fvttDie.constructor.DENOMINATION;

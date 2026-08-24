@@ -1471,3 +1471,120 @@
     gap: 6px;
     flex-wrap: nowrap;
 }
+
+/* ------------------------- */
+/* Pending throw card        */
+/* ------------------------- */
+
+.dsn-pending-card .dsn-pending-need {
+    font-size: 13px;
+    margin-bottom: 4px;
+}
+
+.dsn-pending-card .dsn-pending-shell,
+.dsn-pending-card .dsn-pending-inert-hint {
+    margin: 4px 0 0;
+    color: var(--color-text-dark-secondary);
+    font-style: italic;
+}
+
+.dsn-pending-card .dsn-pending-roll {
+    cursor: default;
+}
+
+.dsn-pending-card .dice-rolls {
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1px;
+}
+
+.dsn-pending-card .dice-rolls .roll {
+    min-width: 24px;
+    min-height: 24px;
+    line-height: 24px;
+    float: none;
+}
+
+.dsn-pending-card .dsn-pending-group {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 4px 2px;
+}
+
+.dsn-pending-card .dsn-pending-group + .dsn-pending-group {
+    border-top: 1px dashed var(--color-border-light-tertiary, rgba(0, 0, 0, 0.25));
+}
+
+.dsn-pending-card .dsn-pending-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dsn-pending-card .dsn-pending-term-label {
+    min-width: 34px;
+    text-align: right;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.dsn-pending-card .dice-rolls .roll.dsn-open {
+    opacity: 0.35;
+}
+
+.dsn-pending-card .dice-rolls .roll.dsn-held {
+    opacity: 1;
+    animation: dsn-pending-held-pulse 1s ease-in-out infinite;
+}
+
+@keyframes dsn-pending-held-pulse {
+    0%, 100% { filter: none; }
+    50% { filter: drop-shadow(0 0 4px #ff6400) brightness(1.15); }
+}
+
+.dsn-pending-card .dice-rolls .roll.dsn-rolling {
+    animation: dsn-pending-breathe 1.6s ease-in-out infinite;
+}
+
+@keyframes dsn-pending-breathe {
+    0%, 100% { opacity: 0.9; }
+    50% { opacity: 0.35; }
+}
+
+.dsn-pending-card .dsn-pending-more,
+.dsn-pending-card .dsn-pending-overcap {
+    font-size: 11px;
+    font-style: italic;
+    color: var(--color-text-dark-secondary);
+}
+
+.dsn-pending-card .dsn-pending-actions {
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
+}
+
+.dsn-pending-card .dsn-pending-actions button {
+    flex: 1;
+    font-size: 11px;
+    line-height: 1.5;
+    padding: 2px 4px;
+    white-space: nowrap;
+    text-transform: none;
+    letter-spacing: normal;
+    min-height: 0;
+    height: auto;
+    width: auto;
+}
+
+.dsn-pending-card .dsn-pending-actions button i {
+    font-size: 10px;
+}
+
+.dsn-pending-card .dsn-pending-actions button.dsn-pending-skip {
+    flex: 0 0 auto;
+    color: var(--color-level-error, #ce0707);
+    border-color: var(--color-level-error-border, #750003);
+}

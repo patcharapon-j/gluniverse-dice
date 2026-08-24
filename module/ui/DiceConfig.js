@@ -205,7 +205,14 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
                 "all": "DICESONICE.visibilityAll",
                 "mine": "DICESONICE.visibilityMine",
                 "none": "DICESONICE.visibilityNone"
-            })
+            }),
+            interactiveThrowsUserList: Utils.localize({
+                "default": "DICESONICE.interactiveThrowsUserDefault",
+                "disabled": "DICESONICE.interactiveThrowsUserDisabled",
+                "off": "DICESONICE.interactiveThrowsUserOff",
+                "on": "DICESONICE.interactiveThrowsUserOn"
+            }),
+            interactiveThrowsAvailable: Dice3D.interactiveThrowsAvailable() && game.settings.get("dice-so-nice", "interactiveThrows") !== "0"
         },
             this.reset ? Dice3D.ALL_DEFAULT_OPTIONS() : Dice3D.ALL_CONFIG(game.user, this.isActor ? this.document : null)
         );

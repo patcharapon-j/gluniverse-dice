@@ -35,6 +35,7 @@ export class DiceBox {
 
 		//per-user outline passes for remote persistent dice (userId => {pass, meshes})
 		this._remoteOutlinePasses = new Map();
+		this._eligibleOutlinePass = null;
 
 		this.immersiveDarkness = true;
 
@@ -417,7 +418,10 @@ export class DiceBox {
 			const anyPersistentThrowPlaying = this.persistentDiceList.some(d => d.persistentThrow);
 
 			if (neededSteps && this.throwEngine.rolling) {
-				this.throwEngine.updateThrowPlayback(neededSteps);
+				if (time > this.throwEngine.playbackStaleAt)
+					this.throwEngine.fastForwardPlayback();
+				else
+					this.throwEngine.updateThrowPlayback(neededSteps);
 			} else if (!this.throwEngine.rolling && !anyPersistentThrowPlaying) {
 				this.physicsWorker.exec('playStep', {
 					time_diff: time_diff
@@ -583,16 +587,7 @@ export class DiceBox {
 		const now = performance.now();
 		const physicsIds = [];
 		for (const mesh of allEphemeral) {
-			const materials = mesh.parent?.children
-				? mesh.parent.children.flatMap(c => Array.isArray(c.material) ? c.material : [c.material]).filter(Boolean)
-				: (Array.isArray(mesh.material) ? mesh.material : [mesh.material]);
-			const originals = materials.map(m => ({ material: m, transparent: m.transparent, opacity: m.opacity }));
-
-			for (const { material } of originals) {
-				material.transparent = true;
-			}
-
-			this.fadingDice.push({ mesh, startTime: now, duration, originals });
+			this._startMeshFade(mesh, duration, now);
 			physicsIds.push(mesh.id);
 		}
 
@@ -610,6 +605,29 @@ export class DiceBox {
 		// ensure ticker is running
 		Utils.removeTicker(this.animateThrow);
 		canvas.app.ticker.add(this.animateThrow, this);
+	}
+
+	//start the opacity tween on a die and everything in its container (labels, linked meshes)
+	_startMeshFade(mesh, duration, now) {
+		const materials = mesh.parent?.children
+			? mesh.parent.children.flatMap(c => Array.isArray(c.material) ? c.material : [c.material]).filter(Boolean)
+			: (Array.isArray(mesh.material) ? mesh.material : [mesh.material]);
+		const originals = materials.map(m => ({ material: m, transparent: m.transparent, opacity: m.opacity }));
+
+		for (const { material } of originals) {
+			material.transparent = true;
+		}
+
+		this.fadingDice.push({ mesh, startTime: now, duration, originals });
+	}
+
+	async fadeOutPersistentDie(persistentId, duration) {
+		const mesh = this.persistentDiceList.find(d => d.userData.persistentId === persistentId);
+		if (!mesh) return;
+		this._startMeshFade(mesh, duration, performance.now());
+		Utils.removeTicker(this.animateThrow);
+		canvas.app.ticker.add(this.animateThrow, this);
+		await this.persistentDiceManager.removePersistentDie(persistentId, { keepMesh: true });
 	}
 
 	cancelFade() {
@@ -649,6 +667,10 @@ export class DiceBox {
 			entry.pass.dispose();
 		}
 		this._remoteOutlinePasses.clear();
+		if (this._eligibleOutlinePass) {
+			this._eligibleOutlinePass.dispose();
+			this._eligibleOutlinePass = null;
+		}
 
 		this.diceScene.clearScene();
 
@@ -689,6 +711,39 @@ export class DiceBox {
 
 		//update remote user outlines
 		this._updateRemoteOutlines();
+	}
+
+	updateEligibleOutlines(meshes) {
+		if (!this.initialized) return;
+		if (!this.config.persistentDiceOutlines) return;
+		if (!meshes?.length) {
+			if (this._eligibleOutlinePass) this._eligibleOutlinePass.selectedObjects = [];
+			return;
+		}
+		const pass = this._getOrCreateEligibleOutlinePass();
+		if (pass) pass.selectedObjects = [...meshes];
+	}
+
+	_getOrCreateEligibleOutlinePass() {
+		if (this._eligibleOutlinePass) return this._eligibleOutlinePass;
+
+		const canvasSize = new Vector2(this.display.innerWidth, this.display.innerHeight);
+		const pass = new OutlinePass(canvasSize, this.scene, this.camera);
+		pass.pulsePeriod = 3.0;
+		pass.edgeStrength = 2.5;
+		pass.edgeGlow = 0.4;
+		pass.visibleEdgeColor.set(0xffb347);
+		pass.hiddenEdgeColor.set(0xffb347);
+
+		const sfxIndex = this.diceScene.finalComposer.passes.indexOf(this.outlinePass);
+		if (sfxIndex >= 0) {
+			this.diceScene.finalComposer.insertPass(pass, sfxIndex + 1);
+		} else {
+			this.diceScene.finalComposer.addPass(pass);
+		}
+
+		this._eligibleOutlinePass = pass;
+		return pass;
 	}
 
 	_getOrCreateRemoteOutlinePass(userId) {

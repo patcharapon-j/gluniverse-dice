@@ -240,6 +240,20 @@ Hooks.once('init', () => {
         requiresReload: true
     });
 
+    game.settings.register("dice-so-nice", "interactiveThrows", {
+        name: "DICESONICE.interactiveThrows",
+        hint: "DICESONICE.interactiveThrowsHint",
+        scope: "world",
+        type: String,
+        choices: Utils.localize({
+            "0": "DICESONICE.interactiveThrowsDisabled",
+            "1": "DICESONICE.interactiveThrowsAllowedOff",
+            "2": "DICESONICE.interactiveThrowsAllowedOn"
+        }),
+        default: "1",
+        config: true
+    });
+
     // -- Appearance --
 
     game.settings.register("dice-so-nice", "forceCharacterOwnerAppearance", {
@@ -461,6 +475,15 @@ const shouldInterceptMessage = (chatMessage, options = {dsnCountAddedRoll: 0, ds
 };
 
 /**
+ * Interactive throws are stamped at message creation by the roller's client.
+ * Every client then reads the flag at interception; flags added later are ignored.
+ */
+Hooks.on('preCreateChatMessage', (message) => {
+    if (!game.dice3d?.pendingThrows?.shouldStampInteractive(message)) return;
+    message.updateSource({ "flags.dice-so-nice.interactiveThrow": { state: "pending" } });
+});
+
+/**
  * Intercepts all roll-type messages hiding the content until the animation is finished
  */
 Hooks.on('createChatMessage', (chatMessage) => {
@@ -469,6 +492,11 @@ Hooks.on('createChatMessage', (chatMessage) => {
         && Dice3D.CONFIG().visibility !== "none"
         && chatMessage.sound === "sounds/dice.wav") {
         delete chatMessage.sound;
+    }
+
+    if (chatMessage.getFlag("dice-so-nice", "pendingCard")) {
+        game.dice3d?.pendingThrows?.registerCard(chatMessage);
+        return;
     }
 
     // companion message linking: hide non-roll messages tied to an animating primary
@@ -543,6 +571,12 @@ Hooks.on('createChatMessage', (chatMessage) => {
     if (isInitiativeRoll && !game.settings.get("dice-so-nice", "immediatelyDisplayChatMessages"))
         InitiativeMask.flag(chatMessage);
 
+    //interactive throw: the flag sends every client to the pending flow instead of the animation
+    if (game.dice3d.pendingThrows?.shouldOpenPending(chatMessage)) {
+        game.dice3d.pendingThrows.openPending(chatMessage);
+        return;
+    }
+
     game.dice3d.renderRolls(chatMessage, rolls);
 });
 
@@ -558,6 +592,11 @@ Hooks.on("preUpdateCombatant", (combatant, changes) => {
  * Hide messages which are animating rolls.
  */
 Hooks.on("renderChatMessageHTML", (message, html, data) => {
+    if (message.getFlag("dice-so-nice", "pendingCard")) {
+        game.dice3d?.pendingThrows?.injectCard(message, html);
+        return;
+    }
+
     if (game.dice3d && game.dice3d.messageHookDisabled) {
         return;
     }
@@ -643,6 +682,11 @@ Hooks.on("preUpdateChatMessage", (message, updateData, options) => {
  * Hide and roll new rolls added in a chat message in a update
  */
 Hooks.on("updateChatMessage", (message, updateData, options) => {
+    const transition = foundry.utils.getProperty(updateData, "flags.dice-so-nice.interactiveThrow.state");
+    if (transition && transition !== "pending")
+        game.dice3d?.pendingThrows?.onResolutionTransition(message, transition)
+            ?.catch(err => console.error("[Dice So Nice] resolution handling failed:", err));
+
     if (!("rolls" in updateData)) return;
     if(!shouldInterceptMessage(message, options)) return;
 
@@ -658,6 +702,7 @@ Hooks.on("updateChatMessage", (message, updateData, options) => {
 
 Hooks.on("deleteChatMessage", (message) => {
     CompanionLink.cleanup(message.id);
+    game.dice3d?.pendingThrows?.onMessageDeleted(message);
 });
 
 document.addEventListener("visibilitychange", function () {
@@ -702,6 +747,17 @@ Hooks.on("chatCommandsReady", commands => {
 //re-render sidebar tab once dice3d is ready
 Hooks.on("diceSoNiceReady", () => {
     ui["dice-so-nice"]?.render({ force: false });
+    game.dice3d?.pendingThrows?.readyCleanup();
+});
+
+//pending card action buttons (spawn / escape / force / skip)
+document.addEventListener("click", (ev) => {
+    const btn = ev.target.closest("[data-dsn-pending-action]");
+    if (!btn) return;
+    ev.preventDefault();
+    const cardEl = btn.closest("[data-dsn-pending-card]");
+    if (!cardEl) return;
+    game.dice3d?.pendingThrows?.onCardAction(btn.dataset.dsnPendingAction, cardEl.dataset.dsnPendingCard);
 });
 
 Hooks.on("collapseSidebar", (sidebar, collapsed) => {

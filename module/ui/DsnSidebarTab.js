@@ -105,8 +105,22 @@ export class DsnSidebarTab extends HandlebarsApplicationMixin(AbstractSidebarTab
         const savesObject = game.user.getFlag("dice-so-nice", "saves");
         const saveNames = savesObject ? Object.keys(savesObject) : [];
 
+        const worldInteractive = game.settings.get("dice-so-nice", "interactiveThrows");
+        const userInteractive = box ? (Dice3D.CONFIG().interactiveThrowsUser || "default") : "default";
+        const interactive = {
+            available: box ? (Dice3D.interactiveThrowsAvailable() && worldInteractive !== "0") : false,
+            world0: worldInteractive === "0",
+            world1: worldInteractive === "1",
+            world2: worldInteractive === "2",
+            userDefault: userInteractive === "default",
+            userDisabled: userInteractive === "disabled",
+            userOff: userInteractive === "off",
+            userOn: userInteractive === "on"
+        };
+
         const visibility = box ? (Dice3D.CONFIG().visibility || "all") : "all";
         return Object.assign(context, {
+            interactive,
             persistentDiceEnabled,
             ready: !!box,
             dice: diceContext,
@@ -136,6 +150,23 @@ export class DsnSidebarTab extends HandlebarsApplicationMixin(AbstractSidebarTab
         if (protect) {
             protect.addEventListener("change", (ev) => {
                 game.dice3d?.setProtectPersistent(ev.currentTarget.checked);
+            });
+        }
+
+        const interactiveWorld = this.element.querySelector("[data-action=setInteractiveWorld]");
+        if (interactiveWorld) {
+            interactiveWorld.addEventListener("change", async (ev) => {
+                await game.settings.set("dice-so-nice", "interactiveThrows", ev.currentTarget.value);
+                this.render(false);
+            });
+        }
+
+        const interactiveUser = this.element.querySelector("[data-action=setInteractiveUser]");
+        if (interactiveUser) {
+            interactiveUser.addEventListener("change", async (ev) => {
+                const settings = game.user.getFlag("dice-so-nice", "settings") || {};
+                await game.user.setFlag("dice-so-nice", "settings", { ...settings, interactiveThrowsUser: ev.currentTarget.value });
+                this.render(false);
             });
         }
 
