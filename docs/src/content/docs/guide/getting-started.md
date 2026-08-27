@@ -54,7 +54,7 @@ Three buttons are available in the Dice So Nice! section of Module Settings:
 
 - **Dice So Nice!** - Opens the main configuration dialog.
 - **Rollable Area** - Opens the rollable area configuration (see [Rollable Area](/foundryvtt-dice-so-nice/guide/rollable-area/)).
-- **Damage Type Mapping** (GM only) - Opens the damage type mapping dialog (see [Preferences](/foundryvtt-dice-so-nice/guide/preferences/#damage-type-mapping-gm-only)).
+- **Dice Roles** (GM only) - Opens the Dice Roles table, where the world-wide appearance of each dice role (damage types, special system dice...) is set (see [Preferences](/foundryvtt-dice-so-nice/guide/preferences/#dice-roles-table-gm-only)).
 - **Custom Dice Terms** (GM only) - Opens the custom dice terms dialog (see [Custom Dice Terms](/foundryvtt-dice-so-nice/guide/custom-dice-terms/)).
 
 ### Settings Worth Noting

@@ -93,7 +93,7 @@ export class PlayAnimationThormund extends DiceSFX {
             if(this.step == 1){
                 this.step++;
                 x = 0;
-                this.timer.reset();
+                this.timer = new Timer();
                 this.render();
             }
             else

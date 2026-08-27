@@ -11,6 +11,7 @@ import {DICE_MODELS} from './DiceModels.js';
 import {DiceShapeLibrary} from './DiceShapeLibrary.js';
 import {DiceSystem} from '../DiceSystem.js';
 import {DiceLibrary} from './DiceLibrary.js';
+import {Utils} from '../Utils.js';
 import {TARGET_D6_EDGE_METERS} from './SceneConstants.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
@@ -61,7 +62,9 @@ export class DiceFactory {
 		this.baseMaterialCache = {};
 
 		this.systems = new Map();
-		this.damageTypeDefaults = new Map();
+		this._builtinRoles = null;
+		this._registeredRoles = new Map();
+		this._mergedRoles = null;
 		this.systems.set("standard", new DiceSystem("standard", game.i18n.localize("DICESONICE.System.Standard"), "default"));
 		this.systems.set("spectrum", new DiceSystem("spectrum", game.i18n.localize("DICESONICE.System.SpectrumDice"), "default", "Dice So Nice!"));
 		this.systems.set("foundry_vtt", new DiceSystem("foundry_vtt", game.i18n.localize("DICESONICE.System.FoundryVTT"), "default", "Dice So Nice!"));
@@ -495,7 +498,27 @@ export class DiceFactory {
 
 	async preloadPresets(waitForLoad = true, userID = null, config = {}, documentUuid = null){
 		let activePresets = [];
+		const collectFromScope = (scope) => {
+			if(!scope || typeof scope !== "object") return;
+			for(const dieType in scope){
+				if(!scope.hasOwnProperty(dieType)) continue;
+				const system = scope[dieType]?.system;
+				if(!system) continue;
+				if(dieType != "global")
+					activePresets.push(this.getPresetBySystem(dieType, system));
+				else if(this.systems.has(system)){
+					this.systems.get(system).dice.forEach((obj) => {
+						activePresets.push(obj);
+					});
+				}
+			}
+		};
+		const collectFromRoleScopes = (scopes) => {
+			if(!scopes || typeof scopes !== "object") return;
+			for(const scope of Object.values(scopes)) collectFromScope(scope);
+		};
 		const preloadPresetsByUser = (user) => {
+			collectFromRoleScopes(user.getFlag("dice-so-nice", "roleAppearance"));
 			let appearance = user.getFlag("dice-so-nice", "appearance") ? foundry.utils.duplicate(user.getFlag("dice-so-nice", "appearance")) : null;
 			if(!appearance){
 				appearance = {global:{}};
@@ -525,6 +548,7 @@ export class DiceFactory {
 		};
 
 		const preloadPresetsForDocument = (doc) => {
+			collectFromRoleScopes(doc.getFlag("dice-so-nice", "roleAppearance"));
 			let appearance = doc.getFlag("dice-so-nice", "appearance");
 			if (!appearance || foundry.utils.isEmpty(appearance)) return;
 			appearance = foundry.utils.duplicate(appearance);
@@ -550,6 +574,9 @@ export class DiceFactory {
 				preloadPresetsByUser(user);
 			});
 		}
+		try {
+			collectFromRoleScopes(game.settings.get("dice-so-nice", "roleScopes"));
+		} catch(e) {}
         //remove duplicate
         activePresets = activePresets.filter((v, i, a) => a.indexOf(v) === i);
 		let promiseArray = [];
@@ -592,30 +619,241 @@ export class DiceFactory {
 
 	//{id: 'standard', name: game.i18n.localize("DICESONICE.System.Standard")}
 	//Internal use, legacy
-	//See dice3d.addDamageTypeDefaults for public API
+	//See dice3d.addDamageTypeDefaults for public API. Obsolete, use addRole
 	addDamageTypeDefaults(mapping){
 		if(!mapping || typeof mapping !== "object") return;
 		for(const [id, def] of Object.entries(mapping)){
-			const colorset = def?.colorset ?? null;
-			const preset = def?.preset ?? null;
-			const label = def?.label ?? null;
+			const colorset = def?.colorset ?? undefined;
+			const preset = def?.preset ?? undefined;
 			if(colorset && !COLORSETS[colorset])
 				console.warn(`Dice So Nice! | addDamageTypeDefaults: damage type "${id}" references unknown colorset "${colorset}"`);
 			if(preset && !this.systems.has(preset))
 				console.warn(`Dice So Nice! | addDamageTypeDefaults: damage type "${id}" references unknown preset "${preset}"`);
-			this.damageTypeDefaults.set(id, { colorset, preset, label });
+			const global = {};
+			if(colorset) global.colorset = colorset;
+			if(preset) global.system = preset;
+			this.addRole({
+				id,
+				label: def?.label ?? id,
+				group: "DICESONICE.DamageTypes",
+				customizable: false,
+				optional: true,
+				detectors: {types: [id]},
+				defaults: Object.keys(global).length ? {global} : undefined
+			});
 		}
 	}
 
-	getEffectiveDamageTypeDefault(id){
-		const dev = this.damageTypeDefaults.get(id);
-		if(dev)
-			return { preset: dev.preset || "standard", colorset: dev.colorset || "" };
-		return { preset: "standard", colorset: "" };
+	_buildBuiltinRoles(){
+		const roles = new Map();
+		roles.set("basic", {
+			id: "basic",
+			label: "DICESONICE.RoleBasic",
+			group: null,
+			origin: "builtin",
+			package: null,
+			customizable: true,
+			optional: false,
+			dieTypes: null,
+			defaults: {},
+			detectors: {modifiers: [], types: []}
+		});
+		for(const [id, cs] of Object.entries(COLORSETS)){
+			if(cs.category !== "DICESONICE.DamageTypes") continue;
+			roles.set(id, {
+				id,
+				label: cs.description ?? cs.name ?? id,
+				group: "DICESONICE.DamageTypes",
+				origin: "builtin",
+				package: null,
+				customizable: false,
+				optional: true,
+				dieTypes: null,
+				defaults: {global: {colorset: id}},
+				detectors: {modifiers: [], types: [id]}
+			});
+		}
+		return roles;
+	}
+
+	_normalizeDetectors(detectors){
+		const modifiers = Array.isArray(detectors?.modifiers) ? detectors.modifiers : [];
+		const types = Array.isArray(detectors?.types) ? detectors.types : [];
+		return {
+			modifiers: [...new Set(modifiers.filter(m => typeof m === "string" && m.length).map(m => m.toLowerCase()))],
+			types: [...new Set(types.filter(t => typeof t === "string" && t.length))]
+		};
+	}
+
+	_cloneRole(role){
+		return foundry.utils.deepClone(role);
+	}
+
+	_applyRegistered(target, reg){
+		if(reg.label !== undefined) target.label = reg.label;
+		if(reg.group !== undefined) target.group = reg.group;
+		if(reg.customizable !== undefined) target.customizable = reg.customizable;
+		if(reg.optional !== undefined) target.optional = reg.optional;
+		if(reg.dieTypes !== undefined) target.dieTypes = reg.dieTypes ? [...reg.dieTypes] : null;
+		if(reg.package) target.package = reg.package;
+		target.detectors.modifiers = [...new Set([...target.detectors.modifiers, ...reg.detectors.modifiers])];
+		target.detectors.types = [...new Set([...target.detectors.types, ...reg.detectors.types])];
+		target.defaults = foundry.utils.mergeObject(target.defaults ?? {}, this._cloneRole(reg.defaults), {inplace: false});
+	}
+
+	//merged view: builtin < registered < world roles setting
+	_buildRoles(){
+		if(!this._builtinRoles) this._builtinRoles = this._buildBuiltinRoles();
+		const merged = new Map();
+		for(const [id, role] of this._builtinRoles) merged.set(id, this._cloneRole(role));
+		for(const [id, reg] of this._registeredRoles){
+			let target = merged.get(id);
+			if(!target){
+				target = {
+					id,
+					label: id,
+					group: null,
+					origin: "registered",
+					package: null,
+					customizable: false,
+					optional: false,
+					dieTypes: null,
+					defaults: {},
+					detectors: {modifiers: [], types: []}
+				};
+				merged.set(id, target);
+			}
+			this._applyRegistered(target, reg);
+		}
+		let world = {};
+		try {
+			world = game.settings.get("dice-so-nice", "roles") ?? {};
+		} catch(e) {
+			world = {};
+		}
+		for(const [id, override] of Object.entries(world)){
+			if(!override || typeof override !== "object") continue;
+			const existing = merged.get(id);
+			if(existing){
+				//detectors are unioned so a world override never drops what the package declared
+				if(override.label !== undefined) existing.label = override.label;
+				if(override.group !== undefined) existing.group = override.group;
+				if(override.customizable !== undefined) existing.customizable = !!override.customizable;
+				if(override.optional !== undefined) existing.optional = !!override.optional;
+				if(override.detectors !== undefined){
+					const extra = this._normalizeDetectors(override.detectors);
+					existing.detectors = {
+						modifiers: [...new Set([...(existing.detectors?.modifiers ?? []), ...extra.modifiers])],
+						types: [...new Set([...(existing.detectors?.types ?? []), ...extra.types])]
+					};
+				}
+				if(override.deleted !== undefined) existing.deleted = !!override.deleted;
+			} else {
+				merged.set(id, {
+					id,
+					label: override.label ?? id,
+					group: override.group ?? null,
+					origin: "custom",
+					package: null,
+					customizable: !!override.customizable,
+					optional: override.optional ?? true,
+					dieTypes: null,
+					defaults: {},
+					detectors: this._normalizeDetectors(override.detectors),
+					deleted: !!override.deleted
+				});
+			}
+		}
+		return merged;
+	}
+
+	invalidateRoles(){
+		this._mergedRoles = null;
+	}
+
+	get roles(){
+		if(!this._mergedRoles) this._mergedRoles = this._buildRoles();
+		return this._mergedRoles;
+	}
+
+	getRole(id){
+		if(!id) return undefined;
+		return this.roles.get(id);
+	}
+
+	getRoles({customizable, includeDeleted = false} = {}){
+		const list = [...this.roles.values()].filter(role => {
+			if(!includeDeleted && role.deleted) return false;
+			if(customizable !== undefined && !!role.customizable !== !!customizable) return false;
+			return true;
+		});
+		const loc = (str) => game.i18n?.localize?.(str ?? "") ?? (str ?? "");
+		list.sort((a, b) => {
+			if(a.id === "basic") return -1;
+			if(b.id === "basic") return 1;
+			const ga = loc(a.group), gb = loc(b.group);
+			if(ga !== gb) return ga.localeCompare(gb);
+			return loc(a.label).localeCompare(loc(b.label));
+		});
+		return list;
+	}
+
+	//the token only reaches DSN if a term class declares it, so warn the author at registration
+	_isKnownModifier(token){
+		const has = (cls) => {
+			const mods = cls?.MODIFIERS;
+			return !!mods && Object.keys(mods).some(k => k.toLowerCase() === token);
+		};
+		if(has(foundry?.dice?.terms?.Die)) return true;
+		for(const cls of Object.values(CONFIG?.Dice?.terms ?? {})){
+			if(has(cls)) return true;
+		}
+		return false;
+	}
+
+	addRole(role, {package: packageId = null} = {}){
+		if(!role || typeof role.id !== "string" || !role.id.length){
+			console.warn(`Dice So Nice! | addRole: a role needs a string id`);
+			return;
+		}
+		const id = role.id;
+		const entry = this._registeredRoles.get(id) ?? {id, package: null, defaults: {}, detectors: {modifiers: [], types: []}, owners: {}};
+		if(role.label !== undefined) entry.label = role.label;
+		if(role.group !== undefined) entry.group = role.group;
+		if(role.customizable !== undefined) entry.customizable = !!role.customizable;
+		if(role.optional !== undefined) entry.optional = !!role.optional;
+		if(role.dieTypes !== undefined) entry.dieTypes = Array.isArray(role.dieTypes) ? [...role.dieTypes] : null;
+		if(role.detectors){
+			const incoming = this._normalizeDetectors(role.detectors);
+			for(const token of incoming.modifiers){
+				if(!this._isKnownModifier(token))
+					console.warn(`Dice So Nice! | addRole: role "${id}" (package "${packageId ?? "unknown"}") declares modifier "${token}" but no dice term class declares it, the detector will never match`);
+			}
+			entry.detectors.modifiers = [...new Set([...entry.detectors.modifiers, ...incoming.modifiers])];
+			entry.detectors.types = [...new Set([...entry.detectors.types, ...incoming.types])];
+		}
+		if(role.defaults && typeof role.defaults === "object"){
+			for(const [slot, fields] of Object.entries(role.defaults)){
+				if(!fields || typeof fields !== "object") continue;
+				const owners = entry.owners[slot] ??= {};
+				const current = entry.defaults[slot] ?? {};
+				for(const field of Object.keys(fields)){
+					const previous = owners[field];
+					if(previous !== undefined && previous !== packageId && current[field] !== undefined && current[field] !== fields[field])
+						console.warn(`Dice So Nice! | addRole: role "${id}" default "${slot}.${field}" set by "${previous ?? "unknown"}" is overridden by "${packageId ?? "unknown"}"`);
+					owners[field] = packageId;
+				}
+				entry.defaults[slot] = foundry.utils.mergeObject(current, fields, {inplace: false});
+			}
+		}
+		if(packageId) entry.package = packageId;
+		this._registeredRoles.set(id, entry);
+		this.invalidateRoles();
 	}
 
 	//See dice3d.addSystem for public API
 	addSystem(system, mode="default"){
+		const roleDefaultsSource = system;
 		if(system.constructor.name === 'DiceSystem'){ //note: do not use instanceof, it breaks on The Forge
 			this.systems.set(system.id, system);
 			mode = system.mode;
@@ -627,6 +865,11 @@ export class DiceFactory {
 		system.loadSettings();
 		if(mode != "default" && this.preferredSystem == "standard")
 			this.preferredSystem = system.id;
+		const roleDefaults = roleDefaultsSource?.roleDefaults;
+		if(roleDefaults && typeof roleDefaults === "object"){
+			for(const [roleId, scope] of Object.entries(roleDefaults))
+				this.addRole({id: roleId, defaults: scope}, {package: system.id});
+		}
 	}
 
 	//stores a shape bundle in the shape library.
@@ -2017,7 +2260,44 @@ export class DiceFactory {
 		}
 	}
 
-	getAppearanceForDice(appearances, dicetype, dicenotation = null){
+	resolveRoleSlot(roleContext, roleId, dieType){
+		const ctx = roleContext?.[roleId];
+		if(!ctx || typeof ctx !== "object") return null;
+		const slot = {};
+		const apply = (src, ownerId) => {
+			if(!src || typeof src !== "object") return;
+			for(const [key, value] of Object.entries(src)){
+				if(value === "" || value === null || value === undefined) continue;
+				if(key === "libraryDieOwner") continue;
+				if(key === "libraryDieId"){
+					slot.libraryDieId = value;
+					if(src.libraryDieOwner) slot.libraryDieOwner = src.libraryDieOwner;
+					else if(ownerId) slot.libraryDieOwner = ownerId;
+					else delete slot.libraryDieOwner;
+					continue;
+				}
+				slot[key] = (typeof value === "object") ? foundry.utils.deepClone(value) : value;
+			}
+		};
+		const layers = [[ctx.defaults, null], [ctx.world, null]];
+		if(ctx.customizable) layers.push([ctx.player, ctx.userId ?? null]);
+		for(const [layer, ownerId] of layers){
+			apply(layer?.global, ownerId);
+			apply(layer?.[dieType], ownerId);
+		}
+		Utils.sanitizeAppearance({[dieType]: slot});
+		if(slot.libraryDieId){
+			const owner = DiceLibrary.resolveOwner(slot.libraryDieOwner);
+			const die = owner ? DiceLibrary.getFromUser(owner, slot.libraryDieId) : null;
+			if(!die || die.dieType !== dieType){
+				delete slot.libraryDieId;
+				delete slot.libraryDieOwner;
+			}
+		}
+		return slot;
+	}
+
+	getAppearanceForDice(appearances, dicetype, dicenotation = null, roleContext = null){
 		/*
 			We use either (by order of priority):
 			1) A notation appearance
@@ -2028,19 +2308,10 @@ export class DiceFactory {
 			6) The global colorset of the player
 		*/
 
-		// save-as-source: if the damage type maps to a saved profile, replace appearances
-		if(dicenotation){
-			const detected = this.detectDamageType(dicenotation);
-			if(detected){
-				const mapped = this.resolveDamageTypeMapping(detected);
-				if(mapped?.saveName){
-					const saveAppearance = game.users.get(mapped.saveOwner)
-						?.getFlag("dice-so-nice", "saves")
-						?.[mapped.saveName]
-						?.appearance;
-					if(saveAppearance) appearances = saveAppearance;
-				}
-			}
+		const role = dicenotation?.role ?? "basic";
+		if(role !== "basic"){
+			const slot = this.resolveRoleSlot(roleContext, role, dicetype);
+			if(slot) appearances = {global: appearances.global, [dicetype]: slot};
 		}
 
 		let settings;
@@ -2106,30 +2377,22 @@ export class DiceFactory {
 		let suppressLibraryDie = false;
 		if(dicenotation){
 			let colorset = null;
-			let mappedPreset = null;
 
 			//priority 1: explicit dsn colorset on the term still wins
 			if (dicenotation.options.colorset) {
 				colorset = dicenotation.options.colorset;
 				suppressLibraryDie = true;
-			} else {
-				//priority 2: damage type detection (type first, then flavor) routed through the map
-				const detected = this.detectDamageType(dicenotation);
-				if (detected) {
-					const mapped = this.resolveDamageTypeMapping(detected);
-					if (mapped?.preset) {
-						//custom preset wins - overrides system for this die only
-						mappedPreset = mapped.preset;
-						suppressLibraryDie = true;
-					} else if (mapped?.colorset) {
-						colorset = mapped.colorset;
-						suppressLibraryDie = true;
-					}
+			} else if (role === "basic") {
+				//priority 2: a type/flavor naming a non damage colorset (1d6[bronze])
+				const legacy = [dicenotation.options.type, dicenotation.options.flavor].find(v => typeof v === "string" && COLORSETS[v]);
+				if (legacy) {
+					colorset = legacy;
+					suppressLibraryDie = true;
 				}
+			}
+			if (!colorset && dicenotation.options.appearance?.colorset && COLORSETS[dicenotation.options.appearance.colorset]) {
 				//priority 3: explicit colorset on the appearance payload
-				if (!colorset && !mappedPreset && dicenotation.options.appearance?.colorset && COLORSETS[dicenotation.options.appearance.colorset]) {
-					colorset = dicenotation.options.appearance.colorset;
-				}
+				colorset = dicenotation.options.appearance.colorset;
 			}
 
 			// If we do, we retrieve the colorset data
@@ -2140,27 +2403,6 @@ export class DiceFactory {
 				colorsetData.system = appearance.system;
 				colorsetData.systemSettings = appearance.systemSettings;
 				appearance = colorsetData;
-			}
-
-			//if the map routed to a custom preset, swap the system for this die
-			if(mappedPreset && this.systems.has(mappedPreset)){
-				const mappedSystem = this.systems.get(mappedPreset);
-				if(mappedSystem.dice.has(dicetype)){
-					appearance.system = mappedPreset;
-					//pull in that system's default settings so rendering doesn't inherit the old system's knobs
-					appearance.systemSettings = foundry.utils.deepClone(mappedSystem.getDefaultSettings());
-					//if the mapped preset has its own colorset, apply it unless another colorset already won
-					const mappedDiceobj = this.getPresetBySystem(dicetype, mappedPreset);
-					if(mappedDiceobj?.colorset && !colorset){
-						let colorsetData = {...DiceColors.getColorSet(mappedDiceobj.colorset)};
-						Object.entries(colorsetData).forEach((opt) => {
-							if(opt[1] == "custom")
-								delete colorsetData[opt[0]];
-						});
-						foundry.utils.mergeObject(appearance, colorsetData,{applyOperators:true});
-						appearance.colorset = mappedDiceobj.colorset;
-					}
-				}
 			}
 
 			// Then we overwrite the colorset data with the appearance to let players override the colorset default colors
@@ -2201,39 +2443,37 @@ export class DiceFactory {
 		return appearance;
 	}
 
-	//walk the term-level options looking for a damage type signal
 	//roll-level options are merged down into dice terms by Dice3D before we get here
-	//gate is handled in DiceNotation.js - if flavor/type/dsnDamageType made it here, the user setting allows it
-	detectDamageType(dicenotation){
-		if(!dicenotation?.options) return null;
-		if(dicenotation.options.dsnDamageTypeManaged)
-			return dicenotation.options.dsnDamageType ?? null;
-		const type = dicenotation.options.type;
-		if(type && typeof type === "string") return type;
-		const flavor = dicenotation.options.flavor;
-		if(flavor && typeof flavor === "string") return flavor;
-		return null;
-	}
-
-	//resolve a damage type id to a mapping entry {colorset?, preset?} or {saveName, saveOwner}
-	//order: GM override (damageTypeMap) > dev default (damageTypeDefaults) > legacy name==colorset match
-	resolveDamageTypeMapping(detectedType){
-		if(!detectedType) return null;
-		let map = {};
+	detectRole(dsnDie){
 		try {
-			map = game.settings.get("dice-so-nice", "damageTypeMap") ?? {};
+			const options = dsnDie?.options ?? {};
+			if(options.dsnRoleManaged || options.dsnRole != null){
+				if(typeof options.dsnRole === "string" && options.dsnRole !== "") return options.dsnRole;
+			}
+			//dsnDamageType / dsnDamageTypeManaged are obsolete, use dsnRole / dsnRoleManaged
+			if(options.dsnDamageTypeManaged || options.dsnDamageType != null){
+				if(typeof options.dsnDamageType === "string" && options.dsnDamageType !== "") return options.dsnDamageType;
+			}
+			const managed = !!(options.dsnRoleManaged || options.dsnDamageTypeManaged);
+			const roles = [...this.roles.values()].filter(role => !role.deleted);
+			for(const token of dsnDie?.termModifiers ?? []){
+				if(typeof token !== "string") continue;
+				const key = token.toLowerCase().match(/^([a-z]+)/)?.[1];
+				if(!key) continue;
+				const match = roles.find(role => role.detectors?.modifiers?.includes(key));
+				if(match) return match.id;
+			}
+			if(managed) return "basic";
+			for(const value of [options.type, options.flavor]){
+				if(typeof value !== "string" || value === "") continue;
+				const match = roles.find(role => role.detectors?.types?.includes(value));
+				if(match) return match.id;
+				if(COLORSETS[value]?.category === "DICESONICE.DamageTypes") return value;
+			}
 		} catch(e) {
-			map = {};
+			console.warn("Dice So Nice! | detectRole failed, falling back to basic", e);
 		}
-		const entry = map[detectedType];
-		if(entry){
-			if(entry.saveName && entry.saveOwner) return { saveName: entry.saveName, saveOwner: entry.saveOwner };
-			if(entry.preset || entry.colorset) return entry;
-		}
-		const dev = this.damageTypeDefaults.get(detectedType);
-		if(dev && (dev.preset || dev.colorset)) return { preset: dev.preset ?? null, colorset: dev.colorset ?? null };
-		if(COLORSETS[detectedType]) return { colorset: detectedType, preset: null };
-		return null;
+		return "basic";
 	}
 
 	generateMaterialData(diceobj, appearance, diceLibrary = null) {
@@ -2392,7 +2632,7 @@ export class DiceFactory {
 		if(appearance.libraryDieId) {
 			let libraryDie = null;
 			if(appearance.libraryDieOwner) {
-				const owner = game.users.get(appearance.libraryDieOwner);
+				const owner = DiceLibrary.resolveOwner(appearance.libraryDieOwner);
 				if(owner) {
 					libraryDie = DiceLibrary.getFromUser(owner, appearance.libraryDieId);
 				}

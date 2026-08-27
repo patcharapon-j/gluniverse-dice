@@ -63,7 +63,7 @@ Implement it as a non-static instance method that returns an object. Each key na
 class MyRoll extends Roll {
     getDSNProperties() {
         return {
-            damageType: "options.damageType"
+            role: "options.damageType"
         };
     }
 }
@@ -77,17 +77,17 @@ There is nothing to register. Dice So Nice! discovers the method via `roll.getDS
 
 | Key | Value | Description |
 |-----|-------|-------------|
-| `damageType` | path to a string | The damage type id used for [Damage Type Detection and Mapping](/foundryvtt-dice-so-nice/api/customization/#damage-type-detection-and-mapping). |
+| `role` | path to a string | The [dice role](/foundryvtt-dice-so-nice/api/customization/#dice-roles) id of the dice in that scope (`"fire"`, `"hope"`...). |
 
-Only `damageType` is read today. The return value is an object on purpose so the convention can grow: declare only the keys you support, and Dice So Nice! ignores any key it does not yet understand. Returning an unknown key now is harmless and forward-compatible.
+Only `role` is read today. The return value is an object on purpose so the convention can grow: declare only the keys you support, and Dice So Nice! ignores any key it does not yet understand. Returning an unknown key now is harmless and forward-compatible.
 
-### `damageType`
+### `role`
 
-Resolve the path to the damage type id Dice So Nice! should use for the roll's dice (for example `"fire"`). The path is resolved at each roll scope, so a value that lives on a sub-roll lands on that sub-roll's own dice.
+Resolve the path to the role id Dice So Nice! should use for the roll's dice (for example `"fire"` or `"hope"`). The path is resolved at each roll scope, so a value that lives on a sub-roll lands on that sub-roll's own dice.
 
-Declaring `damageType` is an opt-out. Once a roll's class declares it, Dice So Nice! stops reading `.options.type` and `options.flavor` fields for that roll's dice entirely, even when the declared path resolves to nothing.
+Declaring `role` is an opt-out. Once a roll's class declares it, Dice So Nice! stops reading `.options.type` and `options.flavor` fields for that roll's dice entirely, even when the declared path resolves to nothing. Modifier detectors still apply to dice without a role.
 
-It only decides which damage type id is detected. The GM's Damage Type Mapping and any defaults registered with `addDamageTypeDefaults` still decide the final appearance for that id. See [Damage Type Detection and Mapping](/foundryvtt-dice-so-nice/api/customization/#damage-type-detection-and-mapping) for the full resolution chain.
+It only decides which role id is detected. The GM's Dice Roles table, the player's own role appearance and any defaults registered with `addRole` still decide the final appearance for that id. See [Dice roles](/foundryvtt-dice-so-nice/api/customization/#dice-roles) for the full resolution chain.
 
 ## Using a custom Roll system
 If the `Roll` class is not used, you can alternatively call the `game.dice3d.show` method.

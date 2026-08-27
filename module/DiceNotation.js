@@ -159,40 +159,46 @@ export class DiceNotation {
 		if (typeof dsnDie.options.flavor === "string" && dsnDie.options.flavor.startsWith("die:")) {
 			const remainder = dsnDie.options.flavor.slice(4);
 			const colonIdx = remainder.indexOf(":");
-			let targetUser, dieName;
+			//die:<name>, die:<user name>:<name> or die:world:<name>
+			let targetOwner, dieName;
 			if (colonIdx !== -1) {
-				const userName = remainder.slice(0, colonIdx);
+				const ownerName = remainder.slice(0, colonIdx);
 				dieName = remainder.slice(colonIdx + 1);
-				targetUser = game.users.find(u => u.name.toLowerCase() === userName.toLowerCase());
+				if (ownerName.toLowerCase() === DiceLibrary.WORLD_OWNER)
+					targetOwner = DiceLibrary.WORLD_OWNER;
+				else
+					targetOwner = game.users.find(u => u.name.toLowerCase() === ownerName.toLowerCase());
 			} else {
 				dieName = remainder;
-				targetUser = this.user;
+				targetOwner = this.user;
 			}
-			if (targetUser && dieName) {
-				const libraryDie = DiceLibrary.getByNameAndTypeForUser(targetUser, dieName, dsnDie.type);
+			if (targetOwner && dieName) {
+				const libraryDie = DiceLibrary.getByNameAndTypeForUser(targetOwner, dieName, dsnDie.type);
 				if (libraryDie) {
 					if (!dsnDie.options.appearance) dsnDie.options.appearance = {};
 					dsnDie.options.appearance.libraryDieId = libraryDie.id;
-					if (targetUser.id !== this.user.id) {
-						dsnDie.options.appearance.libraryDieOwner = targetUser.id;
+					const ownerId = DiceLibrary.isWorldOwner(targetOwner) ? DiceLibrary.WORLD_OWNER : targetOwner.id;
+					if (ownerId !== this.user.id) {
+						dsnDie.options.appearance.libraryDieOwner = ownerId;
 					}
 				}
 			}
 			delete dsnDie.options.flavor;
-		} else if(this.userConfig && !this.userConfig.enableFlavorColorset) {
-			if(dsnDie.options.flavor) delete dsnDie.options.flavor;
-			if(dsnDie.options.type) delete dsnDie.options.type;
 		}
-
-		//the managed damage type bypasses flavor/type so we remove it here if needed
-		if(this.userConfig && !this.userConfig.enableFlavorColorset)
-			delete dsnDie.options.dsnDamageType;
 
 		dsnDie.termIndex = termIndex;
 		dsnDie.termNumber = fvttDie.number ?? null;
 		dsnDie.termTotal = fvttDie.total ?? null;
 		dsnDie.termFaces = fvttDie.faces ?? null;
 		dsnDie.termModifiers = fvttDie.modifiers ? [...fvttDie.modifiers] : [];
+		//decided once here so the role travels with the die through sockets and queued commands
+		dsnDie.role = game.dice3d?.DiceFactory?.detectRole(dsnDie) ?? "basic";
+		if(this.userConfig && !this.userConfig.enableFlavorColorset) {
+			if(game.dice3d?.DiceFactory?.getRole(dsnDie.role)?.optional) dsnDie.role = "basic";
+			//flavor and type also carry the colorset of a 1d6[black] roll, so they go too
+			delete dsnDie.options.flavor;
+			delete dsnDie.options.type;
+		}
 
 		this.throws[dsnDie.fvttResult.indexThrow].dice.push(dsnDie);
 	}

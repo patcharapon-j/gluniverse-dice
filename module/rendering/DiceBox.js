@@ -480,8 +480,9 @@ export class DiceBox {
 				}
 			}
 
-			// clean up physics for faded-out dice
 			if (this.fadingDice.length === 0 && this.persistentDiceList.length === 0 && !this.throwEngine.rolling) {
+				//one last frame without the faded meshes, otherwise the canvas keeps the half-transparent one
+				this.renderScene();
 				Utils.removeTicker(this.animateThrow);
 				this.isVisible = false;
 			}

@@ -1,13 +1,14 @@
 import { Dice3D } from './Dice3D.js';
 import { DiceConfig } from './ui/DiceConfig.js';
 import { RollableAreaConfig } from './ui/RollableAreaConfig.js';
-import { DamageTypeConfig } from './ui/DamageTypeConfig.js';
+import { DiceRolesConfig } from './ui/DiceRolesConfig.js';
 import { CustomDiceTermConfig } from './ui/CustomDiceTermConfig.js';
 import { DsnSidebarTab } from './ui/DsnSidebarTab.js';
 import { InitiativeMask } from './ui/InitiativeMask.js';
 import { CompanionLink } from './CompanionLink.js';
 import { Utils } from './Utils.js';
 import { CustomDiceTerms } from './engine/CustomDiceTerms.js';
+import { DiceLibrary } from './engine/DiceLibrary.js';
 
 /**
  * Registers the exposed settings for the various 3D dice options.
@@ -32,11 +33,11 @@ Hooks.once('init', () => {
     });
 
     game.settings.registerMenu("dice-so-nice", "damage-type-config", {
-        name: "DICESONICE.DamageTypeConfigMenu",
-        label: "DICESONICE.DamageTypeConfigMenuLabel",
-        hint: "DICESONICE.DamageTypeConfigMenuHint",
-        icon: "fas fa-droplet",
-        type: DamageTypeConfig,
+        name: "DICESONICE.DiceRolesConfigMenu",
+        label: "DICESONICE.DiceRolesConfigMenuLabel",
+        hint: "DICESONICE.DiceRolesConfigMenuHint",
+        icon: "fas fa-masks-theater",
+        type: DiceRolesConfig,
         restricted: true
     });
 
@@ -301,13 +302,54 @@ Hooks.once('init', () => {
 
     // -- Internal (config: false) --
 
-    //GM-editable mapping: damage type id → { colorset?, preset?, label? }
-    //ships empty; hardcoded name==colorset fallback handles unmapped entries
+    //pre-6.3 damage type mapping, frozen: only read by the roles migration
     game.settings.register("dice-so-nice", "damageTypeMap", {
         scope: "world",
         config: false,
         type: Object,
         default: {}
+    });
+
+    //one-shot marker for the damage type to roles migration, see Utils.migrateDamageTypeMap
+    game.settings.register("dice-so-nice", "rolesMigrated", {
+        scope: "world",
+        config: false,
+        type: Boolean,
+        default: false
+    });
+
+    //GM catalog: custom roles plus per-role overrides { <id>: { label?, group?, customizable?, detectors?, deleted? } }
+    game.settings.register("dice-so-nice", "roles", {
+        scope: "world",
+        config: false,
+        type: Object,
+        default: {},
+        onChange: () => game.dice3d?.DiceFactory?.invalidateRoles()
+    });
+
+    //GM world role scopes { <roleId>: { global?, d4?, ... } }, same shape as a user appearance
+    game.settings.register("dice-so-nice", "roleScopes", {
+        scope: "world",
+        config: false,
+        type: Object,
+        default: {},
+        onChange: () => {
+            if (!game.dice3d) return;
+            DiceLibrary.preloadAssets(game.user.id);
+            game.dice3d.DiceFactory.preloadPresets(false);
+        }
+    });
+
+    //GM-owned dice library, same die shape as the user diceLibrary flag, referenced with libraryDieOwner "world"
+    game.settings.register("dice-so-nice", "worldDiceLibrary", {
+        scope: "world",
+        config: false,
+        type: Array,
+        default: [],
+        onChange: () => {
+            game.dice3d?.box?.dicefactory?.disposeCachedMaterials();
+            DiceLibrary.preloadAssets(game.user.id);
+        }
     });
 
     CustomDiceTerms.registerSetting();

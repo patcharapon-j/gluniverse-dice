@@ -59,6 +59,7 @@ export class DiceSystem {
 
         this._settings = [];
         this._scopedSettings = new Map();
+        this._roleDefaults = {};
 
         this._listeners = [];
 
@@ -84,6 +85,20 @@ export class DiceSystem {
 
     get group() {
         return this._group;
+    }
+
+    /**
+     * Registrant defaults per role, applied through dice3d.addRole when the system is registered.
+     * Shape: `{ <roleId>: { global?: {...}, d4?: {...}, ... } }` where each slot accepts the appearance
+     * fields (colorset, system, texture, material, font, labelColor, diceColor, outlineColor, edgeColor, systemSettings).
+     * @type {Object}
+     */
+    get roleDefaults() {
+        return this._roleDefaults;
+    }
+
+    set roleDefaults(value) {
+        this._roleDefaults = (value && typeof value === "object") ? value : {};
     }
 
     get settings() {
@@ -125,8 +140,10 @@ export class DiceSystem {
         }
     }
 
-    getSettingsByDiceType(diceType) {
-        return this._scopedSettings.get(diceType) || this._scopedSettings.get("global");
+    getSettingsByDiceType(diceType, role = "basic") {
+        return this._scopedSettings.get(`${role}:${diceType}`)
+            || this._scopedSettings.get(`${role}:global`)
+            || this._scopedSettings.get("basic:global");
     }
 
     getCacheString(appearance) {
@@ -182,8 +199,8 @@ export class DiceSystem {
         this._registeredBeforeShaderCompileCallbacks.push(callback);
     }
 
-    updateSettings(diceType = "global", settings) {
-        this._scopedSettings.set(diceType, {...settings});
+    updateSettings(diceType = "global", settings, role = "basic") {
+        this._scopedSettings.set(`${role}:${diceType}`, {...settings});
     }
 
     loadSettings() {
@@ -194,15 +211,26 @@ export class DiceSystem {
 
         //set default settings (just key/value pairs)
         const defaultSettings = this.settings.reduce((acc, { id, defaultValue }) => ({ ...acc, [id]: defaultValue }), {});
-        this._scopedSettings.set("global", defaultSettings);
+        this._scopedSettings.set("basic:global", defaultSettings);
 
-        if(savedSettings) {
-            for(let diceType of Object.keys(savedSettings)) {
-                if(savedSettings[diceType].system === this.id) {
-                    this._scopedSettings.set(diceType, {...savedSettings[diceType].systemSettings});
+        const loadScope = (scope, role) => {
+            if(!scope || typeof scope !== "object") return;
+            for(const diceType of Object.keys(scope)) {
+                if(scope[diceType]?.system === this.id && scope[diceType].systemSettings) {
+                    this._scopedSettings.set(`${role}:${diceType}`, {...scope[diceType].systemSettings});
                 }
             }
+        };
+        loadScope(savedSettings, "basic");
+        let worldScopes = null;
+        try {
+            worldScopes = game.settings.get("dice-so-nice", "roleScopes");
+        } catch(e) {
+            worldScopes = null;
         }
+        for(const [role, scope] of Object.entries(worldScopes ?? {})) loadScope(scope, role);
+        const roleScopes = game.user.getFlag("dice-so-nice", "roleAppearance");
+        for(const [role, scope] of Object.entries(roleScopes ?? {})) loadScope(scope, role);
     }
 
     /**
@@ -377,10 +405,13 @@ export class DiceSystem {
      *
      * @param {string} diceType - The type of the dice.
      * @param {string} settingId - The ID of the setting.
+     * @param {string} [role="basic"] - The dice role whose scope is read first.
      * @return {any} The value of the scoped setting, or the default value if not found.
      */
-    getScopedSettingValue(diceType, settingId) {
-        return this._scopedSettings.get(diceType)?.[settingId] ?? this._scopedSettings.get("global")?.[settingId];
+    getScopedSettingValue(diceType, settingId, role = "basic") {
+        return this._scopedSettings.get(`${role}:${diceType}`)?.[settingId]
+            ?? this._scopedSettings.get(`${role}:global`)?.[settingId]
+            ?? this._scopedSettings.get("basic:global")?.[settingId];
     }
 
     /**
@@ -388,9 +419,10 @@ export class DiceSystem {
      *
      * @param {Object} setting - The setting object containing the type, id, name, and value.
      * @param {string} diceType - The type of the dice or "global"
+     * @param {string} [role="basic"] - The dice role whose scope provides the current values.
      * @return {Object} An object containing the HTML content and data for the settings dialog line.
      */
-    getSettingsDialogLine(setting, diceType) {
+    getSettingsDialogLine(setting, diceType, role = "basic") {
         let line = {
             content: "",
             data: {}
@@ -407,7 +439,7 @@ export class DiceSystem {
                 `;
 
                 line.data = {
-                    value: this.getScopedSettingValue(diceType, setting.id)
+                    value: this.getScopedSettingValue(diceType, setting.id, role)
                 };
                 break;
             case DiceSystem.SETTING_TYPE.STRING:
@@ -421,7 +453,7 @@ export class DiceSystem {
                 `;
 
                 line.data = {
-                    value: this.getScopedSettingValue(diceType, setting.id)
+                    value: this.getScopedSettingValue(diceType, setting.id, role)
                 };
                 break;
             case DiceSystem.SETTING_TYPE.COLOR:
@@ -437,7 +469,7 @@ export class DiceSystem {
                 `;
 
                 line.data = {
-                    value: this.getScopedSettingValue(diceType, setting.id)
+                    value: this.getScopedSettingValue(diceType, setting.id, role)
                 };
                 break;
             case DiceSystem.SETTING_TYPE.RANGE:
@@ -452,7 +484,7 @@ export class DiceSystem {
                 `;
 
                 line.data = {
-                    value: this.getScopedSettingValue(diceType, setting.id),
+                    value: this.getScopedSettingValue(diceType, setting.id, role),
                     min: setting.min,
                     max: setting.max,
                     step: setting.step
@@ -470,7 +502,7 @@ export class DiceSystem {
                 `;
 
                 line.data = {
-                    value: this.getScopedSettingValue(diceType, setting.id)
+                    value: this.getScopedSettingValue(diceType, setting.id, role)
                 };
                 break;
             case DiceSystem.SETTING_TYPE.SELECT:
@@ -486,7 +518,7 @@ export class DiceSystem {
                 `;
 
                 line.data = {
-                    value: this.getScopedSettingValue(diceType, setting.id),
+                    value: this.getScopedSettingValue(diceType, setting.id, role),
                     options: setting.options
                 };
                 break;
@@ -504,7 +536,7 @@ export class DiceSystem {
         return line;
     }
 
-    getSettingsDialogContent(diceType) {
+    getSettingsDialogContent(diceType, role = "basic") {
         let dialogContent = {
             content: "",
             data: {}
@@ -514,7 +546,7 @@ export class DiceSystem {
 
         // generate the content and data for each setting
         for (let setting of this._settings) {
-            let line = this.getSettingsDialogLine(setting, diceType);
+            let line = this.getSettingsDialogLine(setting, diceType, role);
             dialogContent.content += line.content;
             dialogContent.data[setting.id] = line.data;
         }

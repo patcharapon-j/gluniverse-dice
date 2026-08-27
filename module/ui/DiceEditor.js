@@ -3,6 +3,7 @@ import { DiceLibrary } from '../engine/DiceLibrary.js';
 import { DiceColors, TEXTURELIST } from '../engine/DiceColors.js';
 import { DiceShapeLibrary } from '../engine/DiceShapeLibrary.js';
 import { Utils } from '../Utils.js';
+import { Dice3D } from '../Dice3D.js';
 import { GlyphPicker } from '../glyph-picker/GlyphPicker.js';
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
@@ -47,6 +48,7 @@ export class DiceEditor extends HandlebarsApplicationMixin(ApplicationV2) {
         super(options);
         this.dieType = dieType;
         this.onSaveCallback = options.onSave || null;
+        this.owner = DiceLibrary.isWorldOwner(options.owner) ? DiceLibrary.WORLD_OWNER : null;
 
         if (libraryDie) {
             this.libraryDie = foundry.utils.deepClone(libraryDie);
@@ -55,14 +57,16 @@ export class DiceEditor extends HandlebarsApplicationMixin(ApplicationV2) {
             //init from current appearance, prefer live DiceConfig form values over persisted flag
             const factory = game.dice3d.box.dicefactory;
             const diceConfig = options.diceConfig || null;
-            const appearances = diceConfig
-                ? diceConfig.getShowcaseAppearance().appearance
+            const showcase = diceConfig ? diceConfig.getShowcaseAppearance() : null;
+            const appearances = showcase
+                ? showcase.appearance
                 : (game.user.getFlag("dice-so-nice", "appearance") || {});
-            let resolved = factory.getAppearanceForDice(appearances, dieType);
+            const roleNotation = Dice3D._roleNotation(showcase?.role);
+            let resolved = factory.getAppearanceForDice(appearances, dieType, roleNotation, showcase?.roleContext ?? null);
 
             //if a library die is already selected, init from its stored appearance
             if (resolved.libraryDieId) {
-                const owner = resolved.libraryDieOwner ? game.users.get(resolved.libraryDieOwner) : game.user;
+                const owner = resolved.libraryDieOwner ? DiceLibrary.resolveOwner(resolved.libraryDieOwner) : game.user;
                 const existingDie = owner ? DiceLibrary.getFromUser(owner, resolved.libraryDieId) : null;
                 if (existingDie?.baseAppearance) {
                     const base = existingDie.baseAppearance;
@@ -99,18 +103,12 @@ export class DiceEditor extends HandlebarsApplicationMixin(ApplicationV2) {
             this.libraryDie.baseAppearance.outlineColor = pick(resolved.outline, "");
             this.libraryDie.baseAppearance.edgeColor = pick(resolved.edge, "");
             //editor forces colorset=custom, so resolve texture from colorset data if needed
-            let effectiveTexture = pick(resolved.texture, "none");
+            let effectiveTexture = DiceEditor._textureName(resolved.texture);
             if (effectiveTexture === "none" && resolved.colorset && resolved.colorset !== "custom") {
                 const colorsetData = DiceColors.getColorSet(resolved.colorset);
                 if (colorsetData.texture && colorsetData.texture !== "custom" && colorsetData.texture !== "none") {
-                    let tex = Array.isArray(colorsetData.texture)
-                        ? colorsetData.texture[Math.floor(Math.random() * colorsetData.texture.length)]
-                        : colorsetData.texture;
-                    effectiveTexture = (typeof tex === "object" && tex.name) ? tex.name : tex;
+                    effectiveTexture = DiceEditor._textureName(colorsetData.texture);
                 }
-            }
-            if (typeof effectiveTexture === "object" && effectiveTexture.name) {
-                effectiveTexture = effectiveTexture.name;
             }
             this.libraryDie.baseAppearance.texture = effectiveTexture;
             //resolve "auto" material from texture (e.g. bronze => metal)
@@ -167,13 +165,21 @@ export class DiceEditor extends HandlebarsApplicationMixin(ApplicationV2) {
         ui.notifications.info(game.i18n.localize("DICESONICE.editorCopyIdNotification"));
     }
 
+    //texture may be a name, an array of names, or a texture object whose name is empty
+    //when the colorset was registered before its texture finished loading
+    static _textureName(val) {
+        if (Array.isArray(val)) val = val.length ? val[Math.floor(Math.random() * val.length)] : "none";
+        if (typeof val === "object" && val !== null) val = val.name;
+        return (typeof val === "string" && val) ? val : "none";
+    }
+
     async _prepareContext(options) {
         const data = {};
         data.dieType = this.dieType;
         data.dieName = this.libraryDie.name;
         data.baseAppearance = this.libraryDie.baseAppearance;
 
-        const tex = this.libraryDie.baseAppearance.texture || "none";
+        const tex = DiceEditor._textureName(this.libraryDie.baseAppearance.texture);
         data.isCustomTexture = tex.startsWith("custom:");
         data.customTexturePath = data.isCustomTexture ? tex.slice(7) : "";
         data.builtinTexture = data.isCustomTexture ? "none" : tex;
@@ -726,11 +732,16 @@ export class DiceEditor extends HandlebarsApplicationMixin(ApplicationV2) {
     static async _onSubmit(event, form, formData) {
         this.libraryDie.name = form.querySelector("[name=dieName]").value || `Custom ${this.dieType.toUpperCase()}`;
 
-        const library = game.dice3d.diceLibrary;
-        if (this.isNew) {
-            await library.add(this.libraryDie);
+        if (this.owner === DiceLibrary.WORLD_OWNER) {
+            const saved = await DiceLibrary.saveWorldDie(this.libraryDie);
+            if (!saved) return;
         } else {
-            await library.update(this.libraryDie.id, this.libraryDie);
+            const library = game.dice3d.diceLibrary;
+            if (this.isNew) {
+                await library.add(this.libraryDie);
+            } else {
+                await library.update(this.libraryDie.id, this.libraryDie);
+            }
         }
 
         game.dice3d.box.dicefactory.disposeCachedMaterials();

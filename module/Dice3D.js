@@ -157,6 +157,46 @@ export class Dice3D {
         return Utils.sanitizeAppearance(appearance, user);
     }
 
+    static ROLE_APPEARANCE(user = game.user, actor = null) {
+        const userScopes = user.getFlag("dice-so-nice", "roleAppearance");
+        let scopes = userScopes ? foundry.utils.duplicate(userScopes) : {};
+        if (actor) {
+            const actorScopes = actor.getFlag("dice-so-nice", "roleAppearance");
+            if (actorScopes) {
+                scopes = foundry.utils.mergeObject(scopes, foundry.utils.duplicate(actorScopes), { applyOperators: true });
+            }
+        }
+        return Utils.sanitizeRoleScopes(scopes, user);
+    }
+
+    static ROLE_CONTEXT(user = game.user, actor = null) {
+        const player = Dice3D.ROLE_APPEARANCE(user, actor);
+        let world = {};
+        try {
+            world = foundry.utils.duplicate(game.settings.get("dice-so-nice", "roleScopes") ?? {});
+        } catch (e) {
+            world = {};
+        }
+        Utils.sanitizeRoleScopes(world);
+        const dicefactory = game.dice3d?.DiceFactory;
+        const ids = new Set([...Object.keys(player), ...Object.keys(world)]);
+        if (dicefactory) for (const role of dicefactory.getRoles()) ids.add(role.id);
+        const context = {};
+        for (const id of ids) {
+            if (id === "basic") continue;
+            const role = dicefactory?.getRole(id);
+            if (role?.deleted) continue;
+            context[id] = {
+                userId: user.id,
+                customizable: !!role?.customizable,
+                player: player[id] ?? {},
+                world: world[id] ?? {},
+                defaults: role?.defaults ? foundry.utils.duplicate(role.defaults) : {}
+            };
+        }
+        return context;
+    }
+
     static SFX(user = game.user) {
         let sfxArray;
         if (Dice3D.CONFIG().showOthersSFX || user.id == game.user.id)
@@ -203,12 +243,14 @@ export class Dice3D {
                 config.appearance.global.colorset = dicefactory.preferredColorset;
         }
         config.diceLibrary = DiceLibrary.getLibraryForUser(user);
+        config.roleContext = Dice3D.ROLE_CONTEXT(user, actor);
         return config;
     }
 
     static ALL_CONFIG(user = game.user, actor = null) {
         let ret = foundry.utils.mergeObject(Dice3D.CONFIG(user), { appearance: Dice3D.APPEARANCE(user, actor) }, { applyOperators: true });
         ret.specialEffects = Dice3D.SFX(user);
+        ret.roleContext = Dice3D.ROLE_CONTEXT(user, actor);
         return ret;
     }
 
@@ -265,7 +307,7 @@ export class Dice3D {
     }
 
     /**
-     * Register default appearances for damage types.
+     * Register default appearances for damage types. Obsolete, use addRole
      * @param {Object} mapping - map of damage type id to default, shape
      *   `{ <id>: { colorset?: String, preset?: String, label?: String } }`.
      *   `colorset` is a registered colorset/theme id, `preset` a registered system id,
@@ -273,6 +315,47 @@ export class Dice3D {
      */
     addDamageTypeDefaults(mapping) {
         this.DiceFactory.addDamageTypeDefaults(mapping);
+    }
+
+    /**
+     * Register or extend a dice role. Registering an existing id merges into it:
+     * detectors are unioned, defaults are merged field by field (last write wins, with a console warning
+     * when a field set by another package is overridden).
+     * @param {Object} role
+     * @param {String} role.id - role id (e.g. "hope", "fire")
+     * @param {String} [role.label] - display name, can be a localization key
+     * @param {String} [role.group] - group shown in the UIs, can be a localization key
+     * @param {Boolean} [role.customizable] - whether players can customize this role in their dice settings
+     * @param {Boolean} [role.optional] - whether players can turn this role off with their "Apply optional dice role appearances" preference
+     * @param {Array<String>|null} [role.dieTypes] - optional die type whitelist shown in the player settings
+     * @param {Object} [role.defaults] - partial role scope `{ global?: {...}, d4?: {...}, ... }`
+     * @param {Object} [role.detectors] - `{ modifiers?: [String], types?: [String] }`. A modifier token must be
+     *   declared by a dice term class (Foundry's Die or one in CONFIG.Dice.terms)
+     * @param {Object} [options]
+     * @param {String} [options.package] - id of the registering package, used in conflict warnings
+     */
+    addRole(role, options = {}) {
+        this.DiceFactory.addRole(role, options);
+    }
+
+    /**
+     * Get the merged record of a role (builtin, registered and world overrides applied).
+     * @param {String} id
+     * @returns {Object|undefined}
+     */
+    getRole(id) {
+        return this.DiceFactory.getRole(id);
+    }
+
+    /**
+     * List roles known to this client.
+     * @param {Object} [options]
+     * @param {Boolean} [options.customizable] - only roles players can (or cannot) customize
+     * @param {Boolean} [options.includeDeleted] - include roles the GM deleted from the table
+     * @returns {Array<Object>}
+     */
+    getRoles(options = {}) {
+        return this.DiceFactory.getRoles(options);
     }
 
     /**
@@ -683,7 +766,10 @@ export class Dice3D {
                         this.show(request.data, game.users.get(request.user), false, null, false, request.speaker);
                     break;
                 case "update":
-                    if (request.document) {
+                    if (request.role) {
+                        DiceLibrary.preloadAssets();
+                        this.DiceFactory.preloadPresets(false);
+                    } else if (request.document) {
                         DiceLibrary.preloadAssets(null, request.document);
                         this.DiceFactory.preloadPresets(false, null, {}, request.document);
                         if (game.user.isGM) {
@@ -959,17 +1045,18 @@ export class Dice3D {
         cb(roll);
     }
 
-    _stampDamageType(roll) {
+    _stampRole(roll) {
         this._walkRollScopes(roll, (scope) => {
             const props = scope.getDSNProperties?.();
+            const path = typeof props?.role === "string" ? props.role : (typeof props?.damageType === "string" ? props.damageType : null);
             //stamp the marker even when the value is empty so the dice opt out of legacy detection
-            if (props && typeof props.damageType === "string") {
-                const value = foundry.utils.getProperty(scope, props.damageType);
+            if (path !== null) {
+                const value = foundry.utils.getProperty(scope, path);
                 for (const die of scope.dice ?? []) {
                     if (!die.options) die.options = {};
-                    die.options.dsnDamageTypeManaged = true;
-                    if (value != null && value !== "" && die.options.dsnDamageType == null)
-                        die.options.dsnDamageType = value;
+                    die.options.dsnRoleManaged = true;
+                    if (value != null && value !== "" && die.options.dsnRole == null)
+                        die.options.dsnRole = value;
                 }
                 return;
             }
@@ -1165,7 +1252,7 @@ export class Dice3D {
 
         //must stamp before buildRollList flattens the pool structure away
         for (const roll of rolls ?? []) {
-            this._stampDamageType(roll);
+            this._stampRole(roll);
             this._stampAppearance(roll);
         }
 
@@ -1295,7 +1382,7 @@ export class Dice3D {
         }
 
         //direct API callers skip renderRolls, so stamp here on the original roll
-        this._stampDamageType(context.roll);
+        this._stampRole(context.roll);
         this._stampAppearance(context.roll);
 
         if (speaker) {
@@ -1667,7 +1754,9 @@ export class Dice3D {
         const user = opts.ownerUserId ? game.users.get(opts.ownerUserId) : game.user;
         //raw appearances for socket sync and flag persistence
         const rawAppearances = opts._rawAppearances || Dice3D.APPEARANCE(user);
-        const appearance = opts.appearance || this.DiceFactory.getAppearanceForDice(rawAppearances, type);
+        const role = opts.role || "basic";
+        const rawRoleScopes = opts._rawRoleScopes || (role !== "basic" ? Dice3D.ROLE_APPEARANCE(user) : null);
+        const appearance = opts.appearance || this.DiceFactory.getAppearanceForDice(rawAppearances, type, Dice3D._roleNotation(role), this._persistentRoleContext(user, rawRoleScopes));
         const diceLibrary = opts.diceLibrary ?? DiceLibrary.getLibraryForUser(user);
         if (!position) {
             const config = Dice3D.CONFIG(user);
@@ -1689,6 +1778,8 @@ export class Dice3D {
                     linkGroupSecondary: opts.linkGroupSecondary || false,
                     digitPlace: opts.digitPlace ?? null,
                     appearances: rawAppearances,
+                    role,
+                    roleScopes: rawRoleScopes,
                     diceLibrary: diceLibrary,
                     guest: opts.guest || null
                 }
@@ -1699,6 +1790,8 @@ export class Dice3D {
                 persistentId: mesh.userData.persistentId,
                 dieType: type,
                 appearances: rawAppearances,
+                role,
+                roleScopes: rawRoleScopes,
                 diceLibrary,
                 linkGroupId: opts.linkGroupId || null,
                 linkGroupSecondary: opts.linkGroupSecondary || false,
@@ -1910,6 +2003,22 @@ export class Dice3D {
         this.box.removeRemoteOutlinePass(userId);
     }
 
+    static _roleNotation(role) {
+        return (!role || role === "basic") ? null : { role, options: {} };
+    }
+
+    //fresh role context for a persistent die, with the raw player scopes it was created with (flag or socket) when we have them
+    _persistentRoleContext(user, rawRoleScopes) {
+        const context = Dice3D.ROLE_CONTEXT(user);
+        if (rawRoleScopes && typeof rawRoleScopes === "object") {
+            const scopes = Utils.sanitizeRoleScopes(foundry.utils.duplicate(rawRoleScopes), user);
+            for (const [id, scope] of Object.entries(scopes)) {
+                if (context[id]) context[id].player = scope;
+            }
+        }
+        return context;
+    }
+
     //save local user's persistent dice to flags
     _savePersistentDiceToFlags() {
         if (!game.user || this._restoringDice) return;
@@ -1936,12 +2045,16 @@ export class Dice3D {
             const entry = saved[i];
             const { x, y } = SpawnLayout.computeSpawnPosition(i, count, spawnLocation, bounds);
             const appearances = entry.appearances || Dice3D.APPEARANCE(user);
-            const appearance = this.DiceFactory.getAppearanceForDice(appearances, entry.dieType);
+            const role = entry.role || "basic";
+            const roleScopes = entry.roleScopes || null;
+            const appearance = this.DiceFactory.getAppearanceForDice(appearances, entry.dieType, Dice3D._roleNotation(role), this._persistentRoleContext(user, roleScopes));
             await this.spawnPersistentDie(entry.dieType, { x, y }, {
                 ownerUserId: userId,
                 remotePersistentId: entry.persistentId,
                 appearance,
                 _rawAppearances: appearances,
+                role,
+                _rawRoleScopes: roleScopes,
                 diceLibrary: entry.diceLibrary,
                 linkGroupId: entry.linkGroupId || null,
                 linkGroupSecondary: entry.linkGroupSecondary || false,
@@ -1967,6 +2080,8 @@ export class Dice3D {
 
     async _onRemotePersistentCreate(request) {
         const { persistentId, dieType, positionPct, linkGroupId, linkGroupSecondary, digitPlace, appearances, diceLibrary, guest } = request.data;
+        const role = request.data.role || "basic";
+        const roleScopes = request.data.roleScopes || null;
         const user = game.users.get(request.user);
         if (!user) return;
 
@@ -1977,7 +2092,7 @@ export class Dice3D {
         this.DiceFactory.preloadPresets(false, request.user);
 
         const resolvedAppearance = this.DiceFactory.getAppearanceForDice(
-            appearances || Dice3D.APPEARANCE(user), dieType
+            appearances || Dice3D.APPEARANCE(user), dieType, Dice3D._roleNotation(role), this._persistentRoleContext(user, roleScopes)
         );
 
         await this.spawnPersistentDie(dieType, positionPct, {
@@ -1988,6 +2103,8 @@ export class Dice3D {
             digitPlace: digitPlace ?? null,
             appearance: resolvedAppearance,
             _rawAppearances: appearances,
+            role,
+            _rawRoleScopes: roleScopes,
             diceLibrary,
             guest: guest || null
         }, false);

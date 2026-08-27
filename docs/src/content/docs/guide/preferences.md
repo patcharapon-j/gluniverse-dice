@@ -38,27 +38,29 @@ The Preferences tab controls how dice behave during and after a roll.
 
 - **Throwing Force** - The intensity of the roll: weak, medium, or strong. Affects how far dice travel and how much they bounce.
 
-## Damage Type Themes
+## Dice Roles
 
-- **Apply damage type themes to dice** - When enabled, damage types (fire, cold, radiant, etc.) can automatically apply matching color themes to your dice. Disable to always use your own appearance settings regardless of damage type.
+- **Apply optional dice role appearances** - When enabled, dice tagged with a role your game marks as optional (damage types, by default) take that role's appearance. Disable to see your own dice instead. Roles marked as essential by your game system or the GM (a system's special dice, for example) keep their appearance either way.
 
-### Damage Type Mapping (GM Only)
+### Dice Roles table (GM Only)
 
-The GM can configure which appearance is used for each damage type. The **Damage Type Mapping** button is available in the Dice So Nice! section of Module Settings (see [Getting Started](/foundryvtt-dice-so-nice/guide/getting-started/#action-buttons)).
+A **role** is what a die means in your game: a damage type, a special die of your game system... Every role can have its own world-wide appearance, set by the GM. The **Dice Roles** button is available in the Dice So Nice! section of Module Settings (see [Getting Started](/foundryvtt-dice-so-nice/guide/getting-started/#action-buttons)).
 
-![Damage Type Mapping dialog](../../../assets/damage-mapping.webp)
+Each row of the table is a role and shows:
 
-From the mapping dialog, the GM can:
+- **Role** and **Group** - the label and the group it belongs to ("Damage Types", the name of your game system...).
+- **Origin** - *Built-in* for the damage types that ship with the module, *Registered* (with the package id) for roles added by a game system or a dice pack, *Custom* for roles you created.
+- **Detectors** - how a die gets this role: modifier tokens declared by the registering package (i.e. `h`, `f`), or type ids matched against the damage type or flavor of the roll.
+- **Players** - two indicators: whether players may customize this role in their own dice settings, and whether they may turn it off with their "Apply optional dice role appearances" preference.
+- **Dice Preset** and **Theme** - quick pick of the world-wide look of the role. *Inherit* leaves the field to the registering package defaults, then to each player's basic dice.
+- **Appearance...** - opens the full dice settings editor targeted at the world appearance of this role.
+- **Reset to default** clears the world appearance of the role, **Delete** removes a custom role (registered and built-in roles are greyed out instead and can be restored).
 
-- **Map each damage type** to a specific dice preset (system) and/or theme (colorset).
-- **Map a damage type to a saved configuration** - The "Save" column lets you pick one of your saved dice configurations (created from the Profile & Data tab). When a save is selected, it overrides the preset and theme columns, applying the full saved appearance instead. This is useful when you want a damage type to use a complete custom look that you have already set up.
-- **Add custom damage types** by providing an id and a display label.
-- **Delete custom damage types** that are no longer needed.
-- **Reset to defaults** to restore the built-in mappings.
+**Add role** and the gear icon of a row open the role settings: the two player permissions, plus the label, id and type ids of a custom role (the id is derived from the label when left empty). Save the table before opening *Appearance...* on a new role.
 
-If a saved configuration referenced by a mapping is deleted, the mapping will show a broken reference indicator. You can fix it by selecting a different save or clearing the save column.
-
-Built-in damage types include: fire, acid, cold, radiant, poison, thunder, lightning, air, water, earth, force, psychic, necrotic, and ice.
+:::note[How a die gets its final look]
+For a die in a role, fields are resolved in this order: the player's own appearance for that role (only for roles players may customize), the world appearance set here, the defaults of the package that registered the role, then the player's basic global settings. A roll that sets its own appearance through the API still wins over all of these.
+:::
 
 ## Immersive Darkness
 

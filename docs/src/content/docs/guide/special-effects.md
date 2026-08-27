@@ -108,6 +108,31 @@ The inner expression must include a dice count (`3d20`) or wildcard (`*d20`) and
 
 The effect plays only on the dice that pass the inner condition. In a `3d20` roll of [20, 20, 5], only the two 20s receive the effect.
 
+### Dice Roles
+
+Add a role tag in brackets right after the faces to match only dice carrying that [dice role](/foundryvtt-dice-so-nice/guide/preferences/#dice-roles) (a damage type, a special system die...). Untagged terms match every role, as before. The tag goes before any modifier and also works inside `count(...)` and the count keywords. Unknown role ids are rejected by the formula validator; hover the formula input for the list of available roles.
+
+```
+d12[hope] == 12
+d12[fear] == 1
+d6[fire] >= 5
+success(d6[hope]cs=3) > 2
+count(2d12[hope] == 12) >= 1
+```
+
+### Any Faces, Max and Min
+
+Use `*` as the faces to match a die of any size, and the keywords `max` / `min` to compare against the extreme values of the die (its number of faces and 1). On an aggregate term, `max` and `min` are the extreme totals of the term.
+
+```
+d* == max
+d*[hope] == max
+d20 == min,max
+2d6 == max
+```
+
+`max` and `min` are not accepted after `total`.
+
 ### Modifiers
 
 Formulas can include Foundry dice modifiers: `kh`, `kl`, `dh`, `dl`, `cs`, `cf`. Modifiers can include a comparison: `cs=3`, `cf<3`, `kh>=5`. DnD 5e `adv`/`dis` modifiers are recognized automatically.
@@ -129,6 +154,9 @@ Formulas can include Foundry dice modifiers: `kh`, `kl`, `dh`, `dl`, `cs`, `cf`.
 | `exploded(d6) >= 3` | 3+ dice exploded |
 | `d20kh == 20` | Nat 20 on a keep-highest d20 |
 | `count(3d20 == 20) >= 2` | 2+ of three d20s show a 20 |
+| `d12[hope] == 12` | A Hope die showing a 12 |
+| `d* == max` | Any die showing its highest face |
+| `d*[fear] == min` | Any Fear die showing a 1 |
 
 ## Effects
 

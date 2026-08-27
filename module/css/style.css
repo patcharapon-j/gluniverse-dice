@@ -184,6 +184,15 @@
     display: block;
 }
 
+.dice-so-nice .sfx-data input.sfx-formula-warning {
+    border-color: #d99a1e;
+    outline-color: #d99a1e;
+}
+
+.dice-so-nice .sfx-formula-error-icon.warning {
+    color: #d99a1e;
+}
+
 .dice-so-nice .dice-more-theme {
     border: 1px solid #585858;
     border-radius: 5px 5px 5px 5px;
@@ -294,6 +303,31 @@
 
 .dice-so-nice .tabAppearance {
     gap: 0.3rem;
+}
+
+.dice-so-nice .dsn-role-switcher {
+    margin-bottom: 6px;
+}
+
+.dice-so-nice .dsn-role-switcher select {
+    font-weight: bold;
+}
+
+.dice-so-nice .dsn-role-switcher button[data-role-reset] {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    padding: 0;
+    line-height: 1;
+}
+
+/* a color preview that shows the inherited value, not an override of this scope */
+.dice-so-nice .tabAppearance input[type="color"].dsn-inherit {
+    outline: 2px dashed var(--color-text-secondary, #7a7971);
+    outline-offset: -2px;
+    opacity: 0.65;
 }
 
 .dice-so-nice .tabAppearance a.system-control, .dice-so-nice .tabAppearance a.library-control {
@@ -635,7 +669,8 @@
     padding: 4px 0 2px;
 }
 
-.dice-library-dialog-app .dice-library-other-user {
+.dice-library-dialog-app .dice-library-other-user,
+.dice-library-dialog-app .dice-library-world {
     border-top: 1px solid var(--color-border-light-tertiary);
     margin-top: 2px;
     padding-top: 2px;
@@ -987,125 +1022,6 @@
     display: flex;
     align-items: center;
     gap: 0.35rem;
-}
-
-/* Damage type mapping config window */
-.damage-type-config .damage-type-config-body {
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-}
-
-.damage-type-config .damage-type-config-table-wrap {
-    max-height: 55vh;
-    overflow-y: auto;
-    border: 1px solid var(--color-border-light-tertiary, rgba(0, 0, 0, 0.2));
-    border-radius: 4px;
-}
-
-.damage-type-config .damage-type-config-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: var(--font-size-14, 14px);
-}
-
-.damage-type-config .damage-type-config-table thead th {
-    position: sticky;
-    top: 0;
-    background: var(--color-bg-alt, rgba(0, 0, 0, 0.05));
-    text-align: left;
-    padding: 0.4rem 0.5rem;
-    font-weight: 600;
-    border-bottom: 1px solid var(--color-border-light-tertiary, rgba(0, 0, 0, 0.2));
-}
-
-.damage-type-config .damage-type-config-table td {
-    padding: 0.35rem 0.5rem;
-    border-bottom: 1px solid var(--color-border-light-tertiary, rgba(0, 0, 0, 0.08));
-    vertical-align: middle;
-}
-
-.damage-type-config .damage-type-config-table tbody tr:last-child td {
-    border-bottom: none;
-}
-
-.damage-type-config .col-label {
-    width: 26%;
-}
-
-.damage-type-config .col-label .builtin-label {
-    font-weight: 600;
-}
-
-.damage-type-config .col-label .damage-type-id {
-    display: block;
-    font-size: 0.8em;
-    opacity: 0.6;
-    font-family: var(--font-mono, monospace);
-}
-
-.damage-type-config .col-label input[type=text] {
-    width: 100%;
-    margin-bottom: 2px;
-}
-
-.damage-type-config .col-label .damage-type-id-input {
-    font-family: var(--font-mono, monospace);
-    font-size: 0.85em;
-    opacity: 0.85;
-}
-
-.damage-type-config .col-preset,
-.damage-type-config .col-theme,
-.damage-type-config .col-save {
-    width: 21%;
-}
-
-.damage-type-config .col-preset select,
-.damage-type-config .col-theme select,
-.damage-type-config .col-save select {
-    width: 100%;
-}
-
-.damage-type-config .col-save .broken-ref {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    color: var(--color-level-warning, #e0a020);
-    font-size: 0.85em;
-    margin-bottom: 2px;
-}
-
-.damage-type-config .col-actions {
-    width: 2.5rem;
-    text-align: center;
-}
-
-.damage-type-config .col-actions button {
-    width: 2rem;
-    height: 2rem;
-    padding: 0;
-    line-height: 1;
-}
-
-.damage-type-config .damage-type-config-actions {
-    display: flex;
-    justify-content: flex-start;
-    padding-top: 0.3rem;
-}
-
-.damage-type-config .damage-type-config-actions button {
-    padding: 0.35rem 0.75rem;
-}
-
-.damage-type-config select:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-}
-
-.damage-type-config .col-actions button:disabled {
-    opacity: 0.35;
-    cursor: not-allowed;
 }
 
 /* mask initiative cells while the 3D roll is still animating */

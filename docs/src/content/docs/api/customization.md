@@ -425,7 +425,7 @@ let r = new Roll('1d6[black]+1d6[white]').evaluate().then((roll) => {
 ```
 
 :::note
-The `die:` prefix is reserved for [library die resolution](/foundryvtt-dice-so-nice/guide/dice-library/#rolling-a-library-die-by-name). A flavor like `[die:Fire Oracle]` resolves to a named library die instead of a colorset or damage type. Avoid naming custom colorsets starting with `die:`.
+The `die:` prefix is reserved for [library die resolution](/foundryvtt-dice-so-nice/guide/dice-library/#rolling-a-library-die-by-name). A flavor like `[die:Fire Oracle]` resolves to a named library die instead of a colorset or role. Avoid naming custom colorsets starting with `die:`.
 :::
 ### Modifying the Roll object
 If you prefer keep the flavor feature available for other uses, you can add a new attribute to a DiceTerm or Roll object instead.
@@ -461,61 +461,108 @@ r.dice[0].options.appearance = {
 r.toMessage();
 ```
 
-## Damage Type Detection and Mapping
+## Dice roles
 
+A **role** is what a die means in your game: `hope`, `wild`, `fire`, `acid`... Every die has exactly one role. `basic` is the default and is what a player's regular appearance settings describe. Every other role resolves to its own appearance, so a `hope` d12 can use a different preset and theme than a basic d12.
 
-DsN can automatically apply color themes to dice based on the damage type of a roll. This works through three detection paths, in priority order:
+Detection runs in this order and the first match wins:
 
-1. **`DiceTerm.options.type`** - The D&D 5e-style damage type field (e.g., `"fire"`, `"cold"`)
-2. **`DiceTerm.options.flavor`** - The legacy flavor text field
-3. **Bracket notation** - The `[fire]` inline flavor path in roll formulas
+1. **Explicit role** set by the system: `term.options.dsnRole` on a die term, or a `role` path declared through [`getDSNProperties()`](/foundryvtt-dice-so-nice/api/roll/#declaring-roll-properties-with-getdsnproperties) on the Roll class.
+2. **Modifier token** declared by a role (`detectors.modifiers`). The token is matched exactly against the modifier command: `h` matches `h` and `h2`, not `hp`.
+3. **`term.options.type`** then **`term.options.flavor`** matched against `detectors.types` of every role, then against the built-in damage type ids. `Roll.options.type` and `Roll.options.flavor` are merged down into each contained die term, so a system can set them once at the roll level.
 
-Both `type` and `flavor` are auto-merged from `Roll.options` into each contained `DiceTerm`, so system developers can set the damage type once at the roll level:
+Dice that match nothing are `basic`. A player who turns off the **Apply optional dice role appearances** preference sends every *optional* role back to `basic`, whichever way it was detected: built-in damage types and roles created by the GM are optional, registered roles are not unless they say so.
+
+### Tagging dice explicitly
 
 ```javascript
-let r = await new Roll('2d6', { type: 'fire' }).evaluate();
+// on a die term
+let r = await new Roll('1d12 + 1d12').evaluate();
+r.dice[0].options.dsnRole = 'hope';
+r.dice[1].options.dsnRole = 'fear';
 r.toMessage();
-// Both d6s will use the "fire" appearance
+
+// from the Roll class, resolved per roll scope
+class DamageRoll extends Roll {
+    getDSNProperties() {
+        return { role: 'options.damageType' };
+    }
+}
 ```
 
-### Declaring a damage type source on a Roll class
+Declaring `role` through `getDSNProperties()` makes Dice So Nice! ignore `.type` and `.flavor` for that roll's dice and trust the declared path only. See [Declaring Roll properties with `getDSNProperties`](/foundryvtt-dice-so-nice/api/roll/#declaring-roll-properties-with-getdsnproperties) for the full convention.
 
-When a system keeps the damage type on its own Roll subclass instead of on the die terms (sometimes nested in pools or grouped sub-rolls, or behind a flavor that carries extra qualifiers like PF2e's `"persistent,fire"`), the three detection paths above never see the right value. A Roll class can instead declare where DsN should read its damage type through the `getDSNProperties()` convention. Declaring it makes DsN ignore `.type` and `.flavor` for that roll's dice and trust the declared source only.
+### Registering a role
 
-See [Declaring Roll properties with `getDSNProperties`](/foundryvtt-dice-so-nice/api/roll/#declaring-roll-properties-with-getdsnproperties) for the full convention. Note that it only changes which damage type id is detected; the GM mapping and developer defaults below still decide the final appearance.
-
-### Developer Default Mapping
-
-Systems and modules can ship their own default appearance for damage types, so a sensible look is applied out of the box without the GM configuring anything. A developer default sits between the built-in colorset fallback and the GM override:
-
-```
-built-in fallback  <  developer default  <  GM override
-```
-
-Register defaults from the `diceSoNiceReady` hook with `dice3d.addDamageTypeDefaults`. This works both for the built-in damage types listed below and for brand-new damage type ids your system introduces.
+Systems and modules register roles from the `diceSoNiceReady` hook with `dice3d.addRole(role, { package })`. The package id is optional and only used in conflict warnings. Registering an id that already exists merges into it.
 
 ```javascript
 Hooks.once('diceSoNiceReady', (dice3d) => {
-    dice3d.addDamageTypeDefaults({
-        // override a built-in damage type with your own registered system/preset
-        fire: { preset: 'mysystem' },
-        // map a brand-new damage type your system introduces
-        sacred: { colorset: 'radiant', label: 'Sacred' }
-    });
+    // detected through a roll modifier declared by the system's own die term
+    dice3d.addRole({
+        id: 'hope',
+        label: 'Hope',
+        group: 'My Game',
+        customizable: true,
+        dieTypes: ['d6', 'd12', 'd20'],
+        defaults: { global: { colorset: 'radiant' } },
+        detectors: { modifiers: ['h'] }
+    }, { package: 'my-system' });
+
+    // a damage type detected through the type or flavor of the roll
+    dice3d.addRole({
+        id: 'sacred',
+        label: 'Sacred',
+        group: 'DICESONICE.DamageTypes',
+        optional: true,
+        detectors: { types: ['sacred', 'holy'] },
+        defaults: { global: { colorset: 'radiant' } }
+    }, { package: 'my-system' });
 });
 ```
 
-Each entry accepts these optional fields:
+A role record has the following fields:
 
-- `colorset` - a registered colorset/theme id
-- `preset` - a registered system id
-- `label` - a display name shown in the GM's Damage Type Mapping table for damage types that are not built in.
+- **id** - role id (`hope`, `fire`).
+- **label** - display name, can be a localization key.
+- **group** - group shown in the UIs (the name of your game, `"DICESONICE.DamageTypes"`...), can be a localization key.
+- **customizable** - when `true`, players can pick this role in their dice settings and give it their own look. The GM can flip any role from the Dice Roles table.
+- **optional** - when `true`, the player preference "Apply optional dice role appearances" turns this role off. Defaults to `false`: set it on roles that are a coloring convention laid over the player's dice (damage types) rather than dice of their own. The GM can flip it from the Dice Roles table.
+- **dieTypes** - optional die type whitelist (`["d6", "d12"]`). Only narrows what the player settings show for this role; it does not affect detection or resolution.
+- **defaults** - the default appearance of the role: `{ global?: {...}, d4?: {...}, d12?: {...} }`. Each slot accepts the same fields as a player appearance (`colorset`, `system`, `texture`, `material`, `font`, `labelColor`, `diceColor`, `outlineColor`, `edgeColor`...). Missing fields are inherited.
+- **detectors** - `{ modifiers?: [...], types?: [...] }`. `modifiers` are roll modifier tokens declared by the system's own dice term class, `types` are matched against the type or flavor of the roll.
 
-### Built-in Damage Types
+### Role defaults on a dice preset
 
-The following damage types have built-in colorset fallbacks: `fire`, `acid`, `cold`, `radiant`, `poison`, `thunder`, `lightning`, `air`, `water`, `earth`, `force`, `psychic`, `necrotic`, `ice`.
+A `DiceSystem` can carry role defaults. They are registered when the system is added, with the same merge rule as `addRole`:
 
-When no GM override or developer default is configured, these fall back to their matching colorset automatically.
+```javascript
+import { DiceSystem } from '../dice-so-nice/api.js';
+
+const pack = new DiceSystem('my-dice', 'My Dice', 'default', 'My Dice Pack');
+pack.roleDefaults = {
+    hope: { global: { system: 'my-dice', colorset: 'my-hope-theme' } },
+    fear: { global: { system: 'my-dice', colorset: 'my-fear-theme' } }
+};
+dice3d.addSystem(pack);
+```
+
+### Appearance resolution
+
+For a die in a role, each appearance field is resolved separately and the first value found wins:
+
+1. the player's own appearance for that role, when the role is customizable
+2. the world appearance set by the GM in the Dice Roles table
+3. the defaults registered with `addRole` or `roleDefaults`
+4. the player's basic global appearance
+
+At each step the slot of the die type is read before the global slot. Per-actor appearance and the "Force roll appearance to owner" setting apply to roles the same way they apply to basic dice. A die's own `options.appearance`, when a system sets one, is merged last and wins over the whole role resolution.
+
+Role appearances can also reference a die from the [Dice Library](/foundryvtt-dice-so-nice/guide/dice-library/). World appearances reference dice from the world library, which the GM edits and every client can read.
+
+### Built-in roles
+
+The following damage types are built-in roles in the "Damage Types" group: `fire`, `acid`, `cold`, `radiant`, `poison`, `thunder`, `lightning`, `air`, `water`, `earth`, `force`, `psychic`, `necrotic`, `ice`. Each is detected through its id and defaults to the matching colorset.
 
 ## Preloading Presets
 

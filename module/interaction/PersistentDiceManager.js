@@ -80,6 +80,7 @@ export class PersistentDiceManager {
 		//axis must be zero or normalized (cannon-es NaN otherwise)
 		const vectordata = {
 			type: type,
+			role: opts.role || "basic",
 			pos: { x: posX, y: diceobj.inertia * 13 * LEGACY_TO_METERS, z: posY },
 			velocity: { x: 0, y: 0, z: 0 },
 			angle: { x: Math.random() * Math.PI * 2, y: Math.random() * Math.PI * 2, z: Math.random() * Math.PI * 2 },
@@ -585,6 +586,7 @@ export class PersistentDiceManager {
 				compositeResult: dm.notation.compositeResult || null,
 				compositeType: dm.notation.compositeType || null,
 				options: dm.options || {},
+				role: dm.notation.role || "basic",
 				termIndex: null,
 				termNumber: null,
 				termTotal: null,
