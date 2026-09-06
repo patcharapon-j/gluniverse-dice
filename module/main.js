@@ -460,7 +460,7 @@ const shouldInterceptMessage = (chatMessage, options = {dsnCountAddedRoll: 0, ds
 
     if (chatMessage.getFlag("dice-so-nice", "skip")) return false;
 
-    const hasInlineRoll = game.settings.get("dice-so-nice", "animateInlineRoll") && chatMessage.content.includes('inline-roll');
+    const hasInlineRoll = Dice3D.hasInlineRoll(chatMessage);
 
     const hide3dDiceOnSecretRolls = game.settings.get("dice-so-nice", "hide3dDiceOnSecretRolls");
     const showGhostDice = game.settings.get("dice-so-nice", "showGhostDice");
@@ -559,41 +559,7 @@ Hooks.on('createChatMessage', (chatMessage) => {
 
     if (!shouldInterceptMessage(chatMessage)) return;
 
-    let rolls = chatMessage.isRoll ? chatMessage.rolls : null;
-    let maxRollOrder = rolls ? 0 : -1;
-
-    const hasInlineRoll = game.settings.get("dice-so-nice", "animateInlineRoll") && chatMessage.content.includes('inline-roll');
-    if (hasInlineRoll) {
-        const temp = document.createElement("div");
-        temp.innerHTML = chatMessage.content;
-        let inlineRollEls = temp.querySelectorAll(".inline-roll.inline-result:not(.inline-dsn-hidden)");
-        if (inlineRollEls.length == 0 && !chatMessage.isRoll) //it was a false positive
-            return;
-        let inlineRollList = [];
-        const sequenceInlineRolls = !game.settings.get("dice-so-nice", "enabledSimultaneousRollForMessage");
-        inlineRollEls.forEach((el, index) => {
-            //We use the Roll class registered in the CONFIG constant in case the system overwrites it (eg: HeXXen)
-            let roll = CONFIG.Dice.rolls[0].fromJSON(unescape(el.dataset.roll));
-            if (sequenceInlineRolls) {
-                maxRollOrder++;
-                roll.dice.forEach(diceterm => {
-                    if (!diceterm.options.hasOwnProperty("rollOrder"))
-                        diceterm.options.rollOrder = maxRollOrder;
-                });
-            }
-            inlineRollList.push(roll);
-        });
-        if (inlineRollList.length) {
-            if (chatMessage.isRoll)
-                inlineRollList = [...chatMessage.rolls, ...inlineRollList];
-
-            let pool = foundry.dice.terms.PoolTerm.fromRolls(inlineRollList);
-            //We use the Roll class registered in the CONFIG constant in case the system overwrites it (eg: HeXXen)
-            rolls = [CONFIG.Dice.rolls[0].fromTerms([pool])];
-        }
-        else if (!chatMessage.isRoll)
-            return;
-    }
+    const rolls = Dice3D.rollsFromMessage(chatMessage);
 
     //Because Better Roll 5e sends an empty roll object sometime
     if (!rolls.length || !rolls[0].dice.length)
@@ -615,7 +581,7 @@ Hooks.on('createChatMessage', (chatMessage) => {
 
     //interactive throw: the flag sends every client to the pending flow instead of the animation
     if (game.dice3d.pendingThrows?.shouldOpenPending(chatMessage)) {
-        game.dice3d.pendingThrows.openPending(chatMessage);
+        game.dice3d.pendingThrows.openPending(chatMessage, rolls);
         return;
     }
 

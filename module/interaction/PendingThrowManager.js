@@ -34,12 +34,11 @@ export class PendingThrowManager {
         if (request === false) return false;
         if (state !== "on" && request !== true) return false;
 
-        if (!message.isRoll || !message.rolls?.length) return false;
+        const rolls = Dice3D.rollsFromMessage(message);
+        if (!rolls.length || !rolls[0].dice.length) return false;
 
         //private rolls stay on the existing secret/ghost path
         if (message.whisper?.length || message.blind) return false;
-
-        if (game.settings.get("dice-so-nice", "animateInlineRoll") && message.content?.includes("inline-roll")) return false;
 
         if (message.getFlag("dice-so-nice", "persistent") || message.getFlag("dice-so-nice", "skip")) return false;
 
@@ -60,19 +59,18 @@ export class PendingThrowManager {
         const actorIdSet = new Set(message.rolls.filter(r => r.data?.actorId).map(r => r.data.actorId));
         if (actorIdSet.size > 1 && shouldResolveOwner) return false;
 
-        const model = this._buildSlotModel(message);
+        const model = this._buildSlotModel(message, rolls);
         return model.groups.some(group => group.slots.some(slot => !slot.prebound));
     }
 
     shouldOpenPending(message) {
         if (message.getFlag("dice-so-nice", PendingThrowManager.STATE_FLAG)?.state !== "pending") return false;
         if (this.pending.has(message.id)) return false;
-        if (!message.isRoll || !message.rolls?.length) return false;
         return true;
     }
 
-    openPending(message) {
-        const model = this._buildSlotModel(message);
+    openPending(message, rolls = Dice3D.rollsFromMessage(message)) {
+        const model = this._buildSlotModel(message, rolls);
         const record = {
             messageId: message.id,
             userId: message.author?.id ?? null,
@@ -167,7 +165,7 @@ export class PendingThrowManager {
                     bound.add(`${slot.bucketIndex}:${member.termIndex}:${member.resultIndex}`);
             }
         }
-        const rolls = message.rolls;
+        const rolls = Dice3D.rollsFromMessage(message);
         this.dice3d._assignDependentRollOrder(rolls);
         const buckets = this.dice3d._buildRollList(rolls);
         const author = message.author ?? game.user;
@@ -534,7 +532,8 @@ export class PendingThrowManager {
             const currentIndex = this.currentGroupIndex(record);
             const revealedCount = currentIndex === -1 ? record.groups.length : currentIndex + 1;
             const echoSlots = this._heldEchoSlots(record);
-            context.formula = game.messages.get(realId)?.rolls?.map(r => r.formula).join(" + ") ?? "";
+            const realMessage = game.messages.get(realId);
+            context.formula = realMessage ? Dice3D.rollsFromMessage(realMessage).map(r => r.formula).join(" + ") : "";
             context.groups = record.groups.slice(0, revealedCount).map((group, gi) => {
                 const chips = [];
                 const byTerm = new Map();
@@ -675,8 +674,7 @@ export class PendingThrowManager {
     //slot model: throw groups matching the rollOrder buckets then DiceNotation's exploded/reroll sequencing
     //a compound group (d100 tens+units and larger) is one slot anchored on its primary die
     //results already handled by fvtt manual fulfillment are pre-bound
-    _buildSlotModel(message) {
-        const rolls = message.rolls;
+    _buildSlotModel(message, rolls) {
         this.dice3d._assignDependentRollOrder(rolls);
         const buckets = this.dice3d._buildRollList(rolls);
         const fulfillmentMethods = CONFIG.Dice.fulfillment?.methods ?? {};

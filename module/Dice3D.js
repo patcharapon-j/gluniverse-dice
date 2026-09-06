@@ -112,6 +112,36 @@ export class Dice3D {
         return user;
     }
 
+    static hasInlineRoll(message) {
+        return game.settings.get("dice-so-nice", "animateInlineRoll") && !!message.content?.includes("inline-roll");
+    }
+
+    //the rolls dsn animates for a message: its own rolls, plus the inline rolls of its content merged into one pool
+    static rollsFromMessage(message) {
+        const rolls = message.isRoll ? message.rolls : [];
+        if (!Dice3D.hasInlineRoll(message)) return rolls;
+        const temp = document.createElement("div");
+        temp.innerHTML = message.content;
+        const sequenceInlineRolls = !game.settings.get("dice-so-nice", "enabledSimultaneousRollForMessage");
+        let maxRollOrder = message.isRoll ? 0 : -1;
+        const inlineRolls = [];
+        temp.querySelectorAll(".inline-roll.inline-result:not(.inline-dsn-hidden)").forEach(el => {
+            //the Roll class registered in CONFIG in case the system overwrites it (eg: HeXXen)
+            const roll = CONFIG.Dice.rolls[0].fromJSON(unescape(el.dataset.roll));
+            if (sequenceInlineRolls) {
+                maxRollOrder++;
+                roll.dice.forEach(term => {
+                    if (!term.options.hasOwnProperty("rollOrder"))
+                        term.options.rollOrder = maxRollOrder;
+                });
+            }
+            inlineRolls.push(roll);
+        });
+        if (!inlineRolls.length) return rolls;
+        const pool = foundry.dice.terms.PoolTerm.fromRolls([...rolls, ...inlineRolls]);
+        return [CONFIG.Dice.rolls[0].fromTerms([pool])];
+    }
+
     static DEFAULT_APPEARANCE(user = game.user) {
         return {
             global: {
