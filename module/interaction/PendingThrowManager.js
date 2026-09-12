@@ -644,7 +644,7 @@ export class PendingThrowManager {
     _deleteCardMessage(card) {
         if (!card.canUserModify(game.user, "delete")) return;
         const isAuthor = card.author?.id === game.user.id;
-        const isBackstop = game.user === game.users.activeGM;
+        const isBackstop = game.user === game.users.activeGM && !card.author?.active;
         if (isAuthor || isBackstop) card.delete().catch(() => { });
     }
 
