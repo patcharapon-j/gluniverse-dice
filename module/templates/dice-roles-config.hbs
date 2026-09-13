@@ -41,8 +41,8 @@
                         {{/if}}
                     </td>
                     <td class="col-players">
-                        <i class="fa-solid fa-user-pen{{#if row.customizable}} on{{/if}}" data-tooltip="{{localize 'DICESONICE.DiceRolesCustomizable'}}"></i>
-                        <i class="fa-solid fa-toggle-off{{#if row.optional}} on{{/if}}" data-tooltip="{{localize 'DICESONICE.DiceRolesOptional'}}"></i>
+                        <i class="fa-solid fa-user-pen{{#if row.customizable}} on{{/if}}" data-tooltip="{{#if row.customizable}}{{localize 'DICESONICE.DiceRolesCustomizableOn'}}{{else}}{{localize 'DICESONICE.DiceRolesCustomizableOff'}}{{/if}}"></i>
+                        <i class="fa-solid fa-toggle-off{{#if row.optional}} on{{/if}}" data-tooltip="{{#if row.optional}}{{localize 'DICESONICE.DiceRolesOptionalOn'}}{{else}}{{localize 'DICESONICE.DiceRolesOptionalOff'}}{{/if}}"></i>
                     </td>
                     <td class="col-preset">
                         <select name="preset-{{row.key}}" {{#if row.deleted}}disabled{{/if}}>
