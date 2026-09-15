@@ -16,6 +16,8 @@ Most systems and modules work with one of the following approaches:
 
 - **Multiple chat messages for one logical roll.** Some systems create several messages for a single action (e.g. a roll card and a separate result card). In that case, put the Roll on the primary message and use [Companion Messages](/foundryvtt-dice-so-nice/api/companion-messages/) to link the others. Companions stay hidden during the animation and are revealed when the dice land. Go to Step 3 for the primary message, then see the Companion Messages page for the linking flag.
 
+- **A result shown inside another message.** If a card that is not the roll message displays the outcome of a roll, wrap that part in an element with a `data-message-id` attribute set to the roll message's ID. It stays hidden until the dice land. See [Showing a roll result inside another message](/foundryvtt-dice-so-nice/api/roll/#showing-a-roll-result-inside-another-message).
+
 - **No Roll class or no chat message at all.** If your system uses a custom random strategy or needs to trigger an animation without posting to chat, use the [Roll API](/foundryvtt-dice-so-nice/api/roll/) directly.
 
 ## Step 3: Create a Chat Message with the required data

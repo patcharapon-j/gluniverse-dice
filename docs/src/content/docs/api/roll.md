@@ -205,6 +205,21 @@ The selector must match the elements that wrap individual roll results inside th
 This only affects how rolls added via message updates are hidden and revealed. The initial message hiding (when the message is first created with rolls) always hides the entire message element regardless of this selector.
 :::
 
+## Showing a roll result inside another message
+
+Some systems display the result of a roll in a message other than the one carrying the Roll. A summary card listing each participant's saving throw, or a request card ticking off who has rolled, are typical examples. The roll message stays hidden until the dice land, but the other message does not, so the result leaks before the animation ends.
+
+Dice So Nice! handles this with a naming convention: wrap the nested result in an element with a `data-message-id` attribute set to the ID of the roll message.
+
+```html
+<li class="target" data-message-id="{{ resultMessageId }}">
+    <span class="name">Bob</span>
+    <span class="result">17</span>
+</li>
+```
+
+While the animation for that message plays, Dice So Nice! hides every element with a matching `data-message-id` found inside another chat message, whenever it gets rendered or re-rendered. The element is revealed at the same time as the roll message. If the roll message is deleted mid-animation, the element is revealed too.
+
 ## Hiding a dice from a roll animation
 
 :::tip[Skip vs. Hidden]
