@@ -95,4 +95,4 @@ Hooks.on('diceSoNicePendingThrowClosed', (messageId) => {});
 
 They fire on every client and only describe what that client is showing. To know when the roll is done, keep using `diceSoNiceRollComplete`.
 
-`diceSoNiceRollStart` also fires when the pending throw opens, once per roll of the message, so a module can inspect or swap the roll (`context.dsnRoll`) before the throw starts. It fires again for the remaining dice when the throw is either escaped or force-resolved.
+`diceSoNiceRollStart` also fires when the pending throw opens, once per roll of the message, so a module can inspect or swap the roll (`context.dsnRoll`) before the throw starts.

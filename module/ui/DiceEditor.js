@@ -3,7 +3,7 @@ import { DiceLibrary } from '../engine/DiceLibrary.js';
 import { DiceColors, TEXTURELIST } from '../engine/DiceColors.js';
 import { DiceShapeLibrary } from '../engine/DiceShapeLibrary.js';
 import { Utils } from '../Utils.js';
-import { Dice3D } from '../Dice3D.js';
+import { DsnSettings } from '../settings/DsnSettings.js';
 import { GlyphPicker } from '../glyph-picker/GlyphPicker.js';
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
@@ -61,7 +61,7 @@ export class DiceEditor extends HandlebarsApplicationMixin(ApplicationV2) {
             const appearances = showcase
                 ? showcase.appearance
                 : (game.user.getFlag("dice-so-nice", "appearance") || {});
-            const roleNotation = Dice3D._roleNotation(showcase?.role);
+            const roleNotation = DsnSettings._roleNotation(showcase?.role);
             let resolved = factory.getAppearanceForDice(appearances, dieType, roleNotation, showcase?.roleContext ?? null);
 
             //if a library die is already selected, init from its stored appearance

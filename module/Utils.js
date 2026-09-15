@@ -518,7 +518,7 @@ export class Utils {
         const bindings = game.keybindings?.bindings?.get("dice-so-nice.dismissEphemeralDice");
         if (!bindings?.length) return;
         if (!bindings.some(b => Utils._matchesKeybinding(event, b))) return;
-        game.dice3d?.dismissEphemeralDice();
+        game.dice3d?.persistent.dismissEphemeralDice();
     }
 
     //match a keydown event against a Foundry stored binding {key, modifiers[]}

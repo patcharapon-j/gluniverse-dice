@@ -1,4 +1,4 @@
-import { Dice3D } from '../Dice3D.js';
+import { DsnSettings } from '../settings/DsnSettings.js';
 import { DiceScene } from '../engine/DiceScene.js';
 import { DiceSFXManager } from '../sfx/DiceSFXManager.js';
 import { SFXFormulaMatcher } from '../sfx/SFXFormulaMatcher.js';
@@ -63,7 +63,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
     }
 
     get noScene() {
-        return Dice3D.CONFIG().visibility === "none";
+        return DsnSettings.CONFIG().visibility === "none";
     }
 
     get title() {
@@ -230,9 +230,9 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
                 "off": "DICESONICE.interactiveThrowsUserOff",
                 "on": "DICESONICE.interactiveThrowsUserOn"
             }),
-            interactiveThrowsAvailable: Dice3D.interactiveThrowsAvailable() && game.settings.get("dice-so-nice", "interactiveThrows") !== "0"
+            interactiveThrowsAvailable: DsnSettings.interactiveThrowsAvailable() && game.settings.get("dice-so-nice", "interactiveThrows") !== "0"
         },
-            this.reset ? Dice3D.ALL_DEFAULT_OPTIONS() : Dice3D.ALL_CONFIG(game.user, this.isActor ? this.document : null)
+            this.reset ? DsnSettings.ALL_DEFAULT_OPTIONS() : DsnSettings.ALL_CONFIG(game.user, this.isActor ? this.document : null)
         );
         delete data.sfxLine;
 
@@ -255,7 +255,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         this.canvas.id = "dice-configuration-canvas";
         this.diceFactory = game.dice3d.box.dicefactory;
         let config = foundry.utils.mergeObject(
-            this.reset ? Dice3D.ALL_DEFAULT_OPTIONS() : Dice3D.ALL_CONFIG(game.user, this.isActor ? this.document : null),
+            this.reset ? DsnSettings.ALL_DEFAULT_OPTIONS() : DsnSettings.ALL_CONFIG(game.user, this.isActor ? this.document : null),
             { dimensions: { width: 634, height: 245 }, autoscale: false, scale: 60 }
         );
 
@@ -336,7 +336,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
 
         let specialEffectsList = [];
         let specialEffectsPromises = [];
-        let specialEffects = Dice3D.SFX();
+        let specialEffects = DsnSettings.SFX();
         if (this.reset)
             specialEffects = [];
         this.triggerTypeList = [...triggerTypeList, ...DiceSFXManager.EXTRA_TRIGGER_TYPE];
@@ -466,12 +466,12 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
     }
 
     _basicGlobal() {
-        if (this.isWorldRole) return Dice3D.APPEARANCE(game.user).global;
-        return this._roleBuffers.basic?.global ?? this.currentGlobalAppearance ?? Dice3D.APPEARANCE(game.user, this.targetActor).global;
+        if (this.isWorldRole) return DsnSettings.APPEARANCE(game.user).global;
+        return this._roleBuffers.basic?.global ?? this.currentGlobalAppearance ?? DsnSettings.APPEARANCE(game.user, this.targetActor).global;
     }
 
     _buildRoleContext(role, buffer) {
-        const context = Dice3D.ROLE_CONTEXT(game.user, this.targetActor);
+        const context = DsnSettings.ROLE_CONTEXT(game.user, this.targetActor);
         if (role === "basic" || !context[role]) return context;
         const scope = this._prepareRoleScope(buffer, { keepHidden: false });
         if (this.isWorldRole) {
@@ -614,11 +614,11 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         if (this._roleBuffers[role]) return this._roleBuffers[role];
         let buffer;
         if (role === "basic") {
-            buffer = Dice3D.APPEARANCE(game.user, this.targetActor);
+            buffer = DsnSettings.APPEARANCE(game.user, this.targetActor);
         } else {
             const stored = this.isWorldRole
                 ? (Utils.sanitizeRoleScopes(this.document.getFlag("dice-so-nice", "roleAppearance") ?? {})[role] ?? {})
-                : (Dice3D.ROLE_APPEARANCE(game.user, this.targetActor)[role] ?? {});
+                : (DsnSettings.ROLE_APPEARANCE(game.user, this.targetActor)[role] ?? {});
             const dieTypes = this._getRoleDieTypes(role);
             buffer = { global: stored.global ?? {} };
             const hidden = {};
@@ -945,7 +945,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
                         let customization = foundry.utils.mergeObject({ appearance: config.appearance }, { specialEffects: specialEffects }, { applyOperators: true });
                         customization.diceLibrary = config.diceLibrary;
                         customization.roleContext = config.roleContext;
-                        game.dice3d._showAnimation(data, customization);
+                        game.dice3d.queue.enqueue(data, customization);
                     });
                 } else if (target.closest("[data-sfx-create]")) {
                     let ID = this.element.querySelectorAll(".sfx-line").length;
@@ -1460,7 +1460,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
     getShowcaseAppearance() {
         let config;
         if (this.isActor || this.isWorldRole) {
-            let userConfig = Dice3D.ALL_CONFIG();
+            let userConfig = DsnSettings.ALL_CONFIG();
             config = foundry.utils.mergeObject(userConfig, {
                 autoscale: false,
                 scale: 60,
@@ -1505,7 +1505,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
             config.roleContext = this._buildRoleContext(this.currentRole, formAppearance);
         } else {
             config.appearance = parseLibrary(formAppearance);
-            config.roleContext = Dice3D.ROLE_CONTEXT(game.user, this.targetActor);
+            config.roleContext = DsnSettings.ROLE_CONTEXT(game.user, this.targetActor);
         }
 
         config.diceLibrary = DiceLibrary.getLibraryForUser(game.user);
@@ -2014,7 +2014,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
                 formData.appearance[scope].systemSettings = Object.fromEntries(Object.entries(formData.appearance[scope].systemSettings).filter(([key]) => systemSettingsIDs.includes(key)));
             }
         }
-        let currentSettings = Dice3D.CONFIG();
+        let currentSettings = DsnSettings.CONFIG();
 
         if (this.reset) {
             await this.document.unsetFlag("dice-so-nice", "roleAppearance");
@@ -2029,7 +2029,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         await game.user.unsetFlag("dice-so-nice", "settings");
 
         //system settings won't be merged here because insertValues is false
-        let appearance = foundry.utils.mergeObject(Dice3D.APPEARANCE(), formData.appearance, { insertKeys: true, insertValues: false, applyOperators: true });
+        let appearance = foundry.utils.mergeObject(DsnSettings.APPEARANCE(), formData.appearance, { insertKeys: true, insertValues: false, applyOperators: true });
 
         //add back system settings and library die refs (mergeObject drops them)
         for (let scope of scopedAppearance) {
@@ -2048,7 +2048,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         }
 
         delete formData.appearance;
-        let settings = foundry.utils.mergeObject(Dice3D.CONFIG(), formData, { insertKeys: false, insertValues: false, applyOperators: true });
+        let settings = foundry.utils.mergeObject(DsnSettings.CONFIG(), formData, { insertKeys: false, insertValues: false, applyOperators: true });
 
         //preserve settings that have no field in this form
         settings.rollingArea = currentSettings.rollingArea;

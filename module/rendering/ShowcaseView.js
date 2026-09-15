@@ -1,7 +1,7 @@
 import { Mesh, Group, PlaneGeometry, ShadowMaterial } from 'three';
 import { LEGACY_TO_METERS } from '../engine/SceneConstants.js';
 import { Utils } from '../Utils.js';
-import { Dice3D } from '../Dice3D.js';
+import { DsnSettings } from '../settings/DsnSettings.js';
 
 //showcase grid layout, selector animation, and die raycasting
 export class ShowcaseView {
@@ -53,7 +53,7 @@ export class ShowcaseView {
 			selectordice = selectordice.filter((die) => !extraDiceTypes.includes(die));
 		if (Array.isArray(config.dieTypes) && config.dieTypes.length)
 			selectordice = selectordice.filter((die) => config.dieTypes.includes(die));
-		const roleNotation = Dice3D._roleNotation(config.role);
+		const roleNotation = DsnSettings._roleNotation(config.role);
 
 		let proportion = this.diceScene.display.containerWidth / this.diceScene.display.containerHeight;
 		let columns = Math.min(selectordice.length, Math.round(Math.sqrt(proportion * selectordice.length)));

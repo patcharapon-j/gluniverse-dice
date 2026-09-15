@@ -1,4 +1,4 @@
-import {Dice3D} from "../Dice3D.js";
+import { DsnSettings } from '../settings/DsnSettings.js';
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -53,7 +53,7 @@ export class RollableAreaConfig extends HandlebarsApplicationMixin(ApplicationV2
             <div class="info">${game.i18n.localize("DICESONICE.RollableAreaText")}</div>
         </div>`;
 
-        let rollingArea = Dice3D.CONFIG().rollingArea;
+        let rollingArea = DsnSettings.CONFIG().rollingArea;
         if(!rollingArea) {
             const diceBox = document.getElementById("dice-box-canvas");
             const diceBoxRect = diceBox.getBoundingClientRect();
@@ -186,7 +186,7 @@ export class RollableAreaConfig extends HandlebarsApplicationMixin(ApplicationV2
     }
 
     async saveSettingsAndReload(rollingArea) {
-        let settings = foundry.utils.mergeObject(Dice3D.CONFIG(), {
+        let settings = foundry.utils.mergeObject(DsnSettings.CONFIG(), {
             rollingArea: rollingArea
         },{applyOperators:true});
         await game.user.setFlag('dice-so-nice', 'settings', settings);

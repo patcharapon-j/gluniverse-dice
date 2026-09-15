@@ -7,7 +7,7 @@ import {
 } from 'three';
 import { DiceScene } from '../engine/DiceScene.js';
 import { LEGACY_TO_METERS } from '../engine/SceneConstants.js';
-import { Dice3D } from '../Dice3D.js';
+import { DsnSettings } from '../settings/DsnSettings.js';
 import { DiceShapeLibrary } from '../engine/DiceShapeLibrary.js';
 import { Utils } from '../Utils.js';
 
@@ -28,7 +28,7 @@ export class DiceEditorPreview {
         const height = this.container.clientHeight || 300;
 
         const config = foundry.utils.mergeObject(
-            Dice3D.ALL_CONFIG(),
+            DsnSettings.ALL_CONFIG(),
             {
                 rendererCacheKey: "editor",
                 dimensions: { width, height },

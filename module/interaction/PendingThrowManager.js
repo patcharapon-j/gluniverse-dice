@@ -1,5 +1,5 @@
 import { DiceNotation, COMPOUND_DICE } from '../DiceNotation.js';
-import { Dice3D } from '../Dice3D.js';
+import { DsnSettings } from '../settings/DsnSettings.js';
 import { InitiativeMask } from '../ui/InitiativeMask.js';
 
 //holds all the pending interactive throw state on this client: the registry, the slot model, the final reveal
@@ -9,9 +9,15 @@ export class PendingThrowManager {
     static REQUEST_FLAG = "interactive";
     static STATE_FLAG = "interactiveThrow";
 
-    constructor(dice3d) {
-        this.dice3d = dice3d;
+    constructor() {
         this.pending = new Map();
+        this.box = null;
+        this.pipeline = null;
+        this.persistent = null;
+    }
+
+    attach(box) {
+        this.box = box;
     }
 
     isPending(messageId) {
@@ -23,10 +29,10 @@ export class PendingThrowManager {
     }
 
     shouldStampInteractive(message) {
-        if (!game.dice3d || game.dice3d.messageHookDisabled) return false;
-        if (!game.dice3d.isEnabled()) return false;
+        if (this.pipeline.messageHookDisabled) return false;
+        if (!DsnSettings.isEnabled()) return false;
 
-        const state = Dice3D.interactiveThrowsState();
+        const state = DsnSettings.interactiveThrowsState();
         if (state === "disabled") return false;
 
         //false always wins (bulk NPC rolls, sweeps); true works unless the feature is fully disabled
@@ -34,7 +40,7 @@ export class PendingThrowManager {
         if (request === false) return false;
         if (state !== "on" && request !== true) return false;
 
-        const rolls = Dice3D.rollsFromMessage(message);
+        const rolls = DsnSettings.rollsFromMessage(message);
         if (!rolls.length || !rolls[0].dice.length) return false;
 
         //private rolls stay on the existing secret/ghost path
@@ -69,7 +75,7 @@ export class PendingThrowManager {
         return true;
     }
 
-    openPending(message, rolls = Dice3D.rollsFromMessage(message)) {
+    openPending(message, rolls = DsnSettings.rollsFromMessage(message)) {
         rolls = rolls.map(roll => {
             const context = { roll, user: message.author ?? game.user, users: null, blind: !!message.blind };
             Hooks.callAll("diceSoNiceRollStart", message.id, context);
@@ -88,7 +94,7 @@ export class PendingThrowManager {
         this.pending.set(message.id, record);
         if (record.userId === game.user.id) {
             this._createCard(record).catch(err => console.error("[Dice So Nice] pending card creation failed:", err));
-            if (Dice3D.CONFIG().interactiveThrowsAutoSpawn)
+            if (DsnSettings.CONFIG().interactiveThrowsAutoSpawn)
                 this.spawnGuests(record).catch(err => console.error("[Dice So Nice] guest auto-spawn failed:", err));
         }
         this.refreshEligibility();
@@ -103,7 +109,7 @@ export class PendingThrowManager {
         this._clearGuests(messageId);
         const message = game.messages.get(messageId);
         if (message) {
-            this.dice3d._revealMessage(message);
+            this.pipeline._revealMessage(message);
         } else {
             InitiativeMask.release(messageId);
             Hooks.callAll("diceSoNiceRollComplete", messageId, []);
@@ -162,7 +168,7 @@ export class PendingThrowManager {
     }
 
     async _animateRemaining(message, record) {
-        if (!this.dice3d.box?.initialized) return;
+        if (!this.box?.initialized) return;
         if (!record.groups.some(g => g.slots.some(s => !s.bound))) return;
         const bound = new Set();
         for (const group of record.groups) {
@@ -172,7 +178,7 @@ export class PendingThrowManager {
                     bound.add(`${slot.bucketIndex}:${member.termIndex}:${member.resultIndex}`);
             }
         }
-        const buckets = this.dice3d._buildRollList(record.rolls);
+        const buckets = this.pipeline._buildRollList(record.rolls);
         const author = message.author ?? game.user;
         for (let bi = 0; bi < buckets.length; bi++) {
             let clone;
@@ -190,7 +196,7 @@ export class PendingThrowManager {
                 });
             });
             if (!anyVisible) continue;
-            await this.dice3d.showForRoll(clone, author, false, null, false, message.id, message.speaker, { ghost: false, secret: false, skipRollStartHook: true });
+            await this.pipeline.showForRoll(clone, author, false, null, false, message.id, message.speaker, { ghost: false, secret: false, skipRollStartHook: true });
         }
     }
 
@@ -237,7 +243,7 @@ export class PendingThrowManager {
             entry.count++;
             needed.set(key, entry);
         }
-        const box = this.dice3d.box;
+        const box = this.box;
         if (box?.initialized) {
             for (const mesh of box.persistentDiceList) {
                 if (mesh.userData?.linkGroupSecondary) continue;
@@ -262,16 +268,16 @@ export class PendingThrowManager {
             for (const entry of missing) {
                 const places = entry.compositeType ? COMPOUND_DICE[parseInt(entry.compositeType.slice(1))] : null;
                 for (let i = 0; i < entry.count; i++) {
-                    const room = maxDiceNumber - (this.dice3d.box?.persistentDiceList.length ?? 0);
+                    const room = maxDiceNumber - (this.box?.persistentDiceList.length ?? 0);
                     if (room < (places ? places.length : 1)) { refused = true; break; }
                     if (places) {
                         const linkGroupId = foundry.utils.randomID();
-                        const primary = await this.dice3d.spawnPersistentDie(places[0].type, null, { linkGroupId, digitPlace: 0, guest, role: entry.role });
+                        const primary = await this.persistent.spawn(places[0].type, null, { linkGroupId, digitPlace: 0, guest, role: entry.role });
                         if (!primary) { refused = true; break; }
                         for (let p = 1; p < places.length; p++)
-                            await this.dice3d.spawnPersistentDie(places[p].type, null, { linkGroupId, linkGroupSecondary: true, digitPlace: p, guest, role: entry.role });
+                            await this.persistent.spawn(places[p].type, null, { linkGroupId, linkGroupSecondary: true, digitPlace: p, guest, role: entry.role });
                     } else {
-                        const mesh = await this.dice3d.spawnPersistentDie(entry.type, null, { guest, role: entry.role });
+                        const mesh = await this.persistent.spawn(entry.type, null, { guest, role: entry.role });
                         if (!mesh) { refused = true; break; }
                     }
                 }
@@ -370,7 +376,7 @@ export class PendingThrowManager {
     }
 
     _randomFaceValue(mesh) {
-        const diceobj = this.dice3d.box?.dicefactory?.get(mesh.notation.type);
+        const diceobj = this.box?.dicefactory?.get(mesh.notation.type);
         const values = diceobj?.values;
         if (Array.isArray(values) && values.length) return values[Math.floor(Math.random() * values.length)];
         const faces = parseInt(mesh.notation.type.slice(1));
@@ -406,7 +412,7 @@ export class PendingThrowManager {
             const groupIndex = this.currentGroupIndex(record);
             if (groupIndex !== -1) this.refreshCard(record.messageId);
             if (record.userId === game.user.id && groupIndex !== -1
-                && Dice3D.CONFIG().interactiveThrowsAutoSpawn && this._missingDiceForCurrentGroup(record).length)
+                && DsnSettings.CONFIG().interactiveThrowsAutoSpawn && this._missingDiceForCurrentGroup(record).length)
                 this.spawnGuests(record).catch(err => console.error("[Dice So Nice] guest auto-spawn failed:", err));
             if (record.resolution === "complete" && !record.resolving && !this._hasClaimedUnboundSlot(record)) {
                 //the transition arrived before our last replay landed: finish now
@@ -421,7 +427,7 @@ export class PendingThrowManager {
     }
 
     refreshEligibility() {
-        const box = this.dice3d.box;
+        const box = this.box;
         if (!box?.initialized) return;
         const openKeys = new Set();
         for (const { slot } of this._openSlots(game.user.id)) openKeys.add(PendingThrowManager._key(slot.type, slot.role));
@@ -445,7 +451,7 @@ export class PendingThrowManager {
 
     //a guest still needed by another pending of the same roller moves to it, the rest despawn with the ephemeral dice
     _clearGuests(messageId) {
-        const box = this.dice3d.box;
+        const box = this.box;
         if (!box?.initialized) return;
         const guests = box.persistentDiceList.filter(m => m.userData?.guestPendingId === messageId);
         if (!guests.length) return;
@@ -487,7 +493,7 @@ export class PendingThrowManager {
                 box.fadeOutPersistentDie(mesh.userData.persistentId, 1000)
                     .catch(err => console.error("[Dice So Nice] guest despawn failed:", err));
             }
-        }, Dice3D.CONFIG().timeBeforeHide);
+        }, DsnSettings.CONFIG().timeBeforeHide);
     }
 
     async _createCard(record) {
@@ -576,7 +582,6 @@ export class PendingThrowManager {
                     chip.label = chip.cells.length > 1 ? `${chip.cells.length}${chip.labelType}` : chip.labelType;
                 return { chips };
             });
-            context.hiddenGroups = record.groups.length - revealedCount;
         }
         return foundry.applications.handlebars.renderTemplate("modules/dice-so-nice/templates/pending-throw-card.hbs", context);
     }
@@ -603,7 +608,7 @@ export class PendingThrowManager {
     }
 
     _heldTypesOfRoller(record) {
-        const box = this.dice3d.box;
+        const box = this.box;
         if (!box?.initialized) return [];
         let meshes;
         if (record.userId === game.user.id)
@@ -695,8 +700,8 @@ export class PendingThrowManager {
     //a compound group (d100 tens+units and larger) is one slot anchored on its primary die
     //results already handled by fvtt manual fulfillment are pre-bound
     _buildSlotModel(message, rolls) {
-        this.dice3d._assignDependentRollOrder(rolls);
-        const buckets = this.dice3d._buildRollList(rolls);
+        this.pipeline._assignDependentRollOrder(rolls);
+        const buckets = this.pipeline._buildRollList(rolls);
         const fulfillmentMethods = CONFIG.Dice.fulfillment?.methods ?? {};
         const maxDiceNumber = game.settings.get("dice-so-nice", "maxDiceNumber");
         const author = message.author ?? game.user;

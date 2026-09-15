@@ -48,11 +48,6 @@ export class DiceBox {
 
 		this.soundManager = new SoundManager();
 
-		//deferred callback values set before persistentDiceManager is created
-		this._deferredOnPersistentEvent = null;
-		this._deferredSfxListForUser = null;
-		this._deferredOnQueueThrow = null;
-
 		this.layers = {
 			dice: 0,
 			bloom: 1
@@ -60,6 +55,7 @@ export class DiceBox {
 
 		this.debugMode = false;
 		this.initialized = false;
+		this.ready = null;
 	}
 
 	//getters delegating to DiceScene
@@ -97,35 +93,8 @@ export class DiceBox {
 	get shadows() { return this.dicefactory.shadows; }
 	get muteSoundSecretRolls() { return this.soundManager.muteSoundSecretRolls; }
 
-	get onPersistentEvent() {
-		return this.persistentDiceManager ? this.persistentDiceManager.onPersistentEvent : this._deferredOnPersistentEvent;
-	}
-
-	set onPersistentEvent(value) {
-		if (this.persistentDiceManager) this.persistentDiceManager.onPersistentEvent = value;
-		else this._deferredOnPersistentEvent = value;
-	}
-
-	get sfxListForUser() {
-		return this.persistentDiceManager ? this.persistentDiceManager.sfxListForUser : this._deferredSfxListForUser;
-	}
-
-	set sfxListForUser(value) {
-		if (this.persistentDiceManager) this.persistentDiceManager.sfxListForUser = value;
-		else this._deferredSfxListForUser = value;
-	}
-
-	get onQueueThrow() {
-		return this.persistentDiceManager ? this.persistentDiceManager.onQueueThrow : this._deferredOnQueueThrow;
-	}
-
-	set onQueueThrow(value) {
-		if (this.persistentDiceManager) this.persistentDiceManager.onQueueThrow = value;
-		else this._deferredOnQueueThrow = value;
-	}
-
 	initialize() {
-		return new Promise(async resolve => {
+		this.ready = new Promise(async resolve => {
 			this.soundManager.update({
 				sounds: this.config.sounds,
 				volume: this.config.soundsVolume,
@@ -199,20 +168,6 @@ export class DiceBox {
 				this.persistentDiceManager.onSelectionChanged = () => this.updateSelectionOutlines();
 				this.persistentDiceManager.onRemoteThrowReplayed = (userId) => this._updateRemoteOutlines();
 
-				//apply deferred callbacks set before persistentDiceManager existed
-				if (this._deferredOnPersistentEvent) {
-					this.persistentDiceManager.onPersistentEvent = this._deferredOnPersistentEvent;
-					this._deferredOnPersistentEvent = null;
-				}
-				if (this._deferredSfxListForUser) {
-					this.persistentDiceManager.sfxListForUser = this._deferredSfxListForUser;
-					this._deferredSfxListForUser = null;
-				}
-				if (this._deferredOnQueueThrow) {
-					this.persistentDiceManager.onQueueThrow = this._deferredOnQueueThrow;
-					this._deferredOnQueueThrow = null;
-				}
-
 				this.throwEngine = new ThrowEngine(this.diceScene, this.physicsWorker, this.dicefactory, this.soundManager);
 				this.throwEngine.sfxContext = this;
 				this.throwEngine.persistentDiceManager = this.persistentDiceManager;
@@ -224,7 +179,7 @@ export class DiceBox {
 				this.inputHandler = new InputHandler(this.diceScene, this.physicsWorker, this.persistentDiceManager, this.throwEngine);
 				this.inputHandler._isVisibleFn = () => this.isVisible;
 				this.inputHandler.onPersistentEvent = (type, data) => {
-					if (this.onPersistentEvent) this.onPersistentEvent(type, data);
+					if (this.persistentDiceManager.onPersistentEvent) this.persistentDiceManager.onPersistentEvent(type, data);
 				};
 				this.inputHandler.onSelectionChanged = () => this.updateSelectionOutlines();
 				this.inputHandler.onDiceClicked = (root, pos) => {
@@ -242,6 +197,7 @@ export class DiceBox {
 			this.initialized = true;
 			resolve();
 		});
+		return this.ready;
 	}
 
 	setScene(dimensions) {

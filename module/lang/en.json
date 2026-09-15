@@ -137,7 +137,6 @@
     "DICESONICE.pendingCardNeed": "{name} needs to roll the following dice:",
     "DICESONICE.pendingCardTitleInert": "{name}'s interactive throw",
     "DICESONICE.pendingCardInertHint": "This throw is playing out on the table.",
-    "DICESONICE.pendingCardMoreGroups": "{count} more to throw once these land…",
     "DICESONICE.pendingCardOverCap": "{count} results beyond the table limit are already locked in.",
     "DICESONICE.pendingCardSpawn": "Spawn dice",
     "DICESONICE.pendingCardSpawnRefused": "The table is full - some dice could not spawn. Reuse table dice or just roll it.",

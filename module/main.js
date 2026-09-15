@@ -1,4 +1,5 @@
 import { Dice3D } from './Dice3D.js';
+import { DsnSettings } from './settings/DsnSettings.js';
 import { DiceConfig } from './ui/DiceConfig.js';
 import { RollableAreaConfig } from './ui/RollableAreaConfig.js';
 import { DiceRolesConfig } from './ui/DiceRolesConfig.js';
@@ -390,7 +391,7 @@ Hooks.once('init', () => {
             ],
             onDown: () => {
                 if (!game.dice3d?.box || game.dice3d.box.selectedPersistentDiceIds.size === 0) return false;
-                game.dice3d.removeSelectedPersistentDice();
+                game.dice3d.persistent.removeSelected();
                 return true; // Consume so Foundry's canvas delete doesn't also fire.
             },
             precedence: foundry.CONST.KEYBINDING_PRECEDENCE?.NORMAL ?? 0
@@ -404,7 +405,7 @@ Hooks.once('init', () => {
         name: "DICESONICE.keybindingDismissEphemeral",
         hint: "DICESONICE.keybindingDismissEphemeralHint",
         editable: [],
-        onDown: () => { game.dice3d?.dismissEphemeralDice(); return true; },
+        onDown: () => { game.dice3d?.persistent.dismissEphemeralDice(); return true; },
         precedence: foundry.CONST.KEYBINDING_PRECEDENCE?.NORMAL ?? 0
     });
     window.addEventListener("keydown", Utils.onDismissEphemeralKeydown);
@@ -460,7 +461,7 @@ const shouldInterceptMessage = (chatMessage, options = {dsnCountAddedRoll: 0, ds
 
     if (chatMessage.getFlag("dice-so-nice", "skip")) return false;
 
-    const hasInlineRoll = Dice3D.hasInlineRoll(chatMessage);
+    const hasInlineRoll = DsnSettings.hasInlineRoll(chatMessage);
 
     const hide3dDiceOnSecretRolls = game.settings.get("dice-so-nice", "hide3dDiceOnSecretRolls");
     const showGhostDice = game.settings.get("dice-so-nice", "showGhostDice");
@@ -531,7 +532,7 @@ Hooks.on('preCreateChatMessage', (message) => {
 Hooks.on('createChatMessage', (chatMessage) => {
     //suppress core dice sound for persistent rolls too
     if (chatMessage.getFlag("dice-so-nice", "persistent")
-        && Dice3D.CONFIG().visibility !== "none"
+        && DsnSettings.CONFIG().visibility !== "none"
         && chatMessage.sound === "sounds/dice.wav") {
         delete chatMessage.sound;
     }
@@ -559,7 +560,7 @@ Hooks.on('createChatMessage', (chatMessage) => {
 
     if (!shouldInterceptMessage(chatMessage)) return;
 
-    const rolls = Dice3D.rollsFromMessage(chatMessage);
+    const rolls = DsnSettings.rollsFromMessage(chatMessage);
 
     //Because Better Roll 5e sends an empty roll object sometime
     if (!rolls.length || !rolls[0].dice.length)
@@ -570,12 +571,12 @@ Hooks.on('createChatMessage', (chatMessage) => {
         return;
 
     //Remove the chatmessage sound if it is the core dice sound.
-    if (Dice3D.CONFIG().visibility !== "none" && chatMessage.sound == "sounds/dice.wav") {
+    if (DsnSettings.CONFIG().visibility !== "none" && chatMessage.sound == "sounds/dice.wav") {
         delete chatMessage.sound;
     }
     chatMessage._dice3danimating = true;
     chatMessage._dice3dPendingRenders = (chatMessage._dice3dPendingRenders || 0) + 1;
-    game.dice3d._hideNestedParts(chatMessage.id);
+    game.dice3d.pipeline._hideNestedParts(chatMessage.id);
 
     if (isInitiativeRoll && !game.settings.get("dice-so-nice", "immediatelyDisplayChatMessages"))
         InitiativeMask.flag(chatMessage);
@@ -586,7 +587,7 @@ Hooks.on('createChatMessage', (chatMessage) => {
         return;
     }
 
-    game.dice3d.renderRolls(chatMessage, rolls);
+    game.dice3d.pipeline.renderRolls(chatMessage, rolls);
 });
 
 Hooks.on("renderCombatTracker", (app, html) => InitiativeMask.apply(html));
@@ -612,9 +613,8 @@ Hooks.on("renderChatMessageHTML", (message, html, data) => {
     if (message._dice3danimating && !game.settings.get("dice-so-nice", "immediatelyDisplayChatMessages")) {
         // for the first render: hide the entire message (_dice3dMessageHidden)
         // for updates: use textContent fingerprints captured in preUpdateChatMessage to diff which roll elements are new vs existing, and only hide new ones
-        // reveal logic is in Dice3D.renderRolls (showMessage closure)
         if (message._dice3dCountNewRolls){
-            const selector = game.dice3d._messageUpdateHideSelector;
+            const selector = game.dice3d.pipeline.messageUpdateHideSelector;
             const existingFps = [...(message._dice3dExistingRollFingerprints || [])];
             if (!message._dice3dAnimFingerprints) message._dice3dAnimFingerprints = {};
             const animFps = message._dice3dAnimFingerprints;
@@ -673,7 +673,7 @@ Hooks.on("preUpdateChatMessage", (message, updateData, options) => {
 
     // snapshot existing roll elements so we can diff after re-render
     if (game.dice3d && options.dsnCountAddedRoll > 0) {
-        const selector = game.dice3d._messageUpdateHideSelector;
+        const selector = game.dice3d.pipeline.messageUpdateHideSelector;
         const el = document.querySelector(`.message[data-message-id="${message.id}"]`);
         if (el) {
             message._dice3dExistingRollFingerprints = [...el.querySelectorAll(selector)]
@@ -701,33 +701,30 @@ Hooks.on("updateChatMessage", (message, updateData, options) => {
         message._dice3dCountNewRolls = options.dsnCountAddedRoll;
         message._dice3dAnimIdCounter = (message._dice3dAnimIdCounter || 0) + 1;
         message._dice3dCurrentAnimId = message._dice3dAnimIdCounter;
-        game.dice3d._hideNestedParts(message.id);
-        game.dice3d.renderRolls(message, message.rolls.slice(options.dsnIndexAddedRoll));
+        game.dice3d.pipeline._hideNestedParts(message.id);
+        game.dice3d.pipeline.renderRolls(message, message.rolls.slice(options.dsnIndexAddedRoll));
     }
 });
 
 Hooks.on("deleteChatMessage", (message) => {
     CompanionLink.cleanup(message.id);
-    game.dice3d?._showNestedParts(message.id);
+    game.dice3d?.pipeline._showNestedParts(message.id);
     game.dice3d?.pendingThrows?.onMessageDeleted(message);
+});
+
+Hooks.on("userConnected", (user, connected) => {
+    if (!game.dice3d?.box?.initialized) return;
+    if (!connected) {
+        game.dice3d.persistent.onUserDisconnected(user.id);
+        game.dice3d.pendingThrows.onUserDisconnected(user.id);
+        return;
+    }
+    game.dice3d.persistent.onUserConnected(user.id);
 });
 
 document.addEventListener("visibilitychange", function () {
     //if there was roll while the tab was hidden
-    if (!document.hidden && game.dice3d && game.dice3d.hiddenAnimationQueue && game.dice3d.hiddenAnimationQueue.length) {
-        let now = (new Date()).getTime();
-        for (let i = 0; i < game.dice3d.hiddenAnimationQueue.length; i++) {
-            let anim = game.dice3d.hiddenAnimationQueue[i];
-            if (now - anim.timestamp > 10000) {
-                anim.resolve(false);
-            } else {
-                game.dice3d._showAnimation(anim.data, anim.config).then(displayed => {
-                    anim.resolve(displayed);
-                });
-            }
-        }
-        game.dice3d.hiddenAnimationQueue = [];
-    }
+    if (!document.hidden) game.dice3d?.queue?.flushHidden();
 });
 
 //Chat Command integration
