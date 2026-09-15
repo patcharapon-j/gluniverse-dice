@@ -575,6 +575,7 @@ Hooks.on('createChatMessage', (chatMessage) => {
     }
     chatMessage._dice3danimating = true;
     chatMessage._dice3dPendingRenders = (chatMessage._dice3dPendingRenders || 0) + 1;
+    game.dice3d._hideNestedParts(chatMessage.id);
 
     if (isInitiativeRoll && !game.settings.get("dice-so-nice", "immediatelyDisplayChatMessages"))
         InitiativeMask.flag(chatMessage);
@@ -704,12 +705,14 @@ Hooks.on("updateChatMessage", (message, updateData, options) => {
         message._dice3dCountNewRolls = options.dsnCountAddedRoll;
         message._dice3dAnimIdCounter = (message._dice3dAnimIdCounter || 0) + 1;
         message._dice3dCurrentAnimId = message._dice3dAnimIdCounter;
+        game.dice3d._hideNestedParts(message.id);
         game.dice3d.renderRolls(message, message.rolls.slice(options.dsnIndexAddedRoll));
     }
 });
 
 Hooks.on("deleteChatMessage", (message) => {
     CompanionLink.cleanup(message.id);
+    game.dice3d?._showNestedParts(message.id);
     game.dice3d?.pendingThrows?.onMessageDeleted(message);
 });
 

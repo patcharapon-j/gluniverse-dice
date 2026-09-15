@@ -52,6 +52,7 @@ export class CompanionLink {
             const primary = game.messages.get(primaryId);
             if (primary?._dice3danimating) {
                 delete primary._dice3danimating;
+                game.dice3d?._showNestedParts(primaryId);
                 const selector = `.message[data-message-id="${primaryId}"]`;
                 document.querySelector(selector)?.classList.remove("dsn-hide");
                 const popout = window.ui?.sidebar?.popouts?.chat;

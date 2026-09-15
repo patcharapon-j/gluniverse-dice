@@ -555,6 +555,7 @@ export class Dice3D {
         //dev escape hatch: set game.dice3d.disableAutoRebuild = true to stop the resize handler from rebuilding the box.
         this.disableAutoRebuild = false;
         this._messageUpdateHideSelector = ".dice-roll";
+        this._nestedHiddenIds = new Set();
         this.defaultShowExtraDice = Dice3D.DEFAULT_OPTIONS.showExtraDice;
 
         //local user's persistent dice data, keyed by persistentId
@@ -1130,6 +1131,32 @@ export class Dice3D {
         return clone;
     }
 
+    //a system can show the result of message X inside another message (ie: dnd5e summary cards)
+    //we hides those parts based on [data-message-id] whenever they get rendered
+    _hideNestedParts(messageId) {
+        if (this.messageHookDisabled || game.settings.get("dice-so-nice", "immediatelyDisplayChatMessages")) return;
+        this._nestedHiddenIds.add(messageId);
+        this._refreshNestedRules();
+    }
+
+    _showNestedParts(messageId) {
+        if (!this._nestedHiddenIds.delete(messageId)) return;
+        this._refreshNestedRules();
+    }
+
+    _refreshNestedRules() {
+        let style = document.getElementById("dsn-nested-hide");
+        if (!style) {
+            style = document.createElement("style");
+            style.id = "dsn-nested-hide";
+            document.head.appendChild(style);
+        }
+        style.textContent = [...this._nestedHiddenIds].map(id => {
+            const safeId = CSS.escape(id);
+            return `.message:not([data-message-id="${safeId}"]) [data-message-id="${safeId}"] { display: none !important; }`;
+        }).join("\n");
+    }
+
     //reveal a held chat message; with animId only the elements tagged with that animation, else the whole message
     //while the message still has a live pending throw, the notification, initiative release and
     //completion hook are skipped: the final reveal of the pending throw fires them
@@ -1200,6 +1227,7 @@ export class Dice3D {
         if (chatMessage._dice3dPendingRenders <= 0) {
             chatMessage._dice3dPendingRenders = 0;
             delete chatMessage._dice3danimating;
+            this._showNestedParts(chatMessage.id);
             delete chatMessage._dice3dCountNewRolls;
             delete chatMessage._dice3dExistingRollFingerprints;
             delete chatMessage._dice3dAnimFingerprints;
