@@ -117,3 +117,4 @@ These flags can be set on a `ChatMessage` at creation time via the `flags` prope
 | `dice-so-nice.skip` | `boolean` | Suppress the 3D animation entirely for this message. See [Roll API](/foundryvtt-dice-so-nice/api/roll/#skip-animation-for-a-specific-message-recommended). |
 | `dice-so-nice.linkedTo` | `string` | Link a non-roll message to a primary roll message so it stays hidden during animation. See [Companion Messages](/foundryvtt-dice-so-nice/api/companion-messages/). |
 | `dice-so-nice.persistent` | `boolean` | Mark the message's dice as persistent (interactive dice that stay on the canvas). |
+| `dice-so-nice.interactive` | `boolean` | `true` asks for an interactive throw, `false` opts this message out of it. See [Interactive Throws](/foundryvtt-dice-so-nice/api/interactive-throws/#request-flags). |

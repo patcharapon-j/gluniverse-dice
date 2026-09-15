@@ -32,7 +32,7 @@ Hooks.once('init', () => {
         restricted: false
     });
 
-    game.settings.registerMenu("dice-so-nice", "damage-type-config", {
+    game.settings.registerMenu("dice-so-nice", "dice-roles-config", {
         name: "DICESONICE.DiceRolesConfigMenu",
         label: "DICESONICE.DiceRolesConfigMenuLabel",
         hint: "DICESONICE.DiceRolesConfigMenuHint",

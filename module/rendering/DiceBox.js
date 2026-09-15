@@ -673,6 +673,7 @@ export class DiceBox {
 			this._eligibleOutlinePass = null;
 		}
 
+		for (const mesh of this.persistentDiceList) this.persistentDiceManager._forwardPendingBind(mesh);
 		this.diceScene.clearScene();
 
 		Utils.removeTicker(this.animateThrow);

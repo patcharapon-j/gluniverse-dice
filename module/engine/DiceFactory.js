@@ -634,7 +634,7 @@ export class DiceFactory {
 			if(preset) global.system = preset;
 			this.addRole({
 				id,
-				label: def?.label ?? id,
+				...(def?.label ? {label: def.label} : {}),
 				group: "DICESONICE.DamageTypes",
 				customizable: false,
 				optional: true,
@@ -920,6 +920,11 @@ export class DiceFactory {
 		let presetShape;
 		if(customShapeDef){
 			presetShape = shape;
+			//a custom term has no standard model: borrow the standard die with the same face count for mass, scale and values
+			if(!model){
+				const faces = customShapeDef.faceValues.filter(v => v !== 0).length;
+				model = this.systems.get("standard").dice.get("d" + faces) ?? this.systems.get("standard").dice.get("d6");
+			}
 		} else {
 			if(!model || !model.internalAdd){
 				if(!shape)
@@ -2447,13 +2452,9 @@ export class DiceFactory {
 	detectRole(dsnDie){
 		try {
 			const options = dsnDie?.options ?? {};
-			if(options.dsnRoleManaged || options.dsnRole != null){
-				if(typeof options.dsnRole === "string" && options.dsnRole !== "") return options.dsnRole;
-			}
+			if(typeof options.dsnRole === "string" && options.dsnRole !== "") return options.dsnRole;
 			//dsnDamageType / dsnDamageTypeManaged are obsolete, use dsnRole / dsnRoleManaged
-			if(options.dsnDamageTypeManaged || options.dsnDamageType != null){
-				if(typeof options.dsnDamageType === "string" && options.dsnDamageType !== "") return options.dsnDamageType;
-			}
+			if(typeof options.dsnDamageType === "string" && options.dsnDamageType !== "") return options.dsnDamageType;
 			const managed = !!(options.dsnRoleManaged || options.dsnDamageTypeManaged);
 			const roles = [...this.roles.values()].filter(role => !role.deleted);
 			for(const token of dsnDie?.termModifiers ?? []){

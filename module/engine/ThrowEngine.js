@@ -68,7 +68,8 @@ export class ThrowEngine {
 
 		for (let i = 0; i < notationVectors.dice.length; i++) {
 
-			const appearance = this.dicefactory.getAppearanceForDice(notationVectors.dsnConfig.appearance, notationVectors.dice[i].type, notationVectors.dice[i]);
+			const appearance = this.dicefactory.getAppearanceForDice(notationVectors.dsnConfig.appearance, notationVectors.dice[i].type, notationVectors.dice[i], notationVectors.dsnConfig.roleContext);
+			notationVectors.dice[i].resolvedAppearance = appearance;
 			const diceobj = this.dicefactory.resolvePreset(notationVectors.dice[i].type, appearance);
 
 			let vec = this.vectorRand(vector);
@@ -422,8 +423,7 @@ export class ThrowEngine {
 				let notationVectors = throws[j];
 				for (let i = 0, len = notationVectors.dice.length; i < len && spawned < maxDiceNumber; ++i) {
 					notationVectors.dice[i].startAtIteration = j * this.nbIterationsBetweenRolls;
-					let appearance = this.dicefactory.getAppearanceForDice(notationVectors.dsnConfig.appearance, notationVectors.dice[i].type, notationVectors.dice[i], notationVectors.dsnConfig.roleContext);
-					await this.spawnDiceMesh(notationVectors.dice[i], appearance, notationVectors.dsnConfig.diceLibrary, workerSpecs);
+					await this.spawnDiceMesh(notationVectors.dice[i], notationVectors.dice[i].resolvedAppearance, notationVectors.dsnConfig.diceLibrary, workerSpecs);
 					spawned++;
 					lastGroup = j;
 				}

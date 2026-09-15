@@ -1451,7 +1451,9 @@ export class Dice3D {
         }
 
 
-        Hooks.callAll("diceSoNiceRollStart", messageID, context);
+        //can be skipped in the middle of an interactive roll
+        if (!options.skipRollStartHook)
+            Hooks.callAll("diceSoNiceRollStart", messageID, context);
         //We allow the hook to modify the roll to be shown without altering the original roll reference
         //This is useful for example to show a different roll than the one made by the user without relying on the manual showForRoll method
         let hookedRoll = context.dsnRoll || context.roll;
@@ -1577,6 +1579,25 @@ export class Dice3D {
         });
     }
 
+    //make sure an interactive roll doesn't get stuck when something unexpected happens before completion
+    _settleDroppedBinds(items) {
+        const binds = [];
+        for (const item of items) {
+            if (item.type !== "persistent") continue;
+            for (const mesh of item.params.heldDice ?? []) {
+                if (!mesh.userData?.pendingBind) continue;
+                binds.push(mesh.userData.pendingBind);
+                delete mesh.userData.pendingBind;
+            }
+        }
+        if (binds.length) this.pendingThrows?.noteBindsLanded(binds);
+    }
+
+    _settleOrphanBinds(results) {
+        const binds = (results ?? []).map(entry => entry.bind).filter(Boolean);
+        if (binds.length) this.pendingThrows?.noteBindsLanded(binds);
+    }
+
     _showPersistentThrow(throwData) {
         throwData.queuedAt = Date.now();
         const idle = this.queue.length === 0 && !this.box.running;
@@ -1636,6 +1657,7 @@ export class Dice3D {
         this.nextAnimation = new Accumulator(timing, async (items) => {
             const overloaded = this.queue.length >= 10;
             if (!this.isEnabled() || (overloaded && !items.some(i => i.type === "persistent"))) {
+                this._settleDroppedBinds(items);
                 items.forEach(item => item.resolve(false));
                 if (this.box.inputHandler) this.box.inputHandler.clearPendingThrowDice();
                 return;
@@ -2013,7 +2035,10 @@ export class Dice3D {
     }
 
     async _handlePersistentMessage(request) {
-        if (!this.box.initialized) return;
+        if (!this.box.initialized) {
+            if (request.type === "persistent-throw") this._settleOrphanBinds(request.data?.results);
+            return;
+        }
         if (!request.data) return;
         switch (request.type) {
             case "persistent-create": return this._onRemotePersistentCreate(request);
@@ -2265,9 +2290,13 @@ export class Dice3D {
         const heldDice = [];
         const forcedByMesh = new Map();
         const binds = [];
+        const orphans = [];
         for (const entry of results) {
             const mesh = this._findPersistentMeshById(entry.persistentId);
-            if (!mesh) continue;
+            if (!mesh) {
+                orphans.push(entry);
+                continue;
+            }
             heldDice.push(mesh);
             forcedByMesh.set(mesh, entry.forcedResult);
             if (entry.bind) {
@@ -2282,6 +2311,7 @@ export class Dice3D {
             //block interaction until the queued replay actually starts
             mesh.userData.pendingReplay = true;
         }
+        this._settleOrphanBinds(orphans);
         if (heldDice.length === 0) return;
 
         //the throw is in the air from now on: its slots show as rolling on the card

@@ -1,6 +1,5 @@
 import { TEXTURELIST, COLORSETS } from './engine/DiceColors.js';
 import { DiceLibrary } from './engine/DiceLibrary.js';
-import { Dice3D } from './Dice3D.js';
 
 /**
  * Generic utilities class...
@@ -63,8 +62,11 @@ export class Utils {
         // We assume a new install. Could be a very very old a, before we had a formatversion
         // But it means 3y or more. Not worth worrying about.
         if (formatversion == "") {
-            if (game.user.isGM)
+            if (game.user.isGM) {
+                if (!game.settings.get("dice-so-nice", "rolesMigrated"))
+                    await Utils.migrateDamageTypeMap();
                 await game.settings.set("dice-so-nice", "formatVersion", Utils.DATA_FORMAT_VERSION);
+            }
             return true;
         }
 
@@ -87,20 +89,6 @@ export class Utils {
             }
 
             migrated = true;
-        }
-
-        if (Utils.isVersionLessThan(formatversion, "2.0")) {
-            //v1 to v2
-            let settings = game.user.getFlag("dice-so-nice", "settings") ? foundry.utils.duplicate(game.user.getFlag("dice-so-nice", "settings")) : {};
-            if (settings.diceColor || settings.labelColor) {
-                let newSettings = foundry.utils.mergeObject(Dice3D.DEFAULT_OPTIONS, settings, { insertKeys: false, insertValues: false, applyOperators: true });
-                let appearance = foundry.utils.mergeObject(Dice3D.DEFAULT_APPEARANCE(), settings, { insertKeys: false, insertValues: false, applyOperators: true });
-                delete newSettings.dimensions;
-                delete newSettings.fxList;
-                await game.settings.set("dice-so-nice", "settings", newSettings);
-                await game.user.setFlag("dice-so-nice", "appearance", appearance);
-                migrated = true;
-            }
         }
 
         if (Utils.isVersionLessThan(formatversion, "4.0")) {

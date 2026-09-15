@@ -468,13 +468,17 @@ export class PersistentDiceManager {
 		if (interactive) {
 			if (this.onPersistentEvent) {
 				this.onPersistentEvent("throw", {
-					data: { persistentIds, velocityPct, results: interactive.results }
+					data: { persistentIds: interactive.dice.map(d => d.userData.persistentId), velocityPct, results: interactive.results }
 				});
 			}
+			let queued;
 			if (this.onQueueThrow)
-				return this.onQueueThrow({ heldDice, velocity, forcedByMesh: interactive.forcedByMesh, roll: null, primaries });
-			console.warn("[Dice So Nice] throwPersistentDice: onQueueThrow not wired, throw dropped");
-			return;
+				queued = this.onQueueThrow({ heldDice: interactive.dice, velocity, forcedByMesh: interactive.forcedByMesh, roll: null, primaries: primaries.filter(d => interactive.dice.includes(d)) });
+			else
+				console.warn("[Dice So Nice] throwPersistentDice: onQueueThrow not wired, throw dropped");
+			const rest = heldDice.filter(d => !interactive.dice.includes(d));
+			if (!rest.length) return queued;
+			return this.throwPersistentDice(rest, velocity);
 		}
 
 		//one Die term per primary, same order

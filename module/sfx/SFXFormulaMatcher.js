@@ -14,6 +14,11 @@ const COUNT_RE = /^(!?)(success|failure|discarded|rerolled|exploded)\((.+)\)$/;
 
 export class SFXFormulaMatcher {
 
+	//fvtt min/max modifiers flag the discarded value as rerolled, but it is not a real dice reroll
+	static isRealReroll(r) {
+		return !!r?.rerolled && !r.active && !r.discarded;
+	}
+
 	static parse(formula) {
 		if (typeof formula !== 'string' || !formula.trim()) return null;
 
@@ -320,9 +325,8 @@ export class SFXFormulaMatcher {
 				if (!SFXFormulaMatcher._matchModifier(parsed.modifier, d.termModifiers)) return false;
 			}
 
-			//min/max modifiers flag discarded value as rerolled, but it is not a real dice reroll
 			if (parsed.keyword === 'rerolled')
-				return (!!d.fvttResult?.rerolled && !d.fvttResult.active && !d.fvttResult.discarded) === flagValue;
+				return SFXFormulaMatcher.isRealReroll(d.fvttResult) === flagValue;
 			return (d.fvttResult?.[parsed.keyword] === true) === flagValue;
 		});
 

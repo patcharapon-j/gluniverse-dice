@@ -1,5 +1,5 @@
 import { Utils } from '../Utils.js';
-import { DiceConfig, WorldRoleScopeTarget } from './DiceConfig.js';
+import { DiceConfig } from './DiceConfig.js';
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -21,7 +21,7 @@ export class DiceRolesConfig extends HandlebarsApplicationMixin(ApplicationV2) {
             contentClasses: ["standard-form"],
             resizable: true
         },
-        id: "damage-type-config",
+        id: "dice-roles-config",
         position: {
             width: 1080,
             height: "auto"
@@ -418,7 +418,7 @@ export class DiceRolesConfig extends HandlebarsApplicationMixin(ApplicationV2) {
             existing.render({ force: true });
             return;
         }
-        new DiceConfig({ document: new WorldRoleScopeTarget(id), roleId: id }).render({ force: true });
+        new DiceConfig({ roleId: id, onScopeSaved: (roleId) => this.reloadScope(roleId) }).render({ force: true });
     }
 
     _parseTypes(text, id) {
@@ -430,17 +430,26 @@ export class DiceRolesConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         return types.length ? types : [id];
     }
 
-    async _renamePlayerScopes(renames) {
-        for (const user of game.users) {
-            const stored = user.getFlag("dice-so-nice", "roleAppearance");
+    async _migrateScopes(renames, removals) {
+        const documents = [...game.users];
+        for (const uuid of game.settings.get("dice-so-nice", "documentsForPreload") ?? []) {
+            const doc = foundry.utils.fromUuidSync(uuid);
+            if (doc?.getFlag) documents.push(doc);
+        }
+        for (const doc of documents) {
+            const stored = doc.getFlag("dice-so-nice", "roleAppearance");
             if (!stored) continue;
-            const moves = renames.filter(([oldId]) => oldId in stored);
-            if (!moves.length) continue;
-            const next = foundry.utils.deepClone(stored);
-            for (const [oldId] of moves) delete next[oldId];
-            for (const [oldId, newId] of moves) next[newId] = foundry.utils.deepClone(stored[oldId]);
-            await user.unsetFlag("dice-so-nice", "roleAppearance");
-            await user.setFlag("dice-so-nice", "roleAppearance", next);
+            const update = {};
+            for (const [oldId, newId] of renames) {
+                if (!(oldId in stored)) continue;
+                update[oldId] = new foundry.data.operators.ForcedDeletion();
+                update[newId] = foundry.utils.deepClone(stored[oldId]);
+            }
+            for (const id of removals) {
+                if (id in stored) update[id] = new foundry.data.operators.ForcedDeletion();
+            }
+            if (foundry.utils.isEmpty(update)) continue;
+            await doc.setFlag("dice-so-nice", "roleAppearance", update);
         }
     }
 
@@ -518,7 +527,7 @@ export class DiceRolesConfig extends HandlebarsApplicationMixin(ApplicationV2) {
 
         await game.settings.set("dice-so-nice", "roles", roles);
         await game.settings.set("dice-so-nice", "roleScopes", scopes);
-        if (renames.length) await this._renamePlayerScopes(renames);
+        if (renames.length || this._removedIds.length) await this._migrateScopes(renames, this._removedIds);
         game.dice3d.DiceFactory.invalidateRoles();
         ui.notifications.info(game.i18n.localize("DICESONICE.DiceRolesConfigSaved"));
     }

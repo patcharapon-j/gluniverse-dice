@@ -70,12 +70,19 @@ export class PendingThrowManager {
     }
 
     openPending(message, rolls = Dice3D.rollsFromMessage(message)) {
+        rolls = rolls.map(roll => {
+            const context = { roll, user: message.author ?? game.user, users: null, blind: !!message.blind };
+            Hooks.callAll("diceSoNiceRollStart", message.id, context);
+            return context.dsnRoll || context.roll;
+        });
         const model = this._buildSlotModel(message, rolls);
         const record = {
             messageId: message.id,
             userId: message.author?.id ?? null,
             groups: model.groups,
             overCapCount: model.overCapCount,
+            rolls,
+            formula: rolls.map(r => r.formula).join(" + "),
             cardMessageId: null
         };
         this.pending.set(message.id, record);
@@ -165,9 +172,7 @@ export class PendingThrowManager {
                     bound.add(`${slot.bucketIndex}:${member.termIndex}:${member.resultIndex}`);
             }
         }
-        const rolls = Dice3D.rollsFromMessage(message);
-        this.dice3d._assignDependentRollOrder(rolls);
-        const buckets = this.dice3d._buildRollList(rolls);
+        const buckets = this.dice3d._buildRollList(record.rolls);
         const author = message.author ?? game.user;
         for (let bi = 0; bi < buckets.length; bi++) {
             let clone;
@@ -185,7 +190,7 @@ export class PendingThrowManager {
                 });
             });
             if (!anyVisible) continue;
-            await this.dice3d.showForRoll(clone, author, false, null, false, message.id, message.speaker);
+            await this.dice3d.showForRoll(clone, author, false, null, false, message.id, message.speaker, { ghost: false, secret: false, skipRollStartHook: true });
         }
     }
 
@@ -212,6 +217,14 @@ export class PendingThrowManager {
         }
     }
 
+    static _key(type, role) {
+        return `${type}:${role ?? "basic"}`;
+    }
+
+    static _meshKey(mesh) {
+        return PendingThrowManager._key(mesh.notation?.type, mesh.notation?.role);
+    }
+
     //open slots of the current group not covered by the roller's own dice on the table (a d100 pair counts once)
     _missingDiceForCurrentGroup(record, excludeMeshes = null) {
         const gi = this.currentGroupIndex(record);
@@ -219,9 +232,10 @@ export class PendingThrowManager {
         const needed = new Map();
         for (const slot of record.groups[gi].slots) {
             if (slot.bound) continue;
-            const entry = needed.get(slot.type) ?? { type: slot.type, compositeType: slot.compositeType, count: 0 };
+            const key = PendingThrowManager._key(slot.type, slot.role);
+            const entry = needed.get(key) ?? { type: slot.type, role: slot.role, compositeType: slot.compositeType, count: 0 };
             entry.count++;
-            needed.set(slot.type, entry);
+            needed.set(key, entry);
         }
         const box = this.dice3d.box;
         if (box?.initialized) {
@@ -229,7 +243,7 @@ export class PendingThrowManager {
                 if (mesh.userData?.linkGroupSecondary) continue;
                 if (mesh.userData?.ownerUserId !== record.userId) continue;
                 if (excludeMeshes?.has(mesh)) continue;
-                const entry = needed.get(mesh.notation?.type);
+                const entry = needed.get(PendingThrowManager._meshKey(mesh));
                 if (entry) entry.count--;
             }
         }
@@ -252,12 +266,12 @@ export class PendingThrowManager {
                     if (room < (places ? places.length : 1)) { refused = true; break; }
                     if (places) {
                         const linkGroupId = foundry.utils.randomID();
-                        const primary = await this.dice3d.spawnPersistentDie(places[0].type, null, { linkGroupId, digitPlace: 0, guest });
+                        const primary = await this.dice3d.spawnPersistentDie(places[0].type, null, { linkGroupId, digitPlace: 0, guest, role: entry.role });
                         if (!primary) { refused = true; break; }
                         for (let p = 1; p < places.length; p++)
-                            await this.dice3d.spawnPersistentDie(places[p].type, null, { linkGroupId, linkGroupSecondary: true, digitPlace: p, guest });
+                            await this.dice3d.spawnPersistentDie(places[p].type, null, { linkGroupId, linkGroupSecondary: true, digitPlace: p, guest, role: entry.role });
                     } else {
-                        const mesh = await this.dice3d.spawnPersistentDie(entry.type, null, { guest });
+                        const mesh = await this.dice3d.spawnPersistentDie(entry.type, null, { guest, role: entry.role });
                         if (!mesh) { refused = true; break; }
                     }
                 }
@@ -271,7 +285,8 @@ export class PendingThrowManager {
     }
 
     //claim open slots for a persistent throw, before its Roll would be created
-    //returns null when the throw is not intercepted, else the forced results and the socket payload
+    //returns null when nothing is intercepted, else the forced results, the socket payload and the dice taken.
+    //dice that match no slot are normally rolled
     claimThrow(heldDice, primaries, secondariesByLinkGroup) {
         const myPendings = [...this.pending.values()].filter(r => r.userId === game.user.id);
         const holdsGuest = heldDice.some(m => m.userData?.guest);
@@ -280,9 +295,11 @@ export class PendingThrowManager {
         const forcedByMesh = new Map();
         const results = [];
         const touched = new Set();
+        const taken = new Set();
         const claim = (mesh, forcedResult, bind = null) => {
             forcedByMesh.set(mesh, forcedResult);
             results.push({ persistentId: mesh.userData.persistentId, forcedResult, bind });
+            taken.add(mesh);
         };
 
         for (const primary of primaries) {
@@ -290,7 +307,7 @@ export class PendingThrowManager {
             const faces = parseInt(type.slice(1));
             const places = COMPOUND_DICE[faces];
             const linked = primary.userData?.linkGroupId ? (secondariesByLinkGroup.get(primary.userData.linkGroupId) || []) : [];
-            const claimed = myPendings.length ? this._claimSlot(type) : null;
+            const claimed = myPendings.length ? this._claimSlot(type, primary.notation.role) : null;
             if (claimed) {
                 const { record, groupIndex, slotIndex, slot } = claimed;
                 touched.add(record);
@@ -309,19 +326,23 @@ export class PendingThrowManager {
                     claim(primary, slot.result, bind);
                 }
                 primary.userData.pendingBind = bind;
-            } else {
+            } else if (primary.userData?.guest) {
                 if (places && primary.userData?.linkGroupId) {
                     const rawResult = Math.floor(Math.random() * faces) + 1;
                     DiceNotation.applyCompoundResult(primary, linked, rawResult, places, claim);
                 } else {
                     claim(primary, this._randomFaceValue(primary));
                 }
+            } else {
+                continue;
             }
+            for (const sec of linked) taken.add(sec);
         }
+        if (!taken.size) return null;
 
         this.refreshEligibility();
         for (const record of touched) this.refreshCard(record.messageId);
-        return { forcedByMesh, results };
+        return { forcedByMesh, results, dice: heldDice.filter(mesh => taken.has(mesh)) };
     }
 
     *_openSlots(userId) {
@@ -339,9 +360,9 @@ export class PendingThrowManager {
         }
     }
 
-    _claimSlot(type) {
+    _claimSlot(type, role) {
         for (const open of this._openSlots(game.user.id)) {
-            if (open.slot.type !== type) continue;
+            if (open.slot.type !== type || open.slot.role !== (role ?? "basic")) continue;
             open.slot.claimed = true;
             return open;
         }
@@ -402,13 +423,13 @@ export class PendingThrowManager {
     refreshEligibility() {
         const box = this.dice3d.box;
         if (!box?.initialized) return;
-        const openTypes = new Set();
-        for (const { slot } of this._openSlots(game.user.id)) openTypes.add(slot.type);
+        const openKeys = new Set();
+        for (const { slot } of this._openSlots(game.user.id)) openKeys.add(PendingThrowManager._key(slot.type, slot.role));
         let meshes = [];
-        if (openTypes.size) {
+        if (openKeys.size) {
             meshes = box.persistentDiceList.filter(m => {
                 if (m.userData?.linkGroupSecondary) return false;
-                if (!openTypes.has(m.notation?.type)) return false;
+                if (!openKeys.has(PendingThrowManager._meshKey(m))) return false;
                 return !box.inputHandler?._isPersistentGrabBlocked(m);
             });
             //linked secondaries glow with their primary so the whole d100 group looks eligible
@@ -443,7 +464,7 @@ export class PendingThrowManager {
             for (const record of this.pending.values()) {
                 if (record.userId !== mesh.userData.reservedForUserId) continue;
                 const missing = this._missingDiceForCurrentGroup(record, new Set([mesh, ...leaving]));
-                if (missing.some(entry => entry.type === mesh.notation?.type)) { target = record; break; }
+                if (missing.some(entry => PendingThrowManager._key(entry.type, entry.role) === PendingThrowManager._meshKey(mesh))) { target = record; break; }
             }
             if (target) {
                 mesh.userData.guestPendingId = target.messageId;
@@ -532,8 +553,7 @@ export class PendingThrowManager {
             const currentIndex = this.currentGroupIndex(record);
             const revealedCount = currentIndex === -1 ? record.groups.length : currentIndex + 1;
             const echoSlots = this._heldEchoSlots(record);
-            const realMessage = game.messages.get(realId);
-            context.formula = realMessage ? Dice3D.rollsFromMessage(realMessage).map(r => r.formula).join(" + ") : "";
+            context.formula = record.formula ?? "";
             context.groups = record.groups.slice(0, revealedCount).map((group, gi) => {
                 const chips = [];
                 const byTerm = new Map();
@@ -573,7 +593,7 @@ export class PendingThrowManager {
         const held = this._heldTypesOfRoller(record);
         if (!held.length) return echo;
         for (const { record: r, slot } of this._openSlots(record.userId)) {
-            const idx = held.indexOf(slot.type);
+            const idx = held.indexOf(PendingThrowManager._key(slot.type, slot.role));
             if (idx === -1) continue;
             held.splice(idx, 1);
             if (r === record) echo.add(slot);
@@ -590,7 +610,7 @@ export class PendingThrowManager {
             meshes = box.inputHandler?.mouse.heldPersistentDice ?? [];
         else
             meshes = box.persistentDiceList.filter(m => m.userData?.lockedBy === record.userId);
-        return meshes.filter(m => !m.userData?.linkGroupSecondary).map(m => m.notation?.type).filter(Boolean);
+        return meshes.filter(m => !m.userData?.linkGroupSecondary && m.notation?.type).map(m => PendingThrowManager._meshKey(m));
     }
 
     onTableEvent(type, userId) {
@@ -707,6 +727,7 @@ export class PendingThrowManager {
                     const prebound = fulfillmentMethods[term?.method]?.interactive === true;
                     const slot = {
                         type: die.type,
+                        role: die.role ?? "basic",
                         compositeType: die.compositeType ?? null,
                         result: die.compositeType ? die.compositeResult : die.result,
                         resultLabel: die.resultLabel,

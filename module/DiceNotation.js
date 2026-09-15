@@ -24,9 +24,8 @@ export class DiceNotation {
 		}
 	}
 
-	//fvtt min/max modifiers flag discarded value as rerolled, but it is not a real dice reroll
 	static isRealReroll(r) {
-		return !!r?.rerolled && !r.active && !r.discarded;
+		return SFXFormulaMatcher.isRealReroll(r);
 	}
 
 	/**

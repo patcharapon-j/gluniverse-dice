@@ -75,19 +75,6 @@ export class DiceLibrary {
         await this.save();
     }
 
-    async duplicate(id) {
-        const original = this.get(id);
-        if (!original) return null;
-        const copy = foundry.utils.deepClone(original);
-        copy.id = foundry.utils.randomID();
-        copy.name = `${copy.name} (Copy)`;
-        copy.createdAt = Date.now();
-        copy.updatedAt = Date.now();
-        this._dice.push(copy);
-        await this.save();
-        return copy;
-    }
-
     export(id) {
         const die = this.get(id);
         if (!die) return null;

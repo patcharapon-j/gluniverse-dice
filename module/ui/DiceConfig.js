@@ -16,7 +16,7 @@ import SlimSelect from 'slim-select';
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
 //document-like target over one world role scope
-export class WorldRoleScopeTarget {
+class WorldRoleScopeTarget {
     constructor(roleId) {
         this.roleId = roleId;
     }
@@ -2388,7 +2388,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         if (this.showcaseView) this.showcaseView.stopAnimation();
         if (this.diceScene) this.diceScene.clearScene();
         if (!this.noScene) this.diceFactory.disposeCachedMaterials("showcase");
-        if (this.isWorldRole) foundry.applications.instances.get("damage-type-config")?.reloadScope?.(this.roleId);
+        if (this.isWorldRole) this.options.onScopeSaved?.(this.roleId);
     }
 
     static async _onSubmit(event, form, formData) {

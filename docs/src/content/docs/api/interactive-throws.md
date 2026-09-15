@@ -61,7 +61,7 @@ Dice So Nice! does not register a Foundry dice fulfillment resolver. The throw d
 
 ## Completion timing
 
-Everything that signals the end of the animation waits until the last thrown die lands, or until the pending throw ends another way (escape, force-resolve, skip, reload, disconnect). Nothing resolves earlier. This applies to:
+Everything that signals the end of the animation waits until the roller's last thrown die lands, or until the pending throw ends another way (escape, force-resolve, skip, reload, disconnect). This applies to:
 
 - the promises returned by the public API methods,
 - `game.dice3d.waitFor3DAnimationByMessageID(messageId)`,
@@ -94,3 +94,5 @@ Hooks.on('diceSoNicePendingThrowClosed', (messageId) => {});
 ```
 
 They fire on every client and only describe what that client is showing. To know when the roll is done, keep using `diceSoNiceRollComplete`.
+
+`diceSoNiceRollStart` also fires when the pending throw opens, once per roll of the message, so a module can inspect or swap the roll (`context.dsnRoll`) before the throw starts. It fires again for the remaining dice when the throw is either escaped or force-resolved.
