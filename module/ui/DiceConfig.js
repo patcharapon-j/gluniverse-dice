@@ -11,57 +11,10 @@ import { DiceSystem } from '../DiceSystem.js';
 import { DiceLibrary } from '../engine/DiceLibrary.js';
 import { DiceLibraryDialog } from './DiceLibraryDialog.js';
 import { DiceEditor } from './DiceEditor.js';
+import { WorldRoleScopeTarget } from './WorldRoleScopeTarget.js';
 import SlimSelect from 'slim-select';
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
-
-//document-like target over one world role scope
-class WorldRoleScopeTarget {
-    constructor(roleId) {
-        this.roleId = roleId;
-    }
-
-    get id() {
-        return `role-${this.roleId}`;
-    }
-
-    get name() {
-        const role = game.dice3d?.DiceFactory?.getRole(this.roleId);
-        if (!role) return this.roleId;
-        return role.origin === "custom" ? (role.label || this.roleId) : game.i18n.localize(role.label || this.roleId);
-    }
-
-    _readScopes() {
-        return foundry.utils.deepClone(game.settings.get("dice-so-nice", "roleScopes") ?? {});
-    }
-
-    _isRoleKey(scope, key) {
-        return scope === "dice-so-nice" && key === "roleAppearance";
-    }
-
-    getFlag(scope, key) {
-        if (!this._isRoleKey(scope, key)) return undefined;
-        const stored = this._readScopes()[this.roleId];
-        return stored ? { [this.roleId]: stored } : undefined;
-    }
-
-    async setFlag(scope, key, value) {
-        if (!this._isRoleKey(scope, key)) return;
-        const scopes = this._readScopes();
-        const next = value?.[this.roleId];
-        if (next && !foundry.utils.isEmpty(next)) scopes[this.roleId] = next;
-        else delete scopes[this.roleId];
-        await game.settings.set("dice-so-nice", "roleScopes", scopes);
-    }
-
-    async unsetFlag(scope, key) {
-        if (!this._isRoleKey(scope, key)) return;
-        const scopes = this._readScopes();
-        if (!(this.roleId in scopes)) return;
-        delete scopes[this.roleId];
-        await game.settings.set("dice-so-nice", "roleScopes", scopes);
-    }
-}
 
 /**
  * Form application to configure settings of the 3D Dice.
