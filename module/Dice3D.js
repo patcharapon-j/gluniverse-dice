@@ -13,6 +13,7 @@ import { DiceSystem } from './DiceSystem.js';
 import { DiceLibrary } from './engine/DiceLibrary.js';
 import { InitiativeMask } from './ui/InitiativeMask.js';
 import { CompanionLink } from './CompanionLink.js';
+import { HideRules } from './HideRules.js';
 import { CustomDiceTerms } from './engine/CustomDiceTerms.js';
 import { SpawnLayout } from './interaction/SpawnLayout.js';
 import { PendingThrowManager } from './interaction/PendingThrowManager.js';
@@ -555,7 +556,6 @@ export class Dice3D {
         //dev escape hatch: set game.dice3d.disableAutoRebuild = true to stop the resize handler from rebuilding the box.
         this.disableAutoRebuild = false;
         this._messageUpdateHideSelector = ".dice-roll";
-        this._nestedHiddenIds = new Set();
         this.defaultShowExtraDice = Dice3D.DEFAULT_OPTIONS.showExtraDice;
 
         //local user's persistent dice data, keyed by persistentId
@@ -1135,26 +1135,12 @@ export class Dice3D {
     //we hides those parts based on [data-message-id] whenever they get rendered
     _hideNestedParts(messageId) {
         if (this.messageHookDisabled || game.settings.get("dice-so-nice", "immediatelyDisplayChatMessages")) return;
-        this._nestedHiddenIds.add(messageId);
-        this._refreshNestedRules();
+        const id = CSS.escape(messageId);
+        HideRules.add(`nested:${messageId}`, `.chat-message:not([data-message-id="${id}"]) [data-message-id="${id}"]`);
     }
 
     _showNestedParts(messageId) {
-        if (!this._nestedHiddenIds.delete(messageId)) return;
-        this._refreshNestedRules();
-    }
-
-    _refreshNestedRules() {
-        let style = document.getElementById("dsn-nested-hide");
-        if (!style) {
-            style = document.createElement("style");
-            style.id = "dsn-nested-hide";
-            document.head.appendChild(style);
-        }
-        style.textContent = [...this._nestedHiddenIds].map(id => {
-            const safeId = CSS.escape(id);
-            return `.message:not([data-message-id="${safeId}"]) [data-message-id="${safeId}"] { display: none !important; }`;
-        }).join("\n");
+        HideRules.remove(`nested:${messageId}`);
     }
 
     //reveal a held chat message; with animId only the elements tagged with that animation, else the whole message

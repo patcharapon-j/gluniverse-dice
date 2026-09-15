@@ -609,10 +609,6 @@ Hooks.on("renderChatMessageHTML", (message, html, data) => {
     if (game.dice3d && game.dice3d.messageHookDisabled) {
         return;
     }
-    if (CompanionLink.isHidden(message.id) && !game.settings.get("dice-so-nice", "immediatelyDisplayChatMessages")) {
-        html.classList.add("dsn-hide");
-        return;
-    }
     if (message._dice3danimating && !game.settings.get("dice-so-nice", "immediatelyDisplayChatMessages")) {
         // for the first render: hide the entire message (_dice3dMessageHidden)
         // for updates: use textContent fingerprints captured in preUpdateChatMessage to diff which roll elements are new vs existing, and only hide new ones
