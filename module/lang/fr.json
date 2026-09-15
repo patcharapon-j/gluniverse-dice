@@ -628,5 +628,7 @@
     "DICESONICE.libraryCopyToMine": "Copier dans mes dés",
     "DICESONICE.libraryCreateWorldDie": "Créer un dé dans la bibliothèque du monde",
     "DICESONICE.libraryCopiedToWorld": "{name} a été ajouté à la bibliothèque du monde.",
-    "DICESONICE.libraryCopiedToMine": "{name} a été copié dans vos dés."
+    "DICESONICE.libraryCopiedToMine": "{name} a été copié dans vos dés.",
+    "DICESONICE.interactiveThrowsHint": "Permettre aux joueurs de lancer manuellement les dés lors d'un jet. Le résultat est toujours déterminé par Foundry ; le lancer ne fait que le représenter. Cela nécessite les options : interaction avec les dés, dés permanents et messages de chat qui ne s'affichent pas immédiatement.",
+    "DICESONICE.DiceRolesFieldTypes": "Type de jet ou étiquette"
 }
