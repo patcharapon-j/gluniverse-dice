@@ -534,5 +534,6 @@
     "DICESONICE.MaterialFrosted": "Dépoli",
     "DICESONICE.MaterialVelvet": "Velours",
     "DICESONICE.ColorAmber": "Résine Ambrée",
-    "DICESONICE.ColorRoyalVelvet": "Velours Royal"
+    "DICESONICE.ColorRoyalVelvet": "Velours Royal",
+    "DICESONICE.configTitleWorldRole": "Paramètres des dés 3D - Apparence Monde : {role}"
 }
