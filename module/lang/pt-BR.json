@@ -532,5 +532,7 @@
     "DICESONICE.glyphPicker.nativeHint": "Dica: você também pode colar qualquer emoji do seletor do seu sistema operacional - <kbd>Win</kbd>+<kbd>.</kbd> no Windows, <kbd>Ctrl</kbd>+<kbd>Cmd</kbd>+<kbd>Space</kbd> no macOS, <kbd>Super</kbd>+<kbd>.</kbd> no Linux.",
     "DICESONICE.CustomDiceTermConfigTitle": "Termos de Dados Personalizados",
     "DICESONICE.CustomDiceTermImportInvalidFormat": "O arquivo não é um termo de exportação válido do Dice So Nice.",
-    "DICESONICE.sfxFormulaErrorCountPredicate": "Fórmula count() inválida. Esperado: count(<count>d<faces>[modifier] <operator> <value>) <operator> <value>. Exemplo: count(3d20 == 20) >= 2"
+    "DICESONICE.sfxFormulaErrorCountPredicate": "Fórmula count() inválida. Esperado: count(<count>d<faces>[modifier] <operator> <value>) <operator> <value>. Exemplo: count(3d20 == 20) >= 2",
+    "DICESONICE.protectPersistent": "Proteger meus dados persistentes",
+    "DICESONICE.protectPersistentHint": "Previne que outros jogadores peguem ou arremessem seus dados persistentes. O MJ sempre pode pegá-los."
 }
