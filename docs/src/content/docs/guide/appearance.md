@@ -36,6 +36,17 @@ You can customize individual die types instead of using global settings for all 
 
 When a die type is selected, you can also open the [Dice Library](/foundryvtt-dice-so-nice/guide/dice-library/) from the Appearance tab to browse and apply custom dice.
 
+## Dice Roles
+
+Some dice can play a specific role in your game: damage types, some system special dice, etc. When your game system or the GM makes a role customizable, a **Dice role** dropdown appears above the 3D preview. It lists *Basic* (your regular dice) plus every role you may customize, grouped by origin.
+
+Picking a role swaps the whole Appearance tab to that role: same preview, same die type tabs, same controls, different data. Your basic dice are untouched.
+
+- Every field of a role starts on **Inherit**. An inheriting field falls back to the world appearance set by the GM for this role, then to the defaults of the package that registered the role, then to your basic *Global* settings.
+- The reset icon next to the **Dice role** dropdown clears your customization of the role you are editing, back to full Inherit. Your basic dice and the other roles are untouched.
+
+The preview's test roll tags its dice with the selected role, so what you see is what those dice will look like in play.
+
 ## Extra Dice Customization
 
 Enable **Extra Dice Customization** to access appearance settings for special dice types like d3, d5, d7, d14, d16, d24, and d30. These dice are less common but used by some game systems (e.g., DCC).

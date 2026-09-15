@@ -25,7 +25,7 @@ export class Utils {
         return ticker;
     }
 
-    static DATA_FORMAT_VERSION = "6.1";
+    static DATA_FORMAT_VERSION = "6.3";
     static RELOAD_REQUIRED_IF_MODIFIED = ["canvasZIndex", "bumpMapping", "useHighDPI", "glow", "antialiasing", "rollingArea", "advancedGlass", "ambiance", "visibility"];
 
     /**
@@ -61,17 +61,21 @@ export class Utils {
 
         // We assume a new install. Could be a very very old a, before we had a formatversion
         // But it means 3y or more. Not worth worrying about.
-        if (formatversion == "")
-            formatversion = Utils.DATA_FORMAT_VERSION;
+        if (formatversion == "") {
+            if (game.user.isGM) {
+                if (!game.settings.get("dice-so-nice", "rolesMigrated"))
+                    await Utils.migrateDamageTypeMap();
+                await game.settings.set("dice-so-nice", "formatVersion", Utils.DATA_FORMAT_VERSION);
+            }
+            return true;
+        }
 
         if (formatversion == Utils.DATA_FORMAT_VERSION)
             return true;
 
-        if (formatversion == "" || formatversion != Utils.DATA_FORMAT_VERSION) { //Never updated or first install
-            if (!game.user.isGM) {
-                ui.notifications.warn(game.i18n.localize("DICESONICE.migrateMessageNeedGM"));
-                return false;
-            }
+        if (!game.user.isGM) {
+            ui.notifications.warn(game.i18n.localize("DICESONICE.migrateMessageNeedGM"));
+            return false;
         }
 
         let migrated = false;
@@ -85,62 +89,6 @@ export class Utils {
             }
 
             migrated = true;
-        }
-
-        if (Utils.isVersionLessThan(formatversion, "4.1")) {
-            //Fuck it, lets do this so I'm sure it it not because of DsN itself.
-            if (game.user.isGM) {
-                await Promise.all(game.users.map(async (user) => {
-                    let appearance = user.getFlag("dice-so-nice", "appearance") ? foundry.utils.duplicate(user.getFlag("dice-so-nice", "appearance")) : null;
-                    if (appearance && appearance.hasOwnProperty("labelColor")) {
-                        let data = {
-                            colorset: foundry.data.operators.ForcedDeletion,
-                            diceColor: foundry.data.operators.ForcedDeletion,
-                            edgeColor: foundry.data.operators.ForcedDeletion,
-                            font: foundry.data.operators.ForcedDeletion,
-                            labelColor: foundry.data.operators.ForcedDeletion,
-                            material: foundry.data.operators.ForcedDeletion,
-                            outlineColor: foundry.data.operators.ForcedDeletion,
-                            system: foundry.data.operators.ForcedDeletion,
-                            texture: foundry.data.operators.ForcedDeletion
-                        };
-                        await user.setFlag("dice-so-nice", "appearance", data);
-                    }
-                }));
-            } else {
-                let appearance = game.user.getFlag("dice-so-nice", "appearance") ? foundry.utils.duplicate(game.user.getFlag("dice-so-nice", "appearance")) : null;
-                if (appearance && appearance.hasOwnProperty("labelColor")) {
-                    let data = {
-                        colorset: foundry.data.operators.ForcedDeletion,
-                        diceColor: foundry.data.operators.ForcedDeletion,
-                        edgeColor: foundry.data.operators.ForcedDeletion,
-                        font: foundry.data.operators.ForcedDeletion,
-                        labelColor: foundry.data.operators.ForcedDeletion,
-                        material: foundry.data.operators.ForcedDeletion,
-                        outlineColor: foundry.data.operators.ForcedDeletion,
-                        system: foundry.data.operators.ForcedDeletion,
-                        texture: foundry.data.operators.ForcedDeletion
-                    };
-                    await game.user.setFlag("dice-so-nice", "appearance", data);
-                }
-            }
-
-            migrated = true;
-        }
-
-
-        if (Utils.isVersionLessThan(formatversion, "2.0")) {
-            //v1 to v2
-            let settings = game.user.getFlag("dice-so-nice", "settings") ? foundry.utils.duplicate(game.user.getFlag("dice-so-nice", "settings")) : {};
-            if (settings.diceColor || settings.labelColor) {
-                let newSettings = foundry.utils.mergeObject(game.dice3d.constructor.DEFAULT_OPTIONS, settings, { insertKeys: false, insertValues: false, applyOperators: true });
-                let appearance = foundry.utils.mergeObject(game.dice3d.constructor.DEFAULT_APPEARANCE(), settings, { insertKeys: false, insertValues: false, applyOperators: true });
-                delete newSettings.dimensions;
-                delete newSettings.fxList;
-                await game.settings.set("dice-so-nice", "settings", newSettings);
-                await game.user.setFlag("dice-so-nice", "appearance", appearance);
-                migrated = true;
-            }
         }
 
         if (Utils.isVersionLessThan(formatversion, "4.0")) {
@@ -175,21 +123,12 @@ export class Utils {
 
         if (Utils.isVersionLessThan(formatversion, "4.1")) {
             //v4 to v4.1 (fix)
-            //Remove the extra properties, no idea why tho
+            //remove the legacy top level appearance properties left over by the 4.0 migration
+            const legacyKeys = ["colorset", "diceColor", "edgeColor", "font", "labelColor", "material", "outlineColor", "system", "texture"];
             await Promise.all(game.users.map(async (user) => {
                 let appearance = user.getFlag("dice-so-nice", "appearance") ? foundry.utils.duplicate(user.getFlag("dice-so-nice", "appearance")) : null;
                 if (appearance && appearance.hasOwnProperty("labelColor")) {
-                    let data = {
-                        colorset: foundry.data.operators.ForcedDeletion,
-                        diceColor: foundry.data.operators.ForcedDeletion,
-                        edgeColor: foundry.data.operators.ForcedDeletion,
-                        font: foundry.data.operators.ForcedDeletion,
-                        labelColor: foundry.data.operators.ForcedDeletion,
-                        material: foundry.data.operators.ForcedDeletion,
-                        outlineColor: foundry.data.operators.ForcedDeletion,
-                        system: foundry.data.operators.ForcedDeletion,
-                        texture: foundry.data.operators.ForcedDeletion
-                    };
+                    let data = Object.fromEntries(legacyKeys.map(k => [k, new foundry.data.operators.ForcedDeletion()]));
                     await user.setFlag("dice-so-nice", "appearance", data);
                 }
             }));
@@ -228,19 +167,113 @@ export class Utils {
                 } else if (settings.onlyShowOwnDice === true) {
                     visibility = "mine";
                 }
-                const updated = { ...settings, visibility };
-                delete updated.enabled;
-                delete updated.onlyShowOwnDice;
+                
+                const updated = {
+                    ...settings,
+                    visibility,
+                    enabled: new foundry.data.operators.ForcedDeletion(),
+                    onlyShowOwnDice: new foundry.data.operators.ForcedDeletion()
+                };
                 await game.user.setFlag("dice-so-nice", "settings", updated);
             }
 
             migrated = true;
         }
 
-        game.settings.set("dice-so-nice", "formatVersion", Utils.DATA_FORMAT_VERSION);
+        if(Utils.isVersionLessThan(formatversion, "6.3")) {
+            //damage type mapping becomes world role scopes + custom roles.
+            if (!game.settings.get("dice-so-nice", "rolesMigrated")) {
+                await Utils.migrateDamageTypeMap();
+            }
+            migrated = true;
+        }
+
+        await game.settings.set("dice-so-nice", "formatVersion", Utils.DATA_FORMAT_VERSION);
         if (migrated)
             ui.notifications.info(game.i18n.format("DICESONICE.migrateMessage", { version: Utils.DATA_FORMAT_VERSION }));
         return true;
+    }
+
+    static async migrateDamageTypeMap() {
+        const map = game.settings.get("dice-so-nice", "damageTypeMap") ?? {};
+        const roleScopes = foundry.utils.deepClone(game.settings.get("dice-so-nice", "roleScopes") ?? {});
+        const roles = foundry.utils.deepClone(game.settings.get("dice-so-nice", "roles") ?? {});
+        const helpers = {
+            getSave: (ownerId, name) => {
+                const owner = game.users.get(ownerId);
+                if (!owner) return undefined;
+                return owner.getFlag("dice-so-nice", "saves")?.[name];
+            },
+            copyDieToWorld: async (ownerId, dieId) => {
+                const die = DiceLibrary.getFromUser(ownerId, dieId);
+                if (!die) return null;
+                const copy = await DiceLibrary.saveWorldDie({ ...foundry.utils.deepClone(die), id: undefined });
+                return copy?.id ?? null;
+            },
+            isBuiltinDamage: (id) => COLORSETS[id]?.category === "DICESONICE.DamageTypes"
+        };
+        let count = 0;
+        let changed = false;
+        for (const [id, entry] of Object.entries(map)) {
+            try {
+                const result = await Utils.convertDamageTypeEntry(id, entry, helpers);
+                result.logs.forEach((line) => console.log(`Dice So Nice! | ${line}`));
+                if (result.scope) {
+                    roleScopes[id] = result.scope;
+                    changed = true;
+                }
+                if (result.role) {
+                    roles[id] = foundry.utils.mergeObject(roles[id] ?? {}, result.role);
+                    changed = true;
+                }
+                count++;
+            } catch (e) {
+                console.log(`Dice So Nice! | damage type "${id}" could not be migrated, skipped`, e);
+            }
+        }
+        if (changed) {
+            await game.settings.set("dice-so-nice", "roleScopes", roleScopes);
+            await game.settings.set("dice-so-nice", "roles", roles);
+        }
+        await game.settings.set("dice-so-nice", "rolesMigrated", true);
+        console.log(`Dice So Nice! | migrated ${count} damage type entries to roles`);
+    }
+
+    static async convertDamageTypeEntry(id, entry, { getSave, copyDieToWorld, isBuiltinDamage }) {
+        const logs = [];
+        let scope = null;
+        if (entry?.saveName) {
+            const save = getSave(entry.saveOwner, entry.saveName);
+            if (!save?.appearance) {
+                logs.push(`damage type "${id}": save "${entry.saveName}" or its owner no longer exists, appearance dropped`);
+            } else {
+                scope = structuredClone(save.appearance);
+                for (const [slot, data] of Object.entries(scope)) {
+                    if (!data?.libraryDieId) continue;
+                    const ownerId = data.libraryDieOwner || entry.saveOwner;
+                    const newId = await copyDieToWorld(ownerId, data.libraryDieId);
+                    if (newId) {
+                        data.libraryDieId = newId;
+                        data.libraryDieOwner = "world";
+                    } else {
+                        logs.push(`damage type "${id}": library die "${data.libraryDieId}" on ${slot} no longer exists, reference dropped`);
+                        delete data.libraryDieId;
+                        delete data.libraryDieOwner;
+                    }
+                }
+            }
+        } else {
+            const global = {};
+            if (entry?.colorset) global.colorset = entry.colorset;
+            if (entry?.preset) global.system = entry.preset;
+            if (Object.keys(global).length) scope = { global };
+        }
+        let role = null;
+        if (!isBuiltinDamage(id)) {
+            role = { customizable: false, detectors: { types: [id] } };
+            if (entry?.label) role.label = entry.label;
+        }
+        return { scope, role, logs };
     }
 
     /**
@@ -351,6 +384,7 @@ export class Utils {
 
         let saveObject = {
             appearance: game.user.getFlag("dice-so-nice", "appearance"),
+            roleAppearance: game.user.getFlag("dice-so-nice", "roleAppearance") ?? {},
             sfxList: game.user.getFlag("dice-so-nice", "sfxList"),
             settings: game.user.getFlag("dice-so-nice", "settings"),
             diceLibrary: game.user.getFlag("dice-so-nice", "diceLibrary")
@@ -379,6 +413,12 @@ export class Utils {
         if (save.appearance) {
             await game.user.unsetFlag("dice-so-nice", "appearance");
             await game.user.setFlag("dice-so-nice", "appearance", save.appearance);
+        }
+        if (save.roleAppearance !== undefined) {
+            await game.user.unsetFlag("dice-so-nice", "roleAppearance");
+            if (!foundry.utils.isEmpty(save.roleAppearance)) {
+                await game.user.setFlag("dice-so-nice", "roleAppearance", save.roleAppearance);
+            }
         }
         if (save.sfxList) {
             await game.user.unsetFlag("dice-so-nice", "sfxList");
@@ -438,7 +478,7 @@ export class Utils {
 
             if (settings.libraryDieId) {
                 if (settings.libraryDieOwner) {
-                    const owner = game.users?.get(settings.libraryDieOwner);
+                    const owner = DiceLibrary.resolveOwner(settings.libraryDieOwner);
                     if (!owner || !DiceLibrary.getFromUser(owner, settings.libraryDieId)) {
                         delete settings.libraryDieId;
                         delete settings.libraryDieOwner;
@@ -458,13 +498,27 @@ export class Utils {
         return appearance;
     }
 
+    static sanitizeRoleScopes(scopes, user = null) {
+        if (!scopes || typeof scopes !== "object") return {};
+        for (const roleId in scopes) {
+            if (!scopes.hasOwnProperty(roleId)) continue;
+            const scope = scopes[roleId];
+            if (!scope || typeof scope !== "object") {
+                delete scopes[roleId];
+                continue;
+            }
+            Utils.sanitizeAppearance(scope, user);
+        }
+        return scopes;
+    }
+
     //shortcut to instantly dismiss ephemeral dice
     static onDismissEphemeralKeydown(event) {
         if (event.repeat) return;
         const bindings = game.keybindings?.bindings?.get("dice-so-nice.dismissEphemeralDice");
         if (!bindings?.length) return;
         if (!bindings.some(b => Utils._matchesKeybinding(event, b))) return;
-        game.dice3d?.dismissEphemeralDice();
+        game.dice3d?.persistent.dismissEphemeralDice();
     }
 
     //match a keydown event against a Foundry stored binding {key, modifiers[]}

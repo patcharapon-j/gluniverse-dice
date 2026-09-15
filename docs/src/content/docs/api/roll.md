@@ -63,7 +63,7 @@ Implement it as a non-static instance method that returns an object. Each key na
 class MyRoll extends Roll {
     getDSNProperties() {
         return {
-            damageType: "options.damageType"
+            role: "options.damageType"
         };
     }
 }
@@ -77,17 +77,17 @@ There is nothing to register. Dice So Nice! discovers the method via `roll.getDS
 
 | Key | Value | Description |
 |-----|-------|-------------|
-| `damageType` | path to a string | The damage type id used for [Damage Type Detection and Mapping](/foundryvtt-dice-so-nice/api/customization/#damage-type-detection-and-mapping). |
+| `role` | path to a string | The [dice role](/foundryvtt-dice-so-nice/api/customization/#dice-roles) id of the dice in that scope (`"fire"`, `"hope"`...). |
 
-Only `damageType` is read today. The return value is an object on purpose so the convention can grow: declare only the keys you support, and Dice So Nice! ignores any key it does not yet understand. Returning an unknown key now is harmless and forward-compatible.
+Only `role` is read today. The return value is an object on purpose so the convention can grow: declare only the keys you support, and Dice So Nice! ignores any key it does not yet understand. Returning an unknown key now is harmless and forward-compatible.
 
-### `damageType`
+### `role`
 
-Resolve the path to the damage type id Dice So Nice! should use for the roll's dice (for example `"fire"`). The path is resolved at each roll scope, so a value that lives on a sub-roll lands on that sub-roll's own dice.
+Resolve the path to the role id Dice So Nice! should use for the roll's dice (for example `"fire"` or `"hope"`). The path is resolved at each roll scope, so a value that lives on a sub-roll lands on that sub-roll's own dice.
 
-Declaring `damageType` is an opt-out. Once a roll's class declares it, Dice So Nice! stops reading `.options.type` and `options.flavor` fields for that roll's dice entirely, even when the declared path resolves to nothing.
+Declaring `role` is an opt-out. Once a roll's class declares it, Dice So Nice! stops reading `.options.type` and `options.flavor` fields for that roll's dice entirely, even when the declared path resolves to nothing. Modifier detectors still apply to dice without a role.
 
-It only decides which damage type id is detected. The GM's Damage Type Mapping and any defaults registered with `addDamageTypeDefaults` still decide the final appearance for that id. See [Damage Type Detection and Mapping](/foundryvtt-dice-so-nice/api/customization/#damage-type-detection-and-mapping) for the full resolution chain.
+It only decides which role id is detected. The GM's Dice Roles table, the player's own role appearance and any defaults registered with `addRole` still decide the final appearance for that id. See [Dice roles](/foundryvtt-dice-so-nice/api/customization/#dice-roles) for the full resolution chain.
 
 ## Using a custom Roll system
 If the `Roll` class is not used, you can alternatively call the `game.dice3d.show` method.
@@ -204,6 +204,21 @@ The selector must match the elements that wrap individual roll results inside th
 :::note
 This only affects how rolls added via message updates are hidden and revealed. The initial message hiding (when the message is first created with rolls) always hides the entire message element regardless of this selector.
 :::
+
+## Showing a roll result inside another message
+
+Some systems display the result of a roll in a message other than the one carrying the Roll. A summary card listing each participant's saving throw, or a request card ticking off who has rolled, are typical examples. The roll message stays hidden until the dice land, but the other message does not, so the result leaks before the animation ends.
+
+Dice So Nice! handles this with a naming convention: wrap the nested result in an element with a `data-message-id` attribute set to the ID of the roll message.
+
+```html
+<li class="target" data-message-id="{{ resultMessageId }}">
+    <span class="name">Bob</span>
+    <span class="result">17</span>
+</li>
+```
+
+While the animation for that message plays, Dice So Nice! hides every element with a matching `data-message-id` found inside another chat message, whenever it gets rendered or re-rendered. The element is revealed at the same time as the roll message. If the roll message is deleted mid-animation, the element is revealed too.
 
 ## Hiding a dice from a roll animation
 

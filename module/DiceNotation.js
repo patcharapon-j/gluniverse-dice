@@ -10,9 +10,27 @@ export const COMPOUND_DICE = {
 
 export class DiceNotation {
 
+	static SUPPORTED_FACES = [2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16, 20, 24, 30, 100, 1000, 10000];
+
+	static applyCompoundResult(primary, secondaries, rawResult, places, setFace) {
+		setFace(primary, Math.floor(rawResult / places[0].divisor) % 10);
+		primary.notation.compositeResult = rawResult;
+		primary.notation.compositeType = primary.notation.type;
+		for (const sec of secondaries) {
+			const dp = sec.userData?.digitPlace;
+			if (dp != null && places[dp]) setFace(sec, Math.floor(rawResult / places[dp].divisor) % 10);
+			sec.notation.compositeResult = rawResult;
+			sec.notation.compositeType = primary.notation.type;
+		}
+	}
+
+	static isRealReroll(r) {
+		return SFXFormulaMatcher.isRealReroll(r);
+	}
+
 	/**
-	 * A roll object from Foundry 
-	 * @param {Roll} rolls 
+	 * A roll object from Foundry
+	 * @param {Roll} rolls
 	 */
 	constructor(rolls, userConfig = null, user = game.user) {
 		this.throws = [{dice:[]}];
@@ -24,9 +42,9 @@ export class DiceNotation {
 		//First we need to prepare the data
 		rolls.dice.forEach(die => {
 			//We only are able to handle this list of number of face in 3D for now
-			if([2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16, 20, 24, 30, 100, 1000, 10000].includes(die.faces)) {
+			if(DiceNotation.SUPPORTED_FACES.includes(die.faces)) {
 				//We flag every single die with a throw number, to queue exploded dice
-				let cnt = die.results.filter(r => !r.rerolled && !r.exploded).length;
+				let cnt = die.results.filter(r => !DiceNotation.isRealReroll(r) && !r.exploded).length;
 				let countExtraDice = 0;
 				let localNbThrow = 0;
 
@@ -36,7 +54,7 @@ export class DiceNotation {
 					if(localNbThrow >= this.throws.length)
 						this.throws.push({dice:[]});
 
-					if(die.results[i].exploded || die.results[i].rerolled)
+					if(die.results[i].exploded || DiceNotation.isRealReroll(die.results[i]))
 						countExtraDice++;
 					die.results[i].indexThrow = localNbThrow;
 					/*
@@ -67,7 +85,7 @@ export class DiceNotation {
 		//Then we can create the throws
 		rolls.dice.some(die => {
 			//We only are able to handle this list of number of face in 3D for now
-			if([2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16, 20, 24, 30, 100, 1000, 10000].includes(die.faces)) {
+			if(DiceNotation.SUPPORTED_FACES.includes(die.faces)) {
 				let options = {};
 				for(let i =0; i< die.results.length; i++){
 					if(++diceNumber >= maxDiceNumber)
@@ -117,6 +135,7 @@ export class DiceNotation {
 
 		dsnDie.result = dieValue;
 		dsnDie.fvttResult = fvttDie.results[index];
+		dsnDie.resultIndex = index;
 
 		const Die = foundry.dice.terms.Die;
 		const denomination = fvttDie.constructor.DENOMINATION;
@@ -139,29 +158,31 @@ export class DiceNotation {
 		if (typeof dsnDie.options.flavor === "string" && dsnDie.options.flavor.startsWith("die:")) {
 			const remainder = dsnDie.options.flavor.slice(4);
 			const colonIdx = remainder.indexOf(":");
-			let targetUser, dieName;
+			//die:<name>, die:<user name>:<name> or die:world:<name>
+			let targetOwner, dieName;
 			if (colonIdx !== -1) {
-				const userName = remainder.slice(0, colonIdx);
+				const ownerName = remainder.slice(0, colonIdx);
 				dieName = remainder.slice(colonIdx + 1);
-				targetUser = game.users.find(u => u.name.toLowerCase() === userName.toLowerCase());
+				if (ownerName.toLowerCase() === DiceLibrary.WORLD_OWNER)
+					targetOwner = DiceLibrary.WORLD_OWNER;
+				else
+					targetOwner = game.users.find(u => u.name.toLowerCase() === ownerName.toLowerCase());
 			} else {
 				dieName = remainder;
-				targetUser = this.user;
+				targetOwner = this.user;
 			}
-			if (targetUser && dieName) {
-				const libraryDie = DiceLibrary.getByNameAndTypeForUser(targetUser, dieName, dsnDie.type);
+			if (targetOwner && dieName) {
+				const libraryDie = DiceLibrary.getByNameAndTypeForUser(targetOwner, dieName, dsnDie.type);
 				if (libraryDie) {
 					if (!dsnDie.options.appearance) dsnDie.options.appearance = {};
 					dsnDie.options.appearance.libraryDieId = libraryDie.id;
-					if (targetUser.id !== this.user.id) {
-						dsnDie.options.appearance.libraryDieOwner = targetUser.id;
+					const ownerId = DiceLibrary.isWorldOwner(targetOwner) ? DiceLibrary.WORLD_OWNER : targetOwner.id;
+					if (ownerId !== this.user.id) {
+						dsnDie.options.appearance.libraryDieOwner = ownerId;
 					}
 				}
 			}
 			delete dsnDie.options.flavor;
-		} else if(this.userConfig && !this.userConfig.enableFlavorColorset) {
-			if(dsnDie.options.flavor) delete dsnDie.options.flavor;
-			if(dsnDie.options.type) delete dsnDie.options.type;
 		}
 
 		dsnDie.termIndex = termIndex;
@@ -169,6 +190,14 @@ export class DiceNotation {
 		dsnDie.termTotal = fvttDie.total ?? null;
 		dsnDie.termFaces = fvttDie.faces ?? null;
 		dsnDie.termModifiers = fvttDie.modifiers ? [...fvttDie.modifiers] : [];
+		//decided once here so the role travels with the die through sockets and queued commands
+		dsnDie.role = game.dice3d?.DiceFactory?.detectRole(dsnDie) ?? "basic";
+		if(this.userConfig && !this.userConfig.enableFlavorColorset) {
+			if(game.dice3d?.DiceFactory?.getRole(dsnDie.role)?.optional) dsnDie.role = "basic";
+			//flavor and type also carry the colorset of a 1d6[black] roll, so they go too
+			delete dsnDie.options.flavor;
+			delete dsnDie.options.type;
+		}
 
 		this.throws[dsnDie.fvttResult.indexThrow].dice.push(dsnDie);
 	}
@@ -241,7 +270,7 @@ export class DiceNotation {
 							manualResultTrigger = true;
 						if(sfx.onResult.includes("x") && dsnDie.fvttResult?.exploded)
 							manualResultTrigger = true;
-						if(sfx.onResult.includes("r") && dsnDie.fvttResult?.rerolled)
+						if(sfx.onResult.includes("r") && DiceNotation.isRealReroll(dsnDie.fvttResult))
 							manualResultTrigger = true;
 
 						if(manualResultTrigger)

@@ -1,4 +1,4 @@
-import { DICE_MODELS } from './DiceModels.js';
+import { DiceShapeLibrary } from './DiceShapeLibrary.js';
 import { DiceSFXManager } from '../sfx/DiceSFXManager.js';
 import { DiceSystem } from '../DiceSystem.js';
 import { LEGACY_TO_METERS } from './SceneConstants.js';
@@ -30,6 +30,7 @@ export class ThrowEngine {
 		this.deadDiceList = [];
 		this.iteration = 0;
 		this.iterationsNeeded = 0;
+		this.playbackStaleAt = Infinity;
 		this.minIterations = 0;
 		this.detectedCollides = [];
 		this.framerate = (1 / 60);
@@ -67,7 +68,9 @@ export class ThrowEngine {
 
 		for (let i = 0; i < notationVectors.dice.length; i++) {
 
-			const diceobj = this.dicefactory.get(notationVectors.dice[i].type);
+			const appearance = this.dicefactory.getAppearanceForDice(notationVectors.dsnConfig.appearance, notationVectors.dice[i].type, notationVectors.dice[i], notationVectors.dsnConfig.roleContext);
+			notationVectors.dice[i].resolvedAppearance = appearance;
+			const diceobj = this.dicefactory.resolvePreset(notationVectors.dice[i].type, appearance);
 
 			let vec = this.vectorRand(vector);
 
@@ -161,7 +164,12 @@ export class ThrowEngine {
 		if (value == result) return;
 
 		let rotIndex = value > result ? result + "," + value : value + "," + result;
-		let rotationDegrees = DICE_MODELS[dicemesh.shape].rotationCombinations[rotIndex];
+		const shapeDef = DiceShapeLibrary.get(dicemesh.shape);
+		if (!shapeDef?.rotationCombinations) {
+			console.error(`[Dice So Nice] No rotation table for shape "${dicemesh.shape}" - face swap skipped`);
+			return;
+		}
+		let rotationDegrees = shapeDef.rotationCombinations[rotIndex];
 		if (!rotationDegrees) {
 			console.log(`[Dice So Nice] No dice rotation found for ${dicemesh.shape} ${value} ${result}`);
 			rotationDegrees = [0, 0, 0];
@@ -189,7 +197,7 @@ export class ThrowEngine {
 
 	//create a dice mesh (shared setup for ephemeral and persistent)
 	async createDiceMesh(type, appearance, diceLibrary = null, scopedTextureCache = null) {
-		const diceobj = this.dicefactory.get(type);
+		const diceobj = this.dicefactory.resolvePreset(type, appearance);
 		if (!diceobj) return null;
 
 		let dicemesh = await this.dicefactory.create(scopedTextureCache || this.diceScene.renderer.scopedTextureCache, diceobj.type, appearance, diceLibrary);
@@ -293,17 +301,20 @@ export class ThrowEngine {
 		return stopped;
 	}
 
+	_spawnDiceIntoScene(dicemesh) {
+		//set initial position from sim to avoid flash at origin
+		if (dicemesh.sim && dicemesh.sim.stepPositions) {
+			dicemesh.parent.position.fromArray(dicemesh.sim.stepPositions, 0);
+			dicemesh.parent.quaternion.fromArray(dicemesh.sim.stepQuaternions, 0);
+		}
+		this.diceScene.scene.add(dicemesh.parent);
+		this.dicefactory.systems.get(dicemesh.userData.system).fire(DiceSystem.DICE_EVENT_TYPE.SPAWN, { dice: dicemesh });
+	}
+
 	addDiceToScene() {
 		for (let i = 0; i < this.diceList.length; i++) {
 			if (this.diceList[i].startAtIteration == this.iteration) {
-				let dicemesh = this.diceList[i];
-				//set initial position from sim to avoid flash at origin
-				if (dicemesh.sim && dicemesh.sim.stepPositions) {
-					dicemesh.parent.position.fromArray(dicemesh.sim.stepPositions, 0);
-					dicemesh.parent.quaternion.fromArray(dicemesh.sim.stepQuaternions, 0);
-				}
-				this.diceScene.scene.add(dicemesh.parent);
-				this.dicefactory.systems.get(dicemesh.userData.system).fire(DiceSystem.DICE_EVENT_TYPE.SPAWN, { dice: dicemesh });
+				this._spawnDiceIntoScene(this.diceList[i]);
 			}
 		}
 	}
@@ -333,6 +344,23 @@ export class ThrowEngine {
 		//Note: if the game is lagging, it means some collisions won't be played. Not sure if it is what we want or not
 		if (this.detectedCollides[this.iteration]) {
 			this.soundManager.playAudioSprite(...this.detectedCollides[this.iteration]);
+		}
+	}
+
+	fastForwardPlayback() {
+		if (!this.rolling || this.iteration >= this.iterationsNeeded) return;
+		for (const dicemesh of this.diceList) {
+			if (dicemesh.startAtIteration > this.iteration) this._spawnDiceIntoScene(dicemesh);
+		}
+		this.iteration = this.iterationsNeeded;
+		for (const child of this.diceScene.scene.children) {
+			const dicemesh = child.children && child.children.length ? child.children[0] : null;
+			if (!dicemesh?.sim || dicemesh.userData?.constrained) continue;
+			const last = dicemesh.sim.dead && dicemesh.sim.dead < this.iteration ? dicemesh.sim.dead : this.iteration;
+			if (dicemesh.sim.stepPositions[last * 3] !== undefined) {
+				child.position.fromArray(dicemesh.sim.stepPositions, last * 3);
+				child.quaternion.fromArray(dicemesh.sim.stepQuaternions, last * 4);
+			}
 		}
 	}
 
@@ -395,8 +423,7 @@ export class ThrowEngine {
 				let notationVectors = throws[j];
 				for (let i = 0, len = notationVectors.dice.length; i < len && spawned < maxDiceNumber; ++i) {
 					notationVectors.dice[i].startAtIteration = j * this.nbIterationsBetweenRolls;
-					let appearance = this.dicefactory.getAppearanceForDice(notationVectors.dsnConfig.appearance, notationVectors.dice[i].type, notationVectors.dice[i]);
-					await this.spawnDiceMesh(notationVectors.dice[i], appearance, notationVectors.dsnConfig.diceLibrary, workerSpecs);
+					await this.spawnDiceMesh(notationVectors.dice[i], notationVectors.dice[i].resolvedAppearance, notationVectors.dsnConfig.diceLibrary, workerSpecs);
 					spawned++;
 					lastGroup = j;
 				}
@@ -600,6 +627,7 @@ export class ThrowEngine {
 		this.iteration = 0;
 		this.rolling = true;
 		this.running = (new Date()).getTime();
+		this.playbackStaleAt = persistentThrowData?.queuedAt ? persistentThrowData.queuedAt + 10000 : Infinity;
 		this.callback = callback;
 		this.throws = throws;
 	}
@@ -630,9 +658,15 @@ export class ThrowEngine {
 
 	async handlePersistentThrowCompletion() {
 		const promises = [];
+		const landedBinds = [];
 		for (const dicemesh of this.persistentDiceList) {
 			const pt = dicemesh.persistentThrow;
 			if (!pt) continue;
+
+			if (dicemesh.userData.pendingBind) {
+				landedBinds.push(dicemesh.userData.pendingBind);
+				delete dicemesh.userData.pendingBind;
+			}
 
 			if (dicemesh.sim && dicemesh.parent) {
 				const fi = this.iterationsNeeded;
@@ -670,6 +704,7 @@ export class ThrowEngine {
 			delete dicemesh.sim;
 			delete dicemesh.persistentThrow;
 		}
+		if (landedBinds.length) game.dice3d?.pendingThrows?.noteBindsLanded(landedBinds);
 		return Promise.all(promises);
 	}
 

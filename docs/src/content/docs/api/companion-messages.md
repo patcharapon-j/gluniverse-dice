@@ -49,8 +49,6 @@ The companion is hidden while the d20 animates and revealed when it lands.
 
 **Immediately Display setting.** If the player has enabled "Immediately Display Chat Messages," companion hiding is bypassed. Companions show immediately, matching the player's preference.
 
-**Safety timeout.** If an animation stalls or fails, companions are automatically revealed after 30 seconds to prevent messages from being stuck hidden.
-
 **Message deletion.** If the primary message is deleted mid-animation, all its companions are revealed immediately. If a companion is deleted, it is simply removed from tracking.
 
 **Re-renders.** Foundry may re-render a message's HTML while it is hidden (e.g. when the chat log scrolls). Companions stay hidden during re-renders while the animation is active. After reveal, re-renders will not re-hide the companion.

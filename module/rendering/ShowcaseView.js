@@ -1,6 +1,7 @@
 import { Mesh, Group, PlaneGeometry, ShadowMaterial } from 'three';
 import { LEGACY_TO_METERS } from '../engine/SceneConstants.js';
 import { Utils } from '../Utils.js';
+import { DsnSettings } from '../settings/DsnSettings.js';
 
 //showcase grid layout, selector animation, and die raycasting
 export class ShowcaseView {
@@ -50,6 +51,9 @@ export class ShowcaseView {
 		const extraDiceTypes = ["d3", "d5", "d7", "d14", "d16", "d24", "d30", "d1000", "d10000"];
 		if (!this.showExtraDice)
 			selectordice = selectordice.filter((die) => !extraDiceTypes.includes(die));
+		if (Array.isArray(config.dieTypes) && config.dieTypes.length)
+			selectordice = selectordice.filter((die) => config.dieTypes.includes(die));
+		const roleNotation = DsnSettings._roleNotation(config.role);
 
 		let proportion = this.diceScene.display.containerWidth / this.diceScene.display.containerHeight;
 		let columns = Math.min(selectordice.length, Math.round(Math.sqrt(proportion * selectordice.length)));
@@ -81,7 +85,7 @@ export class ShowcaseView {
 			for (let x = 0; x < columns; x++) {
 				if (count >= selectordice.length)
 					break;
-				let appearance = this.dicefactory.getAppearanceForDice(config.appearance, selectordice[count]);
+				let appearance = this.dicefactory.getAppearanceForDice(config.appearance, selectordice[count], roleNotation, config.roleContext ?? null);
 				let dicemesh = await this.dicefactory.create(this.diceScene.renderer.scopedTextureCache, selectordice[count], appearance, config.diceLibrary || null);
 				//cap oversized custom models at their base size in the showcase
 				const preset = this.dicefactory.getPresetBySystem(selectordice[count], appearance.system);

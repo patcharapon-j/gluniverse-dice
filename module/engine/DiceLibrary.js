@@ -7,6 +7,8 @@ import { CustomDiceTerms } from './CustomDiceTerms.js';
  */
 export class DiceLibrary {
 
+    static WORLD_OWNER = "world";
+
     static LIBRARY_DIE_TYPES = ["df", "d2", "d3", "d4", "d5", "d6", "d7", "d8", "d10", "d12", "d14", "d16", "d20", "d24", "d30", "d100", "d1000", "d10000"];
 
     static _imageCache = {};
@@ -71,19 +73,6 @@ export class DiceLibrary {
     async delete(id) {
         this._dice = this._dice.filter(d => d.id !== id);
         await this.save();
-    }
-
-    async duplicate(id) {
-        const original = this.get(id);
-        if (!original) return null;
-        const copy = foundry.utils.deepClone(original);
-        copy.id = foundry.utils.randomID();
-        copy.name = `${copy.name} (Copy)`;
-        copy.createdAt = Date.now();
-        copy.updatedAt = Date.now();
-        this._dice.push(copy);
-        await this.save();
-        return copy;
     }
 
     export(id) {
@@ -157,7 +146,62 @@ export class DiceLibrary {
         return resolved;
     }
 
+    static isWorldOwner(owner) {
+        return owner === DiceLibrary.WORLD_OWNER || owner?.id === DiceLibrary.WORLD_OWNER;
+    }
+
+    static resolveOwner(owner) {
+        if (!owner) return null;
+        if (DiceLibrary.isWorldOwner(owner)) return DiceLibrary.WORLD_OWNER;
+        if (typeof owner === "string") return game.users?.get(owner) ?? null;
+        return owner;
+    }
+
+    static getWorldLibrary() {
+        let data;
+        try {
+            data = game.settings.get("dice-so-nice", "worldDiceLibrary");
+        } catch (e) {
+            return [];
+        }
+        return Array.isArray(data) ? data : [];
+    }
+
+    static _assertGM() {
+        if (game.user.isGM) return true;
+        ui.notifications.error(game.i18n.localize("DICESONICE.libraryWorldGMOnly"));
+        return false;
+    }
+
+    static async saveWorldDie(dieData) {
+        if (!DiceLibrary._assertGM()) return null;
+        const dice = foundry.utils.deepClone(DiceLibrary.getWorldLibrary());
+        const die = foundry.utils.deepClone(dieData);
+        const index = die.id ? dice.findIndex(d => d.id === die.id) : -1;
+        die.updatedAt = Date.now();
+        if (index === -1) {
+            if (!die.id) die.id = foundry.utils.randomID();
+            die.createdAt = die.createdAt ?? Date.now();
+            dice.push(die);
+        } else {
+            die.createdAt = dice[index].createdAt ?? die.createdAt;
+            dice[index] = die;
+        }
+        await game.settings.set("dice-so-nice", "worldDiceLibrary", dice);
+        return die;
+    }
+
+    static async deleteWorldDie(id) {
+        if (!DiceLibrary._assertGM()) return false;
+        const dice = DiceLibrary.getWorldLibrary().filter(d => d.id !== id);
+        await game.settings.set("dice-so-nice", "worldDiceLibrary", dice);
+        return true;
+    }
+
     static getLibraryForUser(user) {
+        if (DiceLibrary.isWorldOwner(user)) return DiceLibrary.getWorldLibrary();
+        if (typeof user === "string") user = game.users?.get(user);
+        if (!user) return [];
         const data = user.getFlag("dice-so-nice", "diceLibrary");
         return Array.isArray(data) ? data : [];
     }
@@ -177,6 +221,25 @@ export class DiceLibrary {
     static async preloadAssets(userID = null, documentUuid = null) {
         const urls = new Set();
         const customTextures = new Map();
+        const collectFromDie = (die) => {
+            if (die.baseAppearance?.texture?.startsWith("custom:")) {
+                const path = die.baseAppearance.texture.slice(7);
+                if (!customTextures.has(path)) {
+                    customTextures.set(path, die.baseAppearance.textureComposite || "multiply");
+                }
+            }
+
+            if (!die.faces) return;
+            for (const faceData of Object.values(die.faces)) {
+                if (faceData?.labelImage) urls.add(faceData.labelImage);
+                if (faceData?.backgroundTexture?.startsWith("custom:")) {
+                    const path = faceData.backgroundTexture.slice(7);
+                    if (!customTextures.has(path)) {
+                        customTextures.set(path, faceData.backgroundTextureComposite || die.baseAppearance?.textureComposite || "multiply");
+                    }
+                }
+            }
+        };
         const collectFromAppearance = (appearance, fallbackOwner = null) => {
             if (!appearance) return;
 
@@ -185,40 +248,36 @@ export class DiceLibrary {
                 const libId = appearance[scope]?.libraryDieId;
                 if (!libId) continue;
                 const ownerId = appearance[scope]?.libraryDieOwner;
-                const owner = ownerId ? game.users.get(ownerId) : fallbackOwner;
+                const owner = ownerId ? DiceLibrary.resolveOwner(ownerId) : fallbackOwner;
                 if (!owner) continue;
                 const die = DiceLibrary.getFromUser(owner, libId);
-                if (!die) continue;
-
-                if (die.baseAppearance?.texture?.startsWith("custom:")) {
-                    const path = die.baseAppearance.texture.slice(7);
-                    if (!customTextures.has(path)) {
-                        customTextures.set(path, die.baseAppearance.textureComposite || "multiply");
-                    }
-                }
-
-                if (!die.faces) continue;
-                for (const faceData of Object.values(die.faces)) {
-                    if (faceData?.labelImage) urls.add(faceData.labelImage);
-                    if (faceData?.backgroundTexture?.startsWith("custom:")) {
-                        const path = faceData.backgroundTexture.slice(7);
-                        if (!customTextures.has(path)) {
-                            customTextures.set(path, faceData.backgroundTextureComposite || die.baseAppearance?.textureComposite || "multiply");
-                        }
-                    }
-                }
+                if (die) collectFromDie(die);
             }
+        };
+
+        const collectFromRoleScopes = (scopes, fallbackOwner = null) => {
+            if (!scopes || typeof scopes !== "object") return;
+            for (const scope of Object.values(scopes)) collectFromAppearance(scope, fallbackOwner);
+        };
+        const collectFromDocument = (doc, fallbackOwner = null) => {
+            collectFromAppearance(doc.getFlag("dice-so-nice", "appearance"), fallbackOwner);
+            collectFromRoleScopes(doc.getFlag("dice-so-nice", "roleAppearance"), fallbackOwner);
         };
 
         if (documentUuid) {
             const doc = foundry.utils.fromUuidSync(documentUuid);
-            if (doc) collectFromAppearance(doc.getFlag("dice-so-nice", "appearance"));
+            if (doc) collectFromDocument(doc);
         } else if (userID) {
             const user = game.users.get(userID);
-            if (user) collectFromAppearance(user.getFlag("dice-so-nice", "appearance"), user);
+            if (user) collectFromDocument(user, user);
         } else {
-            game.users.forEach(user => collectFromAppearance(user.getFlag("dice-so-nice", "appearance"), user));
+            game.users.forEach(user => collectFromDocument(user, user));
         }
+        try {
+            collectFromRoleScopes(game.settings.get("dice-so-nice", "roleScopes"));
+        } catch (e) {}
+        //world dice can be referenced by flavor (die:world:name) without any scope pointing at them
+        for (const die of DiceLibrary.getWorldLibrary()) collectFromDie(die);
 
         const promises = [];
 
@@ -278,13 +337,26 @@ export class DiceLibrary {
     }
 
     //build optgroup data for the library die dropdown in DiceConfig
-    static buildLibraryDiceGroups(dieType, appearance, selectedOverride = null) {
+    static buildLibraryDiceGroups(dieType, appearance, selectedOverride = null, { worldOnly = false } = {}) {
         const myId = game.user.id;
         const selectedId = selectedOverride ?? appearance?.libraryDieId ?? "";
         const selectedOwner = appearance?.libraryDieOwner ?? "";
         const selectedVal = (selectedOwner && selectedOwner !== myId) ? `${selectedOwner}:${selectedId}` : selectedId;
 
         const groups = [];
+
+        const worldDice = DiceLibrary.getWorldLibrary().filter(d => d.dieType === dieType);
+        if (worldDice.length > 0) {
+            groups.push({
+                label: game.i18n.localize("DICESONICE.libraryWorldDice"),
+                dice: worldDice.map(d => ({
+                    value: `${DiceLibrary.WORLD_OWNER}:${d.id}`,
+                    name: d.name,
+                    selected: `${DiceLibrary.WORLD_OWNER}:${d.id}` === selectedVal
+                }))
+            });
+        }
+        if (worldOnly) return groups;
 
         const myDice = game.dice3d.diceLibrary ? game.dice3d.diceLibrary.getAll().filter(d => d.dieType === dieType) : [];
         if (myDice.length > 0) {

@@ -58,7 +58,17 @@ Each die term resolves its own flavor independently, so you can mix different li
 
 - **Type matching is strict** — `[die:Fire Oracle]` on a d20 roll only finds a d20 named "Fire Oracle", not a d6 with the same name.
 - **No match** — if the die name isn't found, the die silently uses your default appearance. No error is shown.
-- **Independent of damage type themes** — the `die:` prefix works even if "Apply damage type themes to dice" is disabled in your preferences. Regular flavors like `[fire]` still go through the damage type system as before.
+- **Independent of dice roles**: the `die:` prefix works even if "Apply optional dice role appearances" is disabled in your preferences. Regular flavors like `[fire]` still select a [dice role](/foundryvtt-dice-so-nice/guide/preferences/#dice-roles) as before.
+
+## World Library
+
+Next to the personal libraries, the world has its own library of custom dice, owned by the GM and readable by every client. World dice are listed in the Dice Library dialog under **World Dice**, between your dice and the other players' dice. The GM can create (globe button at the bottom), edit, duplicate and delete them, and copy one of their own dice to the world library; players can copy a world die into their own library.
+
+The world library is what the GM uses when setting the world-wide appearance of a [dice role](/foundryvtt-dice-so-nice/guide/preferences/#dice-roles-table-gm-only): the role's appearance editor only offers world dice, so every client can render them. Anyone can also roll a world die by name:
+
+```
+/r 1d6[die:world:Fire Oracle]
+```
 
 ## Visibility
 

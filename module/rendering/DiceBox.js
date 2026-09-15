@@ -35,6 +35,7 @@ export class DiceBox {
 
 		//per-user outline passes for remote persistent dice (userId => {pass, meshes})
 		this._remoteOutlinePasses = new Map();
+		this._eligibleOutlinePass = null;
 
 		this.immersiveDarkness = true;
 
@@ -47,11 +48,6 @@ export class DiceBox {
 
 		this.soundManager = new SoundManager();
 
-		//deferred callback values set before persistentDiceManager is created
-		this._deferredOnPersistentEvent = null;
-		this._deferredSfxListForUser = null;
-		this._deferredOnQueueThrow = null;
-
 		this.layers = {
 			dice: 0,
 			bloom: 1
@@ -59,6 +55,7 @@ export class DiceBox {
 
 		this.debugMode = false;
 		this.initialized = false;
+		this.ready = null;
 	}
 
 	//getters delegating to DiceScene
@@ -96,35 +93,8 @@ export class DiceBox {
 	get shadows() { return this.dicefactory.shadows; }
 	get muteSoundSecretRolls() { return this.soundManager.muteSoundSecretRolls; }
 
-	get onPersistentEvent() {
-		return this.persistentDiceManager ? this.persistentDiceManager.onPersistentEvent : this._deferredOnPersistentEvent;
-	}
-
-	set onPersistentEvent(value) {
-		if (this.persistentDiceManager) this.persistentDiceManager.onPersistentEvent = value;
-		else this._deferredOnPersistentEvent = value;
-	}
-
-	get sfxListForUser() {
-		return this.persistentDiceManager ? this.persistentDiceManager.sfxListForUser : this._deferredSfxListForUser;
-	}
-
-	set sfxListForUser(value) {
-		if (this.persistentDiceManager) this.persistentDiceManager.sfxListForUser = value;
-		else this._deferredSfxListForUser = value;
-	}
-
-	get onQueueThrow() {
-		return this.persistentDiceManager ? this.persistentDiceManager.onQueueThrow : this._deferredOnQueueThrow;
-	}
-
-	set onQueueThrow(value) {
-		if (this.persistentDiceManager) this.persistentDiceManager.onQueueThrow = value;
-		else this._deferredOnQueueThrow = value;
-	}
-
 	initialize() {
-		return new Promise(async resolve => {
+		this.ready = new Promise(async resolve => {
 			this.soundManager.update({
 				sounds: this.config.sounds,
 				volume: this.config.soundsVolume,
@@ -198,20 +168,6 @@ export class DiceBox {
 				this.persistentDiceManager.onSelectionChanged = () => this.updateSelectionOutlines();
 				this.persistentDiceManager.onRemoteThrowReplayed = (userId) => this._updateRemoteOutlines();
 
-				//apply deferred callbacks set before persistentDiceManager existed
-				if (this._deferredOnPersistentEvent) {
-					this.persistentDiceManager.onPersistentEvent = this._deferredOnPersistentEvent;
-					this._deferredOnPersistentEvent = null;
-				}
-				if (this._deferredSfxListForUser) {
-					this.persistentDiceManager.sfxListForUser = this._deferredSfxListForUser;
-					this._deferredSfxListForUser = null;
-				}
-				if (this._deferredOnQueueThrow) {
-					this.persistentDiceManager.onQueueThrow = this._deferredOnQueueThrow;
-					this._deferredOnQueueThrow = null;
-				}
-
 				this.throwEngine = new ThrowEngine(this.diceScene, this.physicsWorker, this.dicefactory, this.soundManager);
 				this.throwEngine.sfxContext = this;
 				this.throwEngine.persistentDiceManager = this.persistentDiceManager;
@@ -223,7 +179,7 @@ export class DiceBox {
 				this.inputHandler = new InputHandler(this.diceScene, this.physicsWorker, this.persistentDiceManager, this.throwEngine);
 				this.inputHandler._isVisibleFn = () => this.isVisible;
 				this.inputHandler.onPersistentEvent = (type, data) => {
-					if (this.onPersistentEvent) this.onPersistentEvent(type, data);
+					if (this.persistentDiceManager.onPersistentEvent) this.persistentDiceManager.onPersistentEvent(type, data);
 				};
 				this.inputHandler.onSelectionChanged = () => this.updateSelectionOutlines();
 				this.inputHandler.onDiceClicked = (root, pos) => {
@@ -241,6 +197,7 @@ export class DiceBox {
 			this.initialized = true;
 			resolve();
 		});
+		return this.ready;
 	}
 
 	setScene(dimensions) {
@@ -417,7 +374,10 @@ export class DiceBox {
 			const anyPersistentThrowPlaying = this.persistentDiceList.some(d => d.persistentThrow);
 
 			if (neededSteps && this.throwEngine.rolling) {
-				this.throwEngine.updateThrowPlayback(neededSteps);
+				if (time > this.throwEngine.playbackStaleAt)
+					this.throwEngine.fastForwardPlayback();
+				else
+					this.throwEngine.updateThrowPlayback(neededSteps);
 			} else if (!this.throwEngine.rolling && !anyPersistentThrowPlaying) {
 				this.physicsWorker.exec('playStep', {
 					time_diff: time_diff
@@ -476,8 +436,9 @@ export class DiceBox {
 				}
 			}
 
-			// clean up physics for faded-out dice
 			if (this.fadingDice.length === 0 && this.persistentDiceList.length === 0 && !this.throwEngine.rolling) {
+				//one last frame without the faded meshes, otherwise the canvas keeps the half-transparent one
+				this.renderScene();
 				Utils.removeTicker(this.animateThrow);
 				this.isVisible = false;
 			}
@@ -583,16 +544,7 @@ export class DiceBox {
 		const now = performance.now();
 		const physicsIds = [];
 		for (const mesh of allEphemeral) {
-			const materials = mesh.parent?.children
-				? mesh.parent.children.flatMap(c => Array.isArray(c.material) ? c.material : [c.material]).filter(Boolean)
-				: (Array.isArray(mesh.material) ? mesh.material : [mesh.material]);
-			const originals = materials.map(m => ({ material: m, transparent: m.transparent, opacity: m.opacity }));
-
-			for (const { material } of originals) {
-				material.transparent = true;
-			}
-
-			this.fadingDice.push({ mesh, startTime: now, duration, originals });
+			this._startMeshFade(mesh, duration, now);
 			physicsIds.push(mesh.id);
 		}
 
@@ -610,6 +562,29 @@ export class DiceBox {
 		// ensure ticker is running
 		Utils.removeTicker(this.animateThrow);
 		canvas.app.ticker.add(this.animateThrow, this);
+	}
+
+	//start the opacity tween on a die and everything in its container (labels, linked meshes)
+	_startMeshFade(mesh, duration, now) {
+		const materials = mesh.parent?.children
+			? mesh.parent.children.flatMap(c => Array.isArray(c.material) ? c.material : [c.material]).filter(Boolean)
+			: (Array.isArray(mesh.material) ? mesh.material : [mesh.material]);
+		const originals = materials.map(m => ({ material: m, transparent: m.transparent, opacity: m.opacity }));
+
+		for (const { material } of originals) {
+			material.transparent = true;
+		}
+
+		this.fadingDice.push({ mesh, startTime: now, duration, originals });
+	}
+
+	async fadeOutPersistentDie(persistentId, duration) {
+		const mesh = this.persistentDiceList.find(d => d.userData.persistentId === persistentId);
+		if (!mesh) return;
+		this._startMeshFade(mesh, duration, performance.now());
+		Utils.removeTicker(this.animateThrow);
+		canvas.app.ticker.add(this.animateThrow, this);
+		await this.persistentDiceManager.removePersistentDie(persistentId, { keepMesh: true });
 	}
 
 	cancelFade() {
@@ -649,7 +624,12 @@ export class DiceBox {
 			entry.pass.dispose();
 		}
 		this._remoteOutlinePasses.clear();
+		if (this._eligibleOutlinePass) {
+			this._eligibleOutlinePass.dispose();
+			this._eligibleOutlinePass = null;
+		}
 
+		for (const mesh of this.persistentDiceList) this.persistentDiceManager._forwardPendingBind(mesh);
 		this.diceScene.clearScene();
 
 		Utils.removeTicker(this.animateThrow);
@@ -689,6 +669,39 @@ export class DiceBox {
 
 		//update remote user outlines
 		this._updateRemoteOutlines();
+	}
+
+	updateEligibleOutlines(meshes) {
+		if (!this.initialized) return;
+		if (!this.config.persistentDiceOutlines) return;
+		if (!meshes?.length) {
+			if (this._eligibleOutlinePass) this._eligibleOutlinePass.selectedObjects = [];
+			return;
+		}
+		const pass = this._getOrCreateEligibleOutlinePass();
+		if (pass) pass.selectedObjects = [...meshes];
+	}
+
+	_getOrCreateEligibleOutlinePass() {
+		if (this._eligibleOutlinePass) return this._eligibleOutlinePass;
+
+		const canvasSize = new Vector2(this.display.innerWidth, this.display.innerHeight);
+		const pass = new OutlinePass(canvasSize, this.scene, this.camera);
+		pass.pulsePeriod = 3.0;
+		pass.edgeStrength = 2.5;
+		pass.edgeGlow = 0.4;
+		pass.visibleEdgeColor.set(0xffb347);
+		pass.hiddenEdgeColor.set(0xffb347);
+
+		const sfxIndex = this.diceScene.finalComposer.passes.indexOf(this.outlinePass);
+		if (sfxIndex >= 0) {
+			this.diceScene.finalComposer.insertPass(pass, sfxIndex + 1);
+		} else {
+			this.diceScene.finalComposer.addPass(pass);
+		}
+
+		this._eligibleOutlinePass = pass;
+		return pass;
 	}
 
 	_getOrCreateRemoteOutlinePass(userId) {

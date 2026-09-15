@@ -1,13 +1,15 @@
 import { Dice3D } from './Dice3D.js';
+import { DsnSettings } from './settings/DsnSettings.js';
 import { DiceConfig } from './ui/DiceConfig.js';
 import { RollableAreaConfig } from './ui/RollableAreaConfig.js';
-import { DamageTypeConfig } from './ui/DamageTypeConfig.js';
+import { DiceRolesConfig } from './ui/DiceRolesConfig.js';
 import { CustomDiceTermConfig } from './ui/CustomDiceTermConfig.js';
 import { DsnSidebarTab } from './ui/DsnSidebarTab.js';
 import { InitiativeMask } from './ui/InitiativeMask.js';
 import { CompanionLink } from './CompanionLink.js';
 import { Utils } from './Utils.js';
 import { CustomDiceTerms } from './engine/CustomDiceTerms.js';
+import { DiceLibrary } from './engine/DiceLibrary.js';
 
 /**
  * Registers the exposed settings for the various 3D dice options.
@@ -31,12 +33,12 @@ Hooks.once('init', () => {
         restricted: false
     });
 
-    game.settings.registerMenu("dice-so-nice", "damage-type-config", {
-        name: "DICESONICE.DamageTypeConfigMenu",
-        label: "DICESONICE.DamageTypeConfigMenuLabel",
-        hint: "DICESONICE.DamageTypeConfigMenuHint",
-        icon: "fas fa-droplet",
-        type: DamageTypeConfig,
+    game.settings.registerMenu("dice-so-nice", "dice-roles-config", {
+        name: "DICESONICE.DiceRolesConfigMenu",
+        label: "DICESONICE.DiceRolesConfigMenuLabel",
+        hint: "DICESONICE.DiceRolesConfigMenuHint",
+        icon: "fas fa-masks-theater",
+        type: DiceRolesConfig,
         restricted: true
     });
 
@@ -240,6 +242,20 @@ Hooks.once('init', () => {
         requiresReload: true
     });
 
+    game.settings.register("dice-so-nice", "interactiveThrows", {
+        name: "DICESONICE.interactiveThrows",
+        hint: "DICESONICE.interactiveThrowsHint",
+        scope: "world",
+        type: String,
+        choices: Utils.localize({
+            "0": "DICESONICE.interactiveThrowsDisabled",
+            "1": "DICESONICE.interactiveThrowsAllowedOff",
+            "2": "DICESONICE.interactiveThrowsAllowedOn"
+        }),
+        default: "1",
+        config: true
+    });
+
     // -- Appearance --
 
     game.settings.register("dice-so-nice", "forceCharacterOwnerAppearance", {
@@ -287,13 +303,54 @@ Hooks.once('init', () => {
 
     // -- Internal (config: false) --
 
-    //GM-editable mapping: damage type id → { colorset?, preset?, label? }
-    //ships empty; hardcoded name==colorset fallback handles unmapped entries
+    //pre-6.3 damage type mapping, frozen: only read by the roles migration
     game.settings.register("dice-so-nice", "damageTypeMap", {
         scope: "world",
         config: false,
         type: Object,
         default: {}
+    });
+
+    //one-shot marker for the damage type to roles migration, see Utils.migrateDamageTypeMap
+    game.settings.register("dice-so-nice", "rolesMigrated", {
+        scope: "world",
+        config: false,
+        type: Boolean,
+        default: false
+    });
+
+    //GM catalog: custom roles plus per-role overrides { <id>: { label?, group?, customizable?, detectors?, deleted? } }
+    game.settings.register("dice-so-nice", "roles", {
+        scope: "world",
+        config: false,
+        type: Object,
+        default: {},
+        onChange: () => game.dice3d?.DiceFactory?.invalidateRoles()
+    });
+
+    //GM world role scopes { <roleId>: { global?, d4?, ... } }, same shape as a user appearance
+    game.settings.register("dice-so-nice", "roleScopes", {
+        scope: "world",
+        config: false,
+        type: Object,
+        default: {},
+        onChange: () => {
+            if (!game.dice3d) return;
+            DiceLibrary.preloadAssets(game.user.id);
+            game.dice3d.DiceFactory.preloadPresets(false);
+        }
+    });
+
+    //GM-owned dice library, same die shape as the user diceLibrary flag, referenced with libraryDieOwner "world"
+    game.settings.register("dice-so-nice", "worldDiceLibrary", {
+        scope: "world",
+        config: false,
+        type: Array,
+        default: [],
+        onChange: () => {
+            game.dice3d?.box?.dicefactory?.disposeCachedMaterials();
+            DiceLibrary.preloadAssets(game.user.id);
+        }
     });
 
     CustomDiceTerms.registerSetting();
@@ -334,7 +391,7 @@ Hooks.once('init', () => {
             ],
             onDown: () => {
                 if (!game.dice3d?.box || game.dice3d.box.selectedPersistentDiceIds.size === 0) return false;
-                game.dice3d.removeSelectedPersistentDice();
+                game.dice3d.persistent.removeSelected();
                 return true; // Consume so Foundry's canvas delete doesn't also fire.
             },
             precedence: foundry.CONST.KEYBINDING_PRECEDENCE?.NORMAL ?? 0
@@ -348,7 +405,7 @@ Hooks.once('init', () => {
         name: "DICESONICE.keybindingDismissEphemeral",
         hint: "DICESONICE.keybindingDismissEphemeralHint",
         editable: [],
-        onDown: () => { game.dice3d?.dismissEphemeralDice(); return true; },
+        onDown: () => { game.dice3d?.persistent.dismissEphemeralDice(); return true; },
         precedence: foundry.CONST.KEYBINDING_PRECEDENCE?.NORMAL ?? 0
     });
     window.addEventListener("keydown", Utils.onDismissEphemeralKeydown);
@@ -392,6 +449,9 @@ const setupDiceSoNice = () => {
             else
                 logger.warn("Dice So Nice! is disabled because the user has activated the 'No-Canvas' mode");
         }
+    }).catch((err) => {
+        logger.error("Dice So Nice! settings migration failed", err);
+        ui.notifications.error(game.i18n.localize("DICESONICE.migrateMessageError"));
     });
 };
 
@@ -401,7 +461,7 @@ const shouldInterceptMessage = (chatMessage, options = {dsnCountAddedRoll: 0, ds
 
     if (chatMessage.getFlag("dice-so-nice", "skip")) return false;
 
-    const hasInlineRoll = game.settings.get("dice-so-nice", "animateInlineRoll") && chatMessage.content.includes('inline-roll');
+    const hasInlineRoll = DsnSettings.hasInlineRoll(chatMessage);
 
     const hide3dDiceOnSecretRolls = game.settings.get("dice-so-nice", "hide3dDiceOnSecretRolls");
     const showGhostDice = game.settings.get("dice-so-nice", "showGhostDice");
@@ -458,14 +518,28 @@ const shouldInterceptMessage = (chatMessage, options = {dsnCountAddedRoll: 0, ds
 };
 
 /**
+ * Interactive throws are stamped at message creation by the roller's client.
+ * Every client then reads the flag at interception; flags added later are ignored.
+ */
+Hooks.on('preCreateChatMessage', (message) => {
+    if (!game.dice3d?.pendingThrows?.shouldStampInteractive(message)) return;
+    message.updateSource({ "flags.dice-so-nice.interactiveThrow": { state: "pending" } });
+});
+
+/**
  * Intercepts all roll-type messages hiding the content until the animation is finished
  */
 Hooks.on('createChatMessage', (chatMessage) => {
     //suppress core dice sound for persistent rolls too
     if (chatMessage.getFlag("dice-so-nice", "persistent")
-        && Dice3D.CONFIG().visibility !== "none"
+        && DsnSettings.CONFIG().visibility !== "none"
         && chatMessage.sound === "sounds/dice.wav") {
         delete chatMessage.sound;
+    }
+
+    if (chatMessage.getFlag("dice-so-nice", "pendingCard")) {
+        game.dice3d?.pendingThrows?.registerCard(chatMessage);
+        return;
     }
 
     // companion message linking: hide non-roll messages tied to an animating primary
@@ -486,41 +560,7 @@ Hooks.on('createChatMessage', (chatMessage) => {
 
     if (!shouldInterceptMessage(chatMessage)) return;
 
-    let rolls = chatMessage.isRoll ? chatMessage.rolls : null;
-    let maxRollOrder = rolls ? 0 : -1;
-
-    const hasInlineRoll = game.settings.get("dice-so-nice", "animateInlineRoll") && chatMessage.content.includes('inline-roll');
-    if (hasInlineRoll) {
-        const temp = document.createElement("div");
-        temp.innerHTML = chatMessage.content;
-        let inlineRollEls = temp.querySelectorAll(".inline-roll.inline-result:not(.inline-dsn-hidden)");
-        if (inlineRollEls.length == 0 && !chatMessage.isRoll) //it was a false positive
-            return;
-        let inlineRollList = [];
-        const sequenceInlineRolls = !game.settings.get("dice-so-nice", "enabledSimultaneousRollForMessage");
-        inlineRollEls.forEach((el, index) => {
-            //We use the Roll class registered in the CONFIG constant in case the system overwrites it (eg: HeXXen)
-            let roll = CONFIG.Dice.rolls[0].fromJSON(unescape(el.dataset.roll));
-            if (sequenceInlineRolls) {
-                maxRollOrder++;
-                roll.dice.forEach(diceterm => {
-                    if (!diceterm.options.hasOwnProperty("rollOrder"))
-                        diceterm.options.rollOrder = maxRollOrder;
-                });
-            }
-            inlineRollList.push(roll);
-        });
-        if (inlineRollList.length) {
-            if (chatMessage.isRoll)
-                inlineRollList = [...chatMessage.rolls, ...inlineRollList];
-
-            let pool = foundry.dice.terms.PoolTerm.fromRolls(inlineRollList);
-            //We use the Roll class registered in the CONFIG constant in case the system overwrites it (eg: HeXXen)
-            rolls = [CONFIG.Dice.rolls[0].fromTerms([pool])];
-        }
-        else if (!chatMessage.isRoll)
-            return;
-    }
+    const rolls = DsnSettings.rollsFromMessage(chatMessage);
 
     //Because Better Roll 5e sends an empty roll object sometime
     if (!rolls.length || !rolls[0].dice.length)
@@ -531,16 +571,23 @@ Hooks.on('createChatMessage', (chatMessage) => {
         return;
 
     //Remove the chatmessage sound if it is the core dice sound.
-    if (Dice3D.CONFIG().visibility !== "none" && chatMessage.sound == "sounds/dice.wav") {
+    if (DsnSettings.CONFIG().visibility !== "none" && chatMessage.sound == "sounds/dice.wav") {
         delete chatMessage.sound;
     }
     chatMessage._dice3danimating = true;
     chatMessage._dice3dPendingRenders = (chatMessage._dice3dPendingRenders || 0) + 1;
+    game.dice3d.pipeline._hideNestedParts(chatMessage.id);
 
     if (isInitiativeRoll && !game.settings.get("dice-so-nice", "immediatelyDisplayChatMessages"))
         InitiativeMask.flag(chatMessage);
 
-    game.dice3d.renderRolls(chatMessage, rolls);
+    //interactive throw: the flag sends every client to the pending flow instead of the animation
+    if (game.dice3d.pendingThrows?.shouldOpenPending(chatMessage)) {
+        game.dice3d.pendingThrows.openPending(chatMessage, rolls);
+        return;
+    }
+
+    game.dice3d.pipeline.renderRolls(chatMessage, rolls);
 });
 
 Hooks.on("renderCombatTracker", (app, html) => InitiativeMask.apply(html));
@@ -555,19 +602,19 @@ Hooks.on("preUpdateCombatant", (combatant, changes) => {
  * Hide messages which are animating rolls.
  */
 Hooks.on("renderChatMessageHTML", (message, html, data) => {
-    if (game.dice3d && game.dice3d.messageHookDisabled) {
+    if (message.getFlag("dice-so-nice", "pendingCard")) {
+        game.dice3d?.pendingThrows?.injectCard(message, html);
         return;
     }
-    if (CompanionLink.isHidden(message.id) && !game.settings.get("dice-so-nice", "immediatelyDisplayChatMessages")) {
-        html.classList.add("dsn-hide");
+
+    if (game.dice3d && game.dice3d.messageHookDisabled) {
         return;
     }
     if (message._dice3danimating && !game.settings.get("dice-so-nice", "immediatelyDisplayChatMessages")) {
         // for the first render: hide the entire message (_dice3dMessageHidden)
         // for updates: use textContent fingerprints captured in preUpdateChatMessage to diff which roll elements are new vs existing, and only hide new ones
-        // reveal logic is in Dice3D.renderRolls (showMessage closure)
         if (message._dice3dCountNewRolls){
-            const selector = game.dice3d._messageUpdateHideSelector;
+            const selector = game.dice3d.pipeline.messageUpdateHideSelector;
             const existingFps = [...(message._dice3dExistingRollFingerprints || [])];
             if (!message._dice3dAnimFingerprints) message._dice3dAnimFingerprints = {};
             const animFps = message._dice3dAnimFingerprints;
@@ -626,7 +673,7 @@ Hooks.on("preUpdateChatMessage", (message, updateData, options) => {
 
     // snapshot existing roll elements so we can diff after re-render
     if (game.dice3d && options.dsnCountAddedRoll > 0) {
-        const selector = game.dice3d._messageUpdateHideSelector;
+        const selector = game.dice3d.pipeline.messageUpdateHideSelector;
         const el = document.querySelector(`.message[data-message-id="${message.id}"]`);
         if (el) {
             message._dice3dExistingRollFingerprints = [...el.querySelectorAll(selector)]
@@ -640,6 +687,11 @@ Hooks.on("preUpdateChatMessage", (message, updateData, options) => {
  * Hide and roll new rolls added in a chat message in a update
  */
 Hooks.on("updateChatMessage", (message, updateData, options) => {
+    const transition = foundry.utils.getProperty(updateData, "flags.dice-so-nice.interactiveThrow.state");
+    if (transition && transition !== "pending")
+        game.dice3d?.pendingThrows?.onResolutionTransition(message, transition)
+            ?.catch(err => console.error("[Dice So Nice] resolution handling failed:", err));
+
     if (!("rolls" in updateData)) return;
     if(!shouldInterceptMessage(message, options)) return;
 
@@ -649,30 +701,30 @@ Hooks.on("updateChatMessage", (message, updateData, options) => {
         message._dice3dCountNewRolls = options.dsnCountAddedRoll;
         message._dice3dAnimIdCounter = (message._dice3dAnimIdCounter || 0) + 1;
         message._dice3dCurrentAnimId = message._dice3dAnimIdCounter;
-        game.dice3d.renderRolls(message, message.rolls.slice(options.dsnIndexAddedRoll));
+        game.dice3d.pipeline._hideNestedParts(message.id);
+        game.dice3d.pipeline.renderRolls(message, message.rolls.slice(options.dsnIndexAddedRoll));
     }
 });
 
 Hooks.on("deleteChatMessage", (message) => {
     CompanionLink.cleanup(message.id);
+    game.dice3d?.pipeline._showNestedParts(message.id);
+    game.dice3d?.pendingThrows?.onMessageDeleted(message);
+});
+
+Hooks.on("userConnected", (user, connected) => {
+    if (!game.dice3d?.box?.initialized) return;
+    if (!connected) {
+        game.dice3d.persistent.onUserDisconnected(user.id);
+        game.dice3d.pendingThrows.onUserDisconnected(user.id);
+        return;
+    }
+    game.dice3d.persistent.onUserConnected(user.id);
 });
 
 document.addEventListener("visibilitychange", function () {
     //if there was roll while the tab was hidden
-    if (!document.hidden && game.dice3d && game.dice3d.hiddenAnimationQueue && game.dice3d.hiddenAnimationQueue.length) {
-        let now = (new Date()).getTime();
-        for (let i = 0; i < game.dice3d.hiddenAnimationQueue.length; i++) {
-            let anim = game.dice3d.hiddenAnimationQueue[i];
-            if (now - anim.timestamp > 10000) {
-                anim.resolve(false);
-            } else {
-                game.dice3d._showAnimation(anim.data, anim.config).then(displayed => {
-                    anim.resolve(displayed);
-                });
-            }
-        }
-        game.dice3d.hiddenAnimationQueue = [];
-    }
+    if (!document.hidden) game.dice3d?.queue?.flushHidden();
 });
 
 //Chat Command integration
@@ -699,6 +751,17 @@ Hooks.on("chatCommandsReady", commands => {
 //re-render sidebar tab once dice3d is ready
 Hooks.on("diceSoNiceReady", () => {
     ui["dice-so-nice"]?.render({ force: false });
+    game.dice3d?.pendingThrows?.readyCleanup();
+});
+
+//pending card action buttons (spawn / escape / force / skip)
+document.addEventListener("click", (ev) => {
+    const btn = ev.target.closest("[data-dsn-pending-action]");
+    if (!btn) return;
+    ev.preventDefault();
+    const cardEl = btn.closest("[data-dsn-pending-card]");
+    if (!cardEl) return;
+    game.dice3d?.pendingThrows?.onCardAction(btn.dataset.dsnPendingAction, cardEl.dataset.dsnPendingCard);
 });
 
 Hooks.on("collapseSidebar", (sidebar, collapsed) => {

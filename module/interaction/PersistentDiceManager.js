@@ -1,6 +1,6 @@
 import { DiceSFXManager } from '../sfx/DiceSFXManager.js';
 import { SFXFormulaMatcher } from '../sfx/SFXFormulaMatcher.js';
-import { COMPOUND_DICE } from '../DiceNotation.js';
+import { DiceNotation, COMPOUND_DICE } from '../DiceNotation.js';
 import { LEGACY_TO_METERS, GRAB_LIFT_PERSISTENT } from '../engine/SceneConstants.js';
 
 import {
@@ -80,6 +80,7 @@ export class PersistentDiceManager {
 		//axis must be zero or normalized (cannon-es NaN otherwise)
 		const vectordata = {
 			type: type,
+			role: opts.role || "basic",
 			pos: { x: posX, y: diceobj.inertia * 13 * LEGACY_TO_METERS, z: posY },
 			velocity: { x: 0, y: 0, z: 0 },
 			angle: { x: Math.random() * Math.PI * 2, y: Math.random() * Math.PI * 2, z: Math.random() * Math.PI * 2 },
@@ -97,6 +98,12 @@ export class PersistentDiceManager {
 		if (opts.linkGroupId) dicemesh.userData.linkGroupId = opts.linkGroupId;
 		if (opts.linkGroupSecondary) dicemesh.userData.linkGroupSecondary = true;
 		if (opts.digitPlace != null) dicemesh.userData.digitPlace = opts.digitPlace;
+		//guest dice serve a pending interactive throw: reserved for the roller, never persisted
+		if (opts.guest) {
+			dicemesh.userData.guest = true;
+			dicemesh.userData.guestPendingId = opts.guest.pendingId;
+			dicemesh.userData.reservedForUserId = opts.guest.reservedForUserId;
+		}
 
 		try {
 			await this.physicsWorker.exec('createDice', {
@@ -139,12 +146,20 @@ export class PersistentDiceManager {
 		return dicemesh;
 	}
 
-	async removePersistentDie(persistentId) {
+	_forwardPendingBind(dicemesh) {
+		const bind = dicemesh.userData?.pendingBind;
+		if (!bind) return;
+		game.dice3d?.pendingThrows?.noteBindsLanded([bind]);
+		delete dicemesh.userData.pendingBind;
+	}
+
+	async removePersistentDie(persistentId, { keepMesh = false } = {}) {
 		const index = this.persistentDiceList.findIndex(d => d.userData.persistentId === persistentId);
 		if (index === -1) return;
 
 		const dicemesh = this.persistentDiceList[index];
 		this.persistentDiceList.splice(index, 1);
+		this._forwardPendingBind(dicemesh);
 		this._emitPersistentDiceChanged();
 
 		//drop from selection set
@@ -152,7 +167,7 @@ export class PersistentDiceManager {
 			if (this.onSelectionChanged) this.onSelectionChanged();
 		}
 
-		this.diceScene.scene.remove(dicemesh.parent.type === "Scene" ? dicemesh : dicemesh.parent);
+		if (!keepMesh) this.diceScene.scene.remove(dicemesh.parent.type === "Scene" ? dicemesh : dicemesh.parent);
 		await this.physicsWorker.exec("removeDice", [dicemesh.id]);
 	}
 
@@ -244,6 +259,7 @@ export class PersistentDiceManager {
 
 		const removedIds = remove.map(d => d.id);
 		for (const dicemesh of remove) {
+			this._forwardPendingBind(dicemesh);
 			this.diceScene.scene.remove(dicemesh.parent.type === "Scene" ? dicemesh : dicemesh.parent);
 			this.selectedPersistentDiceIds.delete(dicemesh.id);
 			const idx = this.persistentDiceList.indexOf(dicemesh);
@@ -441,6 +457,30 @@ export class PersistentDiceManager {
 			}
 		}
 
+		const persistentIds = heldDice.map(d => d.userData.persistentId);
+		const velocityPct = {
+			x: velocity.x / this.diceScene.display.innerWidth,
+			y: velocity.y / this.diceScene.display.innerHeight,
+			z: velocity.z || 0
+		};
+
+		const interactive = game.dice3d?.pendingThrows?.claimThrow(heldDice, primaries, secondariesByLinkGroup);
+		if (interactive) {
+			if (this.onPersistentEvent) {
+				this.onPersistentEvent("throw", {
+					data: { persistentIds: interactive.dice.map(d => d.userData.persistentId), velocityPct, results: interactive.results }
+				});
+			}
+			let queued;
+			if (this.onQueueThrow)
+				queued = this.onQueueThrow({ heldDice: interactive.dice, velocity, forcedByMesh: interactive.forcedByMesh, roll: null, primaries: primaries.filter(d => interactive.dice.includes(d)) });
+			else
+				console.warn("[Dice So Nice] throwPersistentDice: onQueueThrow not wired, throw dropped");
+			const rest = heldDice.filter(d => !interactive.dice.includes(d));
+			if (!rest.length) return queued;
+			return this.throwPersistentDice(rest, velocity);
+		}
+
 		//one Die term per primary, same order
 		const rollFormula = primaries.map(d => `1${d.notation.type}`).join("+");
 		let roll;
@@ -471,20 +511,8 @@ export class PersistentDiceManager {
 			const faces = parseInt(primary.notation.type.slice(1));
 			const places = COMPOUND_DICE[faces];
 			if (places && primary.userData?.linkGroupId) {
-				const primaryDigit = Math.floor(rawResult / places[0].divisor) % 10;
-				forcedByMesh.set(primary, primaryDigit);
-				primary.notation.compositeResult = rawResult;
-				primary.notation.compositeType = primary.notation.type;
-
 				const secondaries = secondariesByLinkGroup.get(primary.userData.linkGroupId) || [];
-				for (const sec of secondaries) {
-					const dp = sec.userData?.digitPlace;
-					if (dp != null && places[dp]) {
-						forcedByMesh.set(sec, Math.floor(rawResult / places[dp].divisor) % 10);
-					}
-					sec.notation.compositeResult = rawResult;
-					sec.notation.compositeType = primary.notation.type;
-				}
+				DiceNotation.applyCompoundResult(primary, secondaries, rawResult, places, (mesh, digit) => forcedByMesh.set(mesh, digit));
 			} else {
 				forcedByMesh.set(primary, rawResult);
 			}
@@ -500,16 +528,7 @@ export class PersistentDiceManager {
 				});
 			}
 			this.onPersistentEvent("throw", {
-				data: {
-					persistentIds: heldDice.map(d => d.userData.persistentId),
-					velocityPct: {
-						x: velocity.x / this.diceScene.display.innerWidth,
-						y: velocity.y / this.diceScene.display.innerHeight,
-						z: velocity.z || 0
-					},
-					results,
-					rollFormula
-				}
+				data: { persistentIds, velocityPct, results, rollFormula }
 			});
 		}
 
@@ -571,6 +590,7 @@ export class PersistentDiceManager {
 				compositeResult: dm.notation.compositeResult || null,
 				compositeType: dm.notation.compositeType || null,
 				options: dm.options || {},
+				role: dm.notation.role || "basic",
 				termIndex: null,
 				termNumber: null,
 				termTotal: null,

@@ -1,4 +1,4 @@
-import { Dice3D } from '../Dice3D.js';
+import { DsnSettings } from '../settings/DsnSettings.js';
 import { DiceScene } from '../engine/DiceScene.js';
 import { DiceSFXManager } from '../sfx/DiceSFXManager.js';
 import { SFXFormulaMatcher } from '../sfx/SFXFormulaMatcher.js';
@@ -11,6 +11,7 @@ import { DiceSystem } from '../DiceSystem.js';
 import { DiceLibrary } from '../engine/DiceLibrary.js';
 import { DiceLibraryDialog } from './DiceLibraryDialog.js';
 import { DiceEditor } from './DiceEditor.js';
+import { WorldRoleScopeTarget } from './WorldRoleScopeTarget.js';
 import SlimSelect from 'slim-select';
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
@@ -43,16 +44,32 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
 
     constructor(options = {}) {
         super(options);
-        this.document = options.document ?? game.user;
-        this.isUser = this.document instanceof User;
-        this.isActor = this.document instanceof Actor;
+        this.roleId = options.roleId ?? null;
+        this.isWorldRole = !!this.roleId;
+        this.document = options.document ?? (this.isWorldRole ? new WorldRoleScopeTarget(this.roleId) : game.user);
+        this.isUser = !this.isWorldRole && this.document instanceof User;
+        this.isActor = !this.isWorldRole && this.document instanceof Actor;
+        this.currentRole = this.roleId ?? "basic";
+        this._roleBuffers = {};
+        this._roleHiddenSlots = {};
+    }
+
+    get isRoleMode() {
+        return this.currentRole !== "basic";
+    }
+
+    get targetActor() {
+        return this.isActor ? this.document : null;
     }
 
     get noScene() {
-        return Dice3D.CONFIG().visibility === "none";
+        return DsnSettings.CONFIG().visibility === "none";
     }
 
     get title() {
+        if (this.isWorldRole) {
+            return game.i18n.format("DICESONICE.configTitleWorldRole", { role: this.document.name });
+        }
         if (this.isActor) {
             return `${game.i18n.localize("DICESONICE.configTitle")} - ${this.document.name}`;
         }
@@ -60,6 +77,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
     }
 
     get id() {
+        if (this.isWorldRole) return `dice-config-role-${this.roleId}`;
         if (this.isActor) return `dice-config-${this.document.id}`;
         return "dice-config";
     }
@@ -121,7 +139,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
 
     _configureRenderParts(options) {
         const parts = super._configureRenderParts(options);
-        if (this.isActor) {
+        if (this.isActor || this.isWorldRole) {
             for (const key of Object.keys(parts)) {
                 if (!["general", "footer"].includes(key)) {
                     delete parts[key];
@@ -205,9 +223,16 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
                 "all": "DICESONICE.visibilityAll",
                 "mine": "DICESONICE.visibilityMine",
                 "none": "DICESONICE.visibilityNone"
-            })
+            }),
+            interactiveThrowsUserList: Utils.localize({
+                "default": "DICESONICE.interactiveThrowsUserDefault",
+                "disabled": "DICESONICE.interactiveThrowsUserDisabled",
+                "off": "DICESONICE.interactiveThrowsUserOff",
+                "on": "DICESONICE.interactiveThrowsUserOn"
+            }),
+            interactiveThrowsAvailable: DsnSettings.interactiveThrowsAvailable() && game.settings.get("dice-so-nice", "interactiveThrows") !== "0"
         },
-            this.reset ? Dice3D.ALL_DEFAULT_OPTIONS() : Dice3D.ALL_CONFIG(game.user, this.isActor ? this.document : null)
+            this.reset ? DsnSettings.ALL_DEFAULT_OPTIONS() : DsnSettings.ALL_CONFIG(game.user, this.isActor ? this.document : null)
         );
         delete data.sfxLine;
 
@@ -230,7 +255,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         this.canvas.id = "dice-configuration-canvas";
         this.diceFactory = game.dice3d.box.dicefactory;
         let config = foundry.utils.mergeObject(
-            this.reset ? Dice3D.ALL_DEFAULT_OPTIONS() : Dice3D.ALL_CONFIG(game.user, this.isActor ? this.document : null),
+            this.reset ? DsnSettings.ALL_DEFAULT_OPTIONS() : DsnSettings.ALL_CONFIG(game.user, this.isActor ? this.document : null),
             { dimensions: { width: 634, height: 245 }, autoscale: false, scale: 60 }
         );
 
@@ -255,6 +280,11 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
                     config.appearance.global.colorset = this.diceFactory.preferredColorset;
             }
             config.diceLibrary = DiceLibrary.getLibraryForUser(game.user);
+            if (this.isWorldRole) {
+                config.role = this.roleId;
+                config.dieTypes = this._getRoleDieTypes(this.roleId);
+                config.roleContext = this._buildRoleContext(this.roleId, this._getRoleBuffer(this.roleId));
+            }
             await this.showcaseView.showcase(config);
         }
 
@@ -306,7 +336,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
 
         let specialEffectsList = [];
         let specialEffectsPromises = [];
-        let specialEffects = Dice3D.SFX();
+        let specialEffects = DsnSettings.SFX();
         if (this.reset)
             specialEffects = [];
         this.triggerTypeList = [...triggerTypeList, ...DiceSFXManager.EXTRA_TRIGGER_TYPE];
@@ -336,6 +366,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
                     specialEffectsMode: DiceSFXManager.SFX_MODE_LIST,
                     triggerTypeList: this.triggerTypeList,
                     possibleResultList: this.possibleResultList[sfx.diceType],
+                    formulaRolesHint: this._sfxFormulaRolesHint(),
                     options: hdbsTemplate(dialogContent.data)
                 }).then((html) => {
                     specialEffectsList.push(html);
@@ -345,81 +376,19 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         }
         data.specialEffectsList = specialEffectsList.join("");
 
-        const tabsList = [];
-        const systemSettingsScoped = {};
-        for (let scope in data.appearance) {
-            if (data.appearance.hasOwnProperty(scope)) {
-                tabsList.push(scope);
-                if (scope != "global") {
-                    if (!data.appearance[scope].labelColor)
-                        data.appearance[scope].labelColor = data.appearance.global.labelColor;
-                    if (!data.appearance[scope].diceColor)
-                        data.appearance[scope].diceColor = data.appearance.global.diceColor;
-                    if (!data.appearance[scope].outlineColor)
-                        data.appearance[scope].outlineColor = data.appearance.global.outlineColor;
-                    if (!data.appearance[scope].edgeColor)
-                        data.appearance[scope].edgeColor = data.appearance.global.edgeColor;
-                }
+        this.currentRole = this.roleId ?? "basic";
+        this.initializationData = data;
+        data.roleSwitcher = this.isWorldRole ? null : this._prepareRoleSwitcher();
 
-                if (this.diceFactory.systems.has(data.appearance[scope].system)) {
-                    const system = this.diceFactory.systems.get(data.appearance[scope].system);
-
-                    if (system.settings.length > 0) {
-                        const dialogContent = system.getSettingsDialogContent(scope);
-
-                        if (dialogContent.content != "") {
-                            const hdbsTemplate = Handlebars.compile(dialogContent.content);
-                            systemSettingsScoped[scope] = hdbsTemplate(dialogContent.data);
-                        }
-                    }
-                }
-            }
-        }
-
-        let tabsAppearance = [];
-        let tabsPromises = [];
-        data.navAppearance = {};
-        tabsList.forEach((diceType) => {
-            const isPerDie = diceType !== "global";
-            let libraryDiceGroups = [];
-            if(isPerDie) {
-                libraryDiceGroups = DiceLibrary.buildLibraryDiceGroups(diceType, data.appearance[diceType]);
-            }
-            tabsPromises.push(foundry.applications.handlebars.renderTemplate("modules/dice-so-nice/templates/partial-appearance.hbs", {
-                dicetype: diceType,
-                appearance: data.appearance[diceType],
-                systemList: data.systemList,
-                colorsetList: data.colorsetList,
-                textureList: data.textureList,
-                materialList: data.materialList,
-                fontList: data.fontList,
-                showLibrary: isPerDie && DiceLibrary.getFullDieTypes().includes(diceType),
-                libraryDiceGroups: libraryDiceGroups,
-                systemSettings: systemSettingsScoped.hasOwnProperty(diceType) ? systemSettingsScoped[diceType] : '',
-                systemSettingsVisible: systemSettingsScoped.hasOwnProperty(diceType) ? '' : 'dsn-hidden'
-            }).then((html) => {
-                //We add a "title" attribute to all colorsets to give a way to users to see the colorset id
-                //However the FVTT Hdlb helper does not provide such functionnality so we have to do it ourselves
-                html = this.addTitleToOptions(html, '[data-colorset] option');
-
-                tabsAppearance.push(html);
-            }));
-            if (diceType != "global")
-                data.navAppearance[diceType] = diceType.toUpperCase();
-        });
-        await Promise.all(tabsPromises);
-
-        if (tabsAppearance.length > 1)
-            data.displayHint = "style='display:none;'";
-        else
-            data.displayHint = '';
-
-        data.tabsAppearance = tabsAppearance.join("");
+        const initialAppearance = this.isWorldRole ? this._getRoleBuffer(this.roleId) : data.appearance;
+        const built = await this._buildAppearanceTabs(initialAppearance, this.currentRole);
+        data.navAppearance = built.navAppearance;
+        data.displayHint = built.displayHint;
+        data.tabsAppearance = built.tabsAppearance;
 
         this.lastActiveAppearanceTab = "global";
 
-        this.initializationData = data;
-        this.currentGlobalAppearance = data.appearance.global;
+        this.currentGlobalAppearance = initialAppearance.global ?? {};
         this.sfxDialogList = [];
         this.systemSettingsDialogList = [];
 
@@ -436,6 +405,10 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
 
         if (this.isActor) {
             data.buttons.unshift({ type: "button", action: "resetActor", icon: "fa-solid fa-undo", label: "DICESONICE.Reset" });
+        }
+
+        if (this.isWorldRole) {
+            data.buttons.unshift({ type: "button", action: "loadRoleSave", icon: "fa-solid fa-box-open", label: "DICESONICE.RoleLoadFromSave" });
         }
 
         return data;
@@ -462,6 +435,344 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         return doc.documentElement.outerHTML;
     }
 
+    _prepareRoleSwitcher() {
+        const roles = this.diceFactory.getRoles({ customizable: true }).filter(role => role.id !== "basic");
+        if (!roles.length) return null;
+        const loc = (str) => game.i18n.localize(str ?? "");
+        const ungrouped = [];
+        const groups = new Map();
+        for (const role of roles) {
+            const entry = { id: role.id, label: loc(role.label) || role.id, selected: role.id === this.currentRole };
+            if (!role.group) {
+                ungrouped.push(entry);
+                continue;
+            }
+            const key = loc(role.group);
+            if (!groups.has(key)) groups.set(key, { label: key, roles: [] });
+            groups.get(key).roles.push(entry);
+        }
+        return {
+            basicLabel: loc("DICESONICE.RoleBasic"),
+            basicSelected: this.currentRole === "basic",
+            ungrouped,
+            groups: [...groups.values()],
+            disabled: !!this.reset
+        };
+    }
+
+    _getRoleDieTypes(role) {
+        const dieTypes = this.diceFactory.getRole(role)?.dieTypes;
+        return Array.isArray(dieTypes) && dieTypes.length ? dieTypes : null;
+    }
+
+    _basicGlobal() {
+        if (this.isWorldRole) return DsnSettings.APPEARANCE(game.user).global;
+        return this._roleBuffers.basic?.global ?? this.currentGlobalAppearance ?? DsnSettings.APPEARANCE(game.user, this.targetActor).global;
+    }
+
+    _buildRoleContext(role, buffer) {
+        const context = DsnSettings.ROLE_CONTEXT(game.user, this.targetActor);
+        if (role === "basic" || !context[role]) return context;
+        const scope = this._prepareRoleScope(buffer, { keepHidden: false });
+        if (this.isWorldRole) {
+            context[role].world = Utils.sanitizeRoleScopes({ [role]: scope })[role] ?? {};
+            context[role].player = {};
+        } else {
+            context[role].player = Utils.sanitizeRoleScopes({ [role]: scope }, game.user)[role] ?? {};
+        }
+        return context;
+    }
+
+    _resolveInheritColors(role, dieType, buffer) {
+        const fallback = { labelColor: "#FFFFFF", diceColor: "#000000", outlineColor: "", edgeColor: "" };
+        const basicGlobal = this._basicGlobal() ?? {};
+        const context = this._buildRoleContext(role, buffer);
+        const slot = this.diceFactory.resolveRoleSlot(context, role, dieType) ?? {};
+        const out = {};
+        for (const field of Object.keys(fallback)) {
+            out[field] = slot[field] || basicGlobal[field] || fallback[field];
+        }
+        return out;
+    }
+
+    async _renderAppearanceTab(diceType, appearance, role, systemSettingsHtml, buffer = null) {
+        const lists = this.initializationData;
+        const isPerDie = diceType !== "global";
+        const roleMode = role !== "basic";
+        if (roleMode) {
+            const filled = {};
+            for (const field of ["system", "colorset", "texture", "material", "font", "labelColor", "diceColor", "outlineColor", "edgeColor"])
+                filled[field] = appearance[field] ?? "";
+            appearance = { ...appearance, ...filled };
+        }
+        const colors = roleMode ? this._resolveInheritColors(role, diceType, buffer ?? { global: {} }) : appearance;
+        const preview = {};
+        const inheritCls = {};
+        for (const field of ["labelColor", "diceColor", "outlineColor", "edgeColor"]) {
+            preview[field] = appearance[field] || colors[field] || "";
+            inheritCls[field] = roleMode && !appearance[field] ? "dsn-inherit" : "";
+        }
+        let html = await foundry.applications.handlebars.renderTemplate("modules/dice-so-nice/templates/partial-appearance.hbs", {
+            dicetype: diceType,
+            appearance: appearance,
+            roleMode: roleMode,
+            inheritLabel: game.i18n.localize("DICESONICE.Inherit"),
+            preview: preview,
+            inheritCls: inheritCls,
+            systemList: lists.systemList,
+            colorsetList: lists.colorsetList,
+            textureList: lists.textureList,
+            materialList: lists.materialList,
+            fontList: lists.fontList,
+            showLibrary: isPerDie && DiceLibrary.getFullDieTypes().includes(diceType),
+            libraryDiceGroups: isPerDie ? DiceLibrary.buildLibraryDiceGroups(diceType, appearance, null, { worldOnly: this.isWorldRole }) : [],
+            systemSettings: systemSettingsHtml ?? '',
+            systemSettingsVisible: systemSettingsHtml ? '' : 'dsn-hidden'
+        });
+        //We add a "title" attribute to all colorsets to give a way to users to see the colorset id
+        //However the FVTT Hdlb helper does not provide such functionnality so we have to do it ourselves
+        return this.addTitleToOptions(html, '[data-colorset] option');
+    }
+
+    _renderSystemSettings(system, diceType, role) {
+        if (!system || !this.diceFactory.systems.has(system)) return '';
+        const sys = this.diceFactory.systems.get(system);
+        if (!sys.settings.length) return '';
+        const dialogContent = sys.getSettingsDialogContent(diceType, role);
+        if (dialogContent.content == "") return '';
+        return Handlebars.compile(dialogContent.content)(dialogContent.data);
+    }
+
+    async _buildAppearanceTabs(appearance, role) {
+        const roleMode = role !== "basic";
+        const tabsList = Object.keys(appearance).filter(scope => appearance.hasOwnProperty(scope));
+        if (!tabsList.includes("global")) tabsList.unshift("global");
+        const tabsAppearance = [];
+        const navAppearance = {};
+        for (const diceType of tabsList) {
+            const slot = appearance[diceType] ?? {};
+            if (!roleMode && diceType != "global") {
+                for (const field of ["labelColor", "diceColor", "outlineColor", "edgeColor"]) {
+                    if (!slot[field]) slot[field] = appearance.global[field];
+                }
+            }
+            if (slot.system && slot.systemSettings && this.diceFactory.systems.has(slot.system))
+                this.diceFactory.systems.get(slot.system).updateSettings(diceType, slot.systemSettings, role);
+            const systemSettings = this._renderSystemSettings(slot.system, diceType, role);
+            tabsAppearance.push(await this._renderAppearanceTab(diceType, slot, role, systemSettings, appearance));
+            if (diceType != "global")
+                navAppearance[diceType] = diceType.toUpperCase();
+        }
+        return {
+            tabsAppearance: tabsAppearance.join(""),
+            navAppearance,
+            displayHint: tabsAppearance.length > 1 ? "style='display:none;'" : ''
+        };
+    }
+
+    _readFormAppearance() {
+        const appearance = {};
+        this.element.querySelectorAll(".tabAppearance").forEach(element => {
+            const tab = element.dataset.tab;
+            appearance[tab] = {
+                labelColor: element.querySelector("[data-labelColor]")?.value,
+                diceColor: element.querySelector("[data-diceColor]")?.value,
+                outlineColor: element.querySelector("[data-outlineColor]")?.value,
+                edgeColor: element.querySelector("[data-edgeColor]")?.value,
+                colorset: element.querySelector("[data-colorset]")?.value,
+                texture: element.querySelector("[data-texture]")?.value,
+                material: element.querySelector("[data-material]")?.value,
+                font: element.querySelector("[data-font]")?.value,
+                system: element.querySelector("[data-system]")?.value,
+                libraryDieId: element.querySelector("[data-libraryDie]")?.value || ""
+            };
+
+            const systemSettingsRaw = {};
+            const systemSettingsContainer = element.querySelector("[data-systemsettings]");
+            if (systemSettingsContainer) {
+                systemSettingsContainer.querySelectorAll("input, select").forEach(field => {
+                    let name = field.getAttribute("name");
+                    name = name.substring(name.lastIndexOf("[") + 1, name.lastIndexOf("]"));
+                    if (field.type === "checkbox") {
+                        systemSettingsRaw[name] = field.checked;
+                    } else {
+                        systemSettingsRaw[name] = field.value;
+                    }
+                });
+            }
+
+            const system = this.diceFactory.systems.get(appearance[tab].system);
+            if (system && system.settings.length > 0) {
+                const systemSettingsIDs = system.settings.map(setting => setting.id);
+                appearance[tab].systemSettings = Object.fromEntries(Object.entries(systemSettingsRaw).filter(([key]) => systemSettingsIDs.includes(key)));
+            }
+        });
+        return appearance;
+    }
+
+    _getRoleBuffer(role) {
+        if (this._roleBuffers[role]) return this._roleBuffers[role];
+        let buffer;
+        if (role === "basic") {
+            buffer = DsnSettings.APPEARANCE(game.user, this.targetActor);
+        } else {
+            const stored = this.isWorldRole
+                ? (Utils.sanitizeRoleScopes(this.document.getFlag("dice-so-nice", "roleAppearance") ?? {})[role] ?? {})
+                : (DsnSettings.ROLE_APPEARANCE(game.user, this.targetActor)[role] ?? {});
+            const dieTypes = this._getRoleDieTypes(role);
+            buffer = { global: stored.global ?? {} };
+            const hidden = {};
+            for (const [dieType, slot] of Object.entries(stored)) {
+                if (dieType === "global") continue;
+                if (dieTypes && !dieTypes.includes(dieType)) hidden[dieType] = slot;
+                else buffer[dieType] = slot;
+            }
+            this._roleHiddenSlots[role] = hidden;
+        }
+        this._roleBuffers[role] = buffer;
+        return buffer;
+    }
+
+    async _switchRole(role) {
+        if (role === this.currentRole) return;
+        if (!this.element.querySelector(".tabAppearance")) return;
+        await Promise.all(this.systemSettingsDialogList.map((dialog) => dialog.close()));
+        this._roleBuffers[this.currentRole] = this._readFormAppearance();
+        this.currentRole = role;
+        const resetButton = this.element.querySelector("[data-role-reset]");
+        if (resetButton) resetButton.hidden = role === "basic";
+        await this._rebuildAppearanceTabs(this._getRoleBuffer(role));
+        this.onApply();
+    }
+
+    async _rebuildAppearanceTabs(appearance) {
+        const built = await this._buildAppearanceTabs(appearance, this.currentRole);
+        this.lastActiveAppearanceTab = "global";
+        this.currentGlobalAppearance = appearance.global ?? {};
+
+        const content = this.element.querySelector("#dsn-appearance-content");
+        content.innerHTML = built.tabsAppearance;
+
+        const nav = this.element.querySelector(".dsn-appearance-tabs");
+        nav.querySelectorAll('.item:not([data-tab="global"])').forEach(el => el.remove());
+        for (const [diceType, name] of Object.entries(built.navAppearance)) {
+            const navSpan = document.createElement("span");
+            navSpan.className = "item";
+            navSpan.dataset.action = "tab";
+            navSpan.dataset.group = "dsn-dice";
+            navSpan.dataset.tab = diceType;
+            navSpan.innerHTML = `${name} <i class="fa-solid fa-times" data-close-tab></i>`;
+            nav.append(navSpan);
+        }
+        const hint = nav.querySelector(".dsn-appearance-hint");
+        if (hint) hint.style.display = Object.keys(built.navAppearance).length ? "none" : "";
+
+        this.changeTab("global", "dsn-dice", { force: true });
+        this.toggleCustomization();
+        this.filterSystems();
+        this.setPosition();
+    }
+
+    _refreshInheritPreviews() {
+        if (!this.isRoleMode) return;
+        const buffer = this._readFormAppearance();
+        this.element.querySelectorAll(".tabAppearance").forEach(element => {
+            const dieType = element.dataset.tab;
+            const colors = this._resolveInheritColors(this.currentRole, dieType, buffer);
+            for (const field of ["labelColor", "diceColor", "outlineColor", "edgeColor"]) {
+                const text = element.querySelector(`[data-${field}]`);
+                const picker = element.querySelector(`[data-${field}Selector]`);
+                if (!text || !picker) continue;
+                if (text.value) {
+                    picker.classList.remove("dsn-inherit");
+                } else {
+                    picker.classList.add("dsn-inherit");
+                    picker.value = colors[field] || "#000000";
+                }
+            }
+        });
+    }
+
+    _prepareAppearanceScope(slot, { sparse, actorOwner = false, worldOwner = false }) {
+        const out = foundry.utils.deepClone(slot ?? {});
+        if (out.libraryDieId) {
+            const parsed = DiceConfig._parseLibraryDieValue(out.libraryDieId);
+            out.libraryDieId = parsed.libraryDieId || "";
+            if (worldOwner) out.libraryDieOwner = DiceLibrary.WORLD_OWNER;
+            else if (parsed.libraryDieOwner) out.libraryDieOwner = parsed.libraryDieOwner;
+            else if (actorOwner) out.libraryDieOwner = game.user.id;
+            else delete out.libraryDieOwner;
+        } else {
+            delete out.libraryDieId;
+            delete out.libraryDieOwner;
+        }
+
+        if (out.colorset != "custom") {
+            delete out.labelColor;
+            delete out.diceColor;
+            delete out.outlineColor;
+            delete out.edgeColor;
+        }
+
+        const system = out.system ? this.diceFactory.systems.get(out.system) : null;
+        if (system && system.settings.length > 0) {
+            const systemSettingsIDs = system.settings.map(setting => setting.id);
+            out.systemSettings = Object.fromEntries(Object.entries(out.systemSettings ?? {}).filter(([key]) => systemSettingsIDs.includes(key)));
+        } else {
+            delete out.systemSettings;
+        }
+
+        if (sparse) {
+            for (const [key, value] of Object.entries(out)) {
+                if (value === "" || value === null || value === undefined) delete out[key];
+                else if (key === "systemSettings" && foundry.utils.isEmpty(value)) delete out[key];
+            }
+        }
+        return out;
+    }
+
+    _prepareRoleScope(buffer, { keepHidden = true, role = this.currentRole } = {}) {
+        const scope = {};
+        for (const [dieType, slot] of Object.entries(buffer ?? {})) {
+            const prepared = this._prepareAppearanceScope(slot, { sparse: true, actorOwner: this.isActor, worldOwner: this.isWorldRole });
+            if (!foundry.utils.isEmpty(prepared)) scope[dieType] = prepared;
+        }
+        if (keepHidden) {
+            for (const [dieType, slot] of Object.entries(this._roleHiddenSlots[role] ?? {})) {
+                if (!scope[dieType]) scope[dieType] = foundry.utils.deepClone(slot);
+            }
+        }
+        return scope;
+    }
+
+    //read-modify-write of the target's roleAppearance flag
+    async _writeRoleAppearance() {
+        const visited = Object.keys(this._roleBuffers).filter(role => role !== "basic");
+        if (!visited.length) return new Set();
+        const stored = foundry.utils.deepClone(this.document.getFlag("dice-so-nice", "roleAppearance") ?? {});
+        const systemsInUse = new Set();
+        for (const role of visited) {
+            const scope = this._prepareRoleScope(this._roleBuffers[role], { role });
+            if (foundry.utils.isEmpty(scope)) delete stored[role];
+            else stored[role] = scope;
+            for (const slot of Object.values(scope)) {
+                if (slot.system && this.diceFactory.systems.has(slot.system)) systemsInUse.add(slot.system);
+            }
+        }
+        await this.document.unsetFlag("dice-so-nice", "roleAppearance");
+        if (!foundry.utils.isEmpty(stored)) await this.document.setFlag("dice-so-nice", "roleAppearance", stored);
+        return systemsInUse;
+    }
+
+    async _resetCurrentRole() {
+        const role = this.currentRole;
+        this._roleBuffers[role] = { global: {} };
+        this._roleHiddenSlots[role] = {};
+        await Promise.all(this.systemSettingsDialogList.map((dialog) => dialog.close()));
+        await this._rebuildAppearanceTabs(this._roleBuffers[role]);
+        this.onApply();
+    }
+
     _onRender(context, options) {
         this.changeTab(this.tabGroups["dsn-dice"], "dsn-dice", { force: true });
 
@@ -482,7 +793,10 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         if (!this.reset) {
             this.element.addEventListener("change", (ev) => {
                 const target = ev.target;
-                if (target.matches("[data-showExtraDice]")) {
+                if (target.matches("[data-role-switcher]")) {
+                    this._switchRole(target.value);
+                    return;
+                } else if (target.matches("[data-showExtraDice]")) {
                     this.onApply(ev);
                 } else if (target.matches("[data-hideAfterRoll]")) {
                     this.toggleHideAfterRoll(ev);
@@ -498,15 +812,11 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
                     this.toggleCustomization(target.dataset.dicetype);
                     const systemSettingsContainer = target.closest(".tabAppearance").querySelector("[data-systemsettings-hidden]");
                     systemSettingsContainer.innerHTML = "";
-                    const system = this.diceFactory.systems.get(target.value);
                     const optionsBtn = target.nextElementSibling;
-                    if (system.settings.length > 0) {
+                    const html = this._renderSystemSettings(target.value, target.dataset.dicetype, this.currentRole);
+                    if (html) {
                         if (optionsBtn) optionsBtn.classList.remove("dsn-hidden");
-                        const dialogContent = system.getSettingsDialogContent(target.dataset.dicetype);
-                        if (dialogContent.content != "") {
-                            const hdbsTemplate = Handlebars.compile(dialogContent.content);
-                            systemSettingsContainer.insertAdjacentHTML("beforeend", hdbsTemplate(dialogContent.data));
-                        }
+                        systemSettingsContainer.insertAdjacentHTML("beforeend", html);
                     } else {
                         if (optionsBtn) optionsBtn.classList.add("dsn-hidden");
                     }
@@ -564,6 +874,8 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
                 }
 
                 if (target.matches("input,select") && target.closest('[data-tab="general"]')) {
+                    if (target.matches("[data-labelColor],[data-diceColor],[data-outlineColor],[data-edgeColor],[data-colorset],[data-system],[data-libraryDie]"))
+                        this._refreshInheritPreviews();
                     this.onApply(ev);
                 }
             });
@@ -571,29 +883,28 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
             this.element.addEventListener("input", (ev) => {
                 const target = ev.target;
                 if (target.matches("[data-sfx-formula]")) {
-                    const { valid, error } = SFXFormulaMatcher.validate(target.value);
+                    const { valid, error, warning } = SFXFormulaMatcher.validate(target.value);
                     const errorIcon = target.parentElement.querySelector("[data-sfx-formula-error]");
-                    if (!valid && target.value.trim()) {
-                        target.classList.add("sfx-formula-invalid");
-                        if (errorIcon) {
-                            errorIcon.classList.add("visible");
-                            errorIcon.title = error || '';
-                        }
-                    } else {
-                        target.classList.remove("sfx-formula-invalid");
-                        if (errorIcon) {
-                            errorIcon.classList.remove("visible");
-                            errorIcon.title = '';
-                        }
+                    const hasText = !!target.value.trim();
+                    target.classList.toggle("sfx-formula-invalid", hasText && !valid);
+                    target.classList.toggle("sfx-formula-warning", hasText && valid && !!warning);
+                    if (errorIcon) {
+                        const message = hasText ? (valid ? warning : error) : null;
+                        errorIcon.classList.toggle("visible", !!message);
+                        errorIcon.classList.toggle("warning", !!message && valid);
+                        errorIcon.title = message || '';
                     }
                 }
             });
+            this.element.querySelectorAll("[data-sfx-formula]").forEach(field => field.dispatchEvent(new Event("input", { bubbles: true })));
 
             this.element.addEventListener("click", (ev) => {
                 const target = ev.target;
                 let actionTarget;
 
-                if (target.closest("[data-reset]")) {
+                if (target.closest("[data-role-reset]")) {
+                    this._resetCurrentRole();
+                } else if (target.closest("[data-reset]")) {
                     this.onReset(ev);
                 } else if (target.closest("[data-cancel]")) {
                     this.close();
@@ -602,7 +913,11 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
                     this.closeAppearanceTab(tabEl.dataset.tab);
                 } else if ((actionTarget = target.closest("[data-library-manage]"))) {
                     ev.preventDefault();
-                    new DiceLibraryDialog({ diceType: actionTarget.dataset.dicetype, diceConfig: this }).render(true);
+                    const libraryOptions = { diceType: actionTarget.dataset.dicetype, diceConfig: this };
+                    if (this.isWorldRole) libraryOptions.worldOnly = true;
+                    new DiceLibraryDialog(libraryOptions).render(true);
+                } else if (target.closest("[data-action=loadRoleSave]")) {
+                    this._onLoadRoleSave();
                 } else if (target.closest("[data-action=test]")) {
                     if (this.noScene) return;
                     let config = this.getShowcaseAppearance();
@@ -622,11 +937,15 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
                             denominationList.push(el.userData);
                     });
                     new Roll(denominationList.join("+")).evaluate().then((roll) => {
+                        if (this.isRoleMode) {
+                            for (const term of roll.dice) term.options.dsnRole = this.currentRole;
+                        }
                         let data = new DiceNotation(roll);
                         let specialEffects = this.getShowcaseSFX();
                         let customization = foundry.utils.mergeObject({ appearance: config.appearance }, { specialEffects: specialEffects }, { applyOperators: true });
                         customization.diceLibrary = config.diceLibrary;
-                        game.dice3d._showAnimation(data, customization);
+                        customization.roleContext = config.roleContext;
+                        game.dice3d.queue.enqueue(data, customization);
                     });
                 } else if (target.closest("[data-sfx-create]")) {
                     let ID = this.element.querySelectorAll(".sfx-line").length;
@@ -761,6 +1080,8 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
                 target.previousElementSibling.value = target.textContent;
             } else if (target.matches("input[type=color]")) {
                 target.previousElementSibling.value = target.value;
+                target.classList.remove("dsn-inherit");
+                this._refreshInheritPreviews();
             } else if (target.matches("[data-colorpicker]")) {
                 target.nextElementSibling.value = target.value;
             }
@@ -784,6 +1105,26 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         await Utils.actionLoadSave(name);
     }
 
+    //library die refs pointing at another owner should not ref between users
+    static _stripForeignLibraryRefs(scope) {
+        for (const key in scope) {
+            if (!scope.hasOwnProperty(key)) continue;
+            if (scope[key]?.libraryDieOwner) {
+                delete scope[key].libraryDieId;
+                delete scope[key].libraryDieOwner;
+            }
+        }
+        return scope;
+    }
+
+    static _stripForeignLibraryRefsInRoles(roleScopes) {
+        for (const role in roleScopes) {
+            if (!roleScopes.hasOwnProperty(role) || !roleScopes[role]) continue;
+            DiceConfig._stripForeignLibraryRefs(roleScopes[role]);
+        }
+        return roleScopes;
+    }
+
     async actionExportToJSON() {
 
         //save current settings first
@@ -793,31 +1134,19 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         });
 
         //strip cross-user library die refs (not portable)
-        const appearance = foundry.utils.deepClone(game.user.getFlag("dice-so-nice", "appearance") || {});
-        for (const scope in appearance) {
-            if (!appearance.hasOwnProperty(scope)) continue;
-            if (appearance[scope]?.libraryDieOwner) {
-                delete appearance[scope].libraryDieId;
-                delete appearance[scope].libraryDieOwner;
-            }
-        }
+        const appearance = DiceConfig._stripForeignLibraryRefs(foundry.utils.deepClone(game.user.getFlag("dice-so-nice", "appearance") || {}));
+        const roleAppearance = DiceConfig._stripForeignLibraryRefsInRoles(foundry.utils.deepClone(game.user.getFlag("dice-so-nice", "roleAppearance") || {}));
 
         const saves = foundry.utils.deepClone(game.user.getFlag("dice-so-nice", "saves") || {});
         for (const saveName in saves) {
             if (!saves.hasOwnProperty(saveName)) continue;
-            const saveAppearance = saves[saveName]?.appearance;
-            if (!saveAppearance) continue;
-            for (const scope in saveAppearance) {
-                if (!saveAppearance.hasOwnProperty(scope)) continue;
-                if (saveAppearance[scope]?.libraryDieOwner) {
-                    delete saveAppearance[scope].libraryDieId;
-                    delete saveAppearance[scope].libraryDieOwner;
-                }
-            }
+            if (saves[saveName]?.appearance) DiceConfig._stripForeignLibraryRefs(saves[saveName].appearance);
+            if (saves[saveName]?.roleAppearance) DiceConfig._stripForeignLibraryRefsInRoles(saves[saveName].roleAppearance);
         }
 
         let data = {
             appearance: appearance,
+            roleAppearance: roleAppearance,
             sfxList: game.user.getFlag("dice-so-nice", "sfxList"),
             settings: game.user.getFlag("dice-so-nice", "settings"),
             saves: saves,
@@ -857,6 +1186,11 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         if (data.appearance) {
             await game.user.unsetFlag("dice-so-nice", "appearance");
             await game.user.setFlag("dice-so-nice", "appearance", data.appearance);
+        }
+        if (data.roleAppearance && typeof data.roleAppearance === "object") {
+            await game.user.unsetFlag("dice-so-nice", "roleAppearance");
+            if (!foundry.utils.isEmpty(data.roleAppearance))
+                await game.user.setFlag("dice-so-nice", "roleAppearance", data.roleAppearance);
         }
         if (data.sfxList) {
             await game.user.unsetFlag("dice-so-nice", "sfxList");
@@ -975,9 +1309,12 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
                 });
                 if (appearanceArray.length > 1) {
                     let hasDiff = false;
-                    hasDiff = !foundry.utils.isEmpty(foundry.utils.diffObject(appearanceArray[0], appearanceArray[1]));
+                    if (this.isRoleMode)
+                        hasDiff = Object.values(appearanceArray[1]).some(value => value);
+                    else
+                        hasDiff = !foundry.utils.isEmpty(foundry.utils.diffObject(appearanceArray[0], appearanceArray[1]));
 
-                    if (!hasDiff && systemSettingsElement) {
+                    if (!hasDiff && systemSettingsElement && this.diceFactory.systems.has(appearanceArray[1].system)) {
                         for (let setting of this.diceFactory.systems.get(appearanceArray[1].system).settings) {
                             let settingEl = systemSettingsElement.querySelector(`[name="systemSettings[${appearanceArray[1].system}][${setting.id}]"]`);
                             let value;
@@ -1052,7 +1389,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
 
                 let system = element.querySelector("[data-system]")?.value;
                 let customizationElements = element.querySelectorAll("[data-colorset],[data-texture],[data-material],[data-font]");
-                if (system != "standard") {
+                if (system && system != "standard" && this.diceFactory.systems.has(system)) {
                     let diceobj = this.diceFactory.systems.get(system).dice.get(dt);
                     if (diceobj) {
                         let colorsetData = {};
@@ -1087,6 +1424,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
             let dt = element.dataset.dicetype;
             if (dt != "global") {
                 element.querySelectorAll("option").forEach(opt => {
+                    if (!opt.value || !this.diceFactory.systems.has(opt.value)) return;
                     let model = this.diceFactory.systems.get("standard").dice.get(dt);
                     if (!this.diceFactory.systems.get(opt.value).dice.has(dt) || !this.diceFactory.systems.get(opt.value).getDiceByShapeAndValues(model.shape, model.values))
                         opt.disabled = true;
@@ -1096,6 +1434,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
     }
 
     setPreferredOptions() {
+        if (this.isWorldRole) return;
         if (!game.user.getFlag("dice-so-nice", "appearance") && !this.document.getFlag("dice-so-nice", "appearance")) {
             if (this.diceFactory.preferredSystem != "standard") {
                 const el = this.element.querySelector('.tabAppearance[data-tab="global"] [data-system]');
@@ -1120,8 +1459,8 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
 
     getShowcaseAppearance() {
         let config;
-        if (this.isActor) {
-            let userConfig = Dice3D.ALL_CONFIG();
+        if (this.isActor || this.isWorldRole) {
+            let userConfig = DsnSettings.ALL_CONFIG();
             config = foundry.utils.mergeObject(userConfig, {
                 autoscale: false,
                 scale: 60,
@@ -1148,44 +1487,29 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
                 appearance: {}
             };
         }
-        this.element.querySelectorAll(".tabAppearance").forEach(element => {
-            const tab = element.dataset.tab;
-            config.appearance[tab] = {
-                labelColor: element.querySelector("[data-labelColor]")?.value,
-                diceColor: element.querySelector("[data-diceColor]")?.value,
-                outlineColor: element.querySelector("[data-outlineColor]")?.value,
-                edgeColor: element.querySelector("[data-edgeColor]")?.value,
-                colorset: element.querySelector("[data-colorset]")?.value,
-                texture: element.querySelector("[data-texture]")?.value,
-                material: element.querySelector("[data-material]")?.value,
-                font: element.querySelector("[data-font]")?.value,
-                system: element.querySelector("[data-system]")?.value,
-                ...DiceConfig._parseLibraryDieValue(element.querySelector("[data-libraryDie]")?.value)
-            };
 
-            const systemSettingsRaw = {};
-            const systemSettingsContainer = element.querySelector("[data-systemsettings]");
-            if (systemSettingsContainer) {
-                systemSettingsContainer.querySelectorAll("input, select").forEach(field => {
-                    let name = field.getAttribute("name");
-                    name = name.substring(name.lastIndexOf("[") + 1, name.lastIndexOf("]"));
-                    if (field.type === "checkbox") {
-                        systemSettingsRaw[name] = field.checked;
-                    } else {
-                        systemSettingsRaw[name] = field.value;
-                    }
-                });
+        const formAppearance = this._readFormAppearance();
+        const parseLibrary = (scope) => {
+            const out = {};
+            for (const [tab, slot] of Object.entries(scope)) {
+                const { libraryDieId, ...rest } = slot;
+                out[tab] = { ...rest, ...DiceConfig._parseLibraryDieValue(libraryDieId) };
             }
-
-            const system = this.diceFactory.systems.get(config.appearance[tab].system);
-            if (system && system.settings.length > 0) {
-                const systemSettingsIDs = system.settings.map(setting => setting.id);
-                config.appearance[tab].systemSettings = Object.fromEntries(Object.entries(systemSettingsRaw).filter(([key]) => systemSettingsIDs.includes(key)));
-            }
-        });
+            return out;
+        };
+        config.role = this.currentRole;
+        config.dieTypes = this._getRoleDieTypes(this.currentRole);
+        if (this.isRoleMode) {
+            config.appearance = parseLibrary(this._getRoleBuffer("basic"));
+            config.roleAppearance = formAppearance;
+            config.roleContext = this._buildRoleContext(this.currentRole, formAppearance);
+        } else {
+            config.appearance = parseLibrary(formAppearance);
+            config.roleContext = DsnSettings.ROLE_CONTEXT(game.user, this.targetActor);
+        }
 
         config.diceLibrary = DiceLibrary.getLibraryForUser(game.user);
-        this.currentGlobalAppearance = config.appearance.global;
+        this.currentGlobalAppearance = formAppearance.global;
         return config;
     }
 
@@ -1199,7 +1523,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
             const select = element.querySelector("[data-libraryDie]");
             if (!select) return;
             const currentVal = select.value || "";
-            const groups = DiceLibrary.buildLibraryDiceGroups(tab, null, currentVal);
+            const groups = DiceLibrary.buildLibraryDiceGroups(tab, null, currentVal, { worldOnly: this.isWorldRole });
             let html = `<option value="">${game.i18n.localize("DICESONICE.None")}</option>`;
             for (const group of groups) {
                 html += `<optgroup label="${group.label}">`;
@@ -1255,6 +1579,8 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
                 this.diceScene.updateRenderSettings();
             }
             await this.diceFactory.preloadPresets(true, null, config.appearance);
+            if (config.roleAppearance)
+                await this.diceFactory.preloadPresets(true, null, this._prepareRoleScope(config.roleAppearance, { keepHidden: false }));
 
             this.showcaseView.showExtraDice = config.showExtraDice;
             await this.showcaseView.showcase(config);
@@ -1361,6 +1687,114 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         });
     }
 
+    async _onLoadRoleSave() {
+        const saves = game.user.getFlag("dice-so-nice", "saves") ?? {};
+        const saveList = new Map(Object.entries(saves));
+
+        foundry.applications.api.DialogV2.wait({
+            window: { title: "DICESONICE.RoleLoadFromSave" },
+            position: { width: 550 },
+            content: await foundry.applications.handlebars.renderTemplate("modules/dice-so-nice/templates/dialog-load.hbs", { saveList: saveList.keys() }),
+            buttons: [{
+                action: "load", icon: "fa-solid fa-box-open", label: "DICESONICE.Load",
+                callback: async (event, button, dialog) => {
+                    const name = dialog.element.querySelector("[data-save-list]").value;
+                    await this._loadRoleSave(name, saves[name]);
+                }
+            }, {
+                action: "no", icon: "fa-solid fa-ban", label: "DICESONICE.Cancel", default: true
+            }],
+            render: (event, dialog) => {
+                if (!saveList.size) {
+                    const btn = dialog.element.querySelector('[data-button="load"]');
+                    if (btn) btn.disabled = true;
+                }
+            }
+        });
+    }
+
+    async _loadRoleSave(name, save) {
+        if (!save) return;
+        const roleScope = save.roleAppearance?.[this.roleId];
+        const hasRoleScope = roleScope && !foundry.utils.isEmpty(roleScope);
+        const hasBasic = save.appearance && !foundry.utils.isEmpty(save.appearance);
+        if (!hasRoleScope && !hasBasic) {
+            ui.notifications.warn(game.i18n.format("DICESONICE.RoleLoadNothing", { name }));
+            return;
+        }
+
+        let source;
+        if (hasRoleScope && hasBasic) {
+            const choice = await foundry.applications.api.DialogV2.wait({
+                window: { title: game.i18n.localize("DICESONICE.RoleLoadFromSave") },
+                content: `<p>${game.i18n.format("DICESONICE.RoleLoadWhich", { name, role: this.document.name })}</p>`,
+                buttons: [
+                    { action: "role", icon: "fa-solid fa-masks-theater", label: game.i18n.format("DICESONICE.RoleLoadRoleChoice", { role: this.document.name }) },
+                    { action: "basic", icon: "fa-solid fa-dice-d20", label: "DICESONICE.RoleLoadBasicChoice" },
+                    { action: "cancel", icon: "fa-solid fa-ban", label: "DICESONICE.Cancel", default: true }
+                ]
+            });
+            if (choice !== "role" && choice !== "basic") return;
+            source = choice === "role" ? roleScope : save.appearance;
+        } else {
+            source = hasRoleScope ? roleScope : save.appearance;
+        }
+
+        const scope = await this._importScopeToWorld(foundry.utils.deepClone(source), save);
+        await this._applyLoadedScope(scope);
+        ui.notifications.info(game.i18n.format("DICESONICE.loadMessage", { name }));
+    }
+
+    //a world scope can only reference world dice, so we copy it
+    async _importScopeToWorld(scope, save) {
+        for (const data of Object.values(scope)) {
+            if (!data?.libraryDieId) continue;
+            if (DiceLibrary.isWorldOwner(data.libraryDieOwner)) {
+                if (!DiceLibrary.getFromUser(DiceLibrary.WORLD_OWNER, data.libraryDieId)) {
+                    delete data.libraryDieId;
+                    delete data.libraryDieOwner;
+                }
+                continue;
+            }
+            //the save snapshots the library
+            const snapshot = Array.isArray(save.diceLibrary) ? save.diceLibrary.find(d => d.id === data.libraryDieId) : null;
+            const die = snapshot ?? DiceLibrary.getFromUser(data.libraryDieOwner || game.user.id, data.libraryDieId);
+            if (!die) {
+                delete data.libraryDieId;
+                delete data.libraryDieOwner;
+                continue;
+            }
+            const existing = DiceLibrary.getByNameAndTypeForUser(DiceLibrary.WORLD_OWNER, die.name, die.dieType);
+            const copy = existing ?? await DiceLibrary.saveWorldDie({ ...foundry.utils.deepClone(die), id: undefined });
+            if (copy) {
+                data.libraryDieId = copy.id;
+                data.libraryDieOwner = DiceLibrary.WORLD_OWNER;
+            } else {
+                delete data.libraryDieId;
+                delete data.libraryDieOwner;
+            }
+        }
+        return scope;
+    }
+
+    async _applyLoadedScope(scope) {
+        const role = this.roleId;
+        Utils.sanitizeRoleScopes({ [role]: scope });
+        const dieTypes = this._getRoleDieTypes(role);
+        const buffer = { global: scope.global ?? {} };
+        const hidden = {};
+        for (const [dieType, slot] of Object.entries(scope)) {
+            if (dieType === "global") continue;
+            if (dieTypes && !dieTypes.includes(dieType)) hidden[dieType] = slot;
+            else buffer[dieType] = slot;
+        }
+        this._roleHiddenSlots[role] = hidden;
+        this._roleBuffers[role] = buffer;
+        await Promise.all(this.systemSettingsDialogList.map((dialog) => dialog.close()));
+        await this._rebuildAppearanceTabs(buffer);
+        this.onApply();
+    }
+
     async _onImport() {
         foundry.applications.api.DialogV2.wait({
             window: { title: "DICESONICE.Import" },
@@ -1427,34 +1861,12 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
             if (this.element.querySelector(`.dsn-appearance-tabs [data-tab="${diceType}"]`)) {
                 this.activateAppearanceTab(diceType);
             } else {
-                let newSystemSettings = {};
-                if (this.diceFactory.systems.has(this.currentGlobalAppearance.system)) {
-                    const system = this.diceFactory.systems.get(this.currentGlobalAppearance.system);
-                    if (system.settings.length > 0) {
-                        const dialogContent = system.getSettingsDialogContent(diceType);
-                        if (dialogContent.content != "") {
-                            const hdbsTemplate = Handlebars.compile(dialogContent.content);
-                            newSystemSettings = hdbsTemplate(dialogContent.data);
-                        }
-                    }
-                }
                 const hint = this.element.querySelector(".dsn-appearance-hint");
                 if (hint) hint.style.display = "none";
-                const libraryDiceGroups = DiceLibrary.buildLibraryDiceGroups(diceType, null);
-                foundry.applications.handlebars.renderTemplate("modules/dice-so-nice/templates/partial-appearance.hbs", {
-                    dicetype: diceType,
-                    appearance: this.currentGlobalAppearance,
-                    systemList: this.initializationData.systemList,
-                    colorsetList: this.initializationData.colorsetList,
-                    textureList: this.initializationData.textureList,
-                    materialList: this.initializationData.materialList,
-                    fontList: this.initializationData.fontList,
-                    showLibrary: DiceLibrary.getFullDieTypes().includes(diceType),
-                    libraryDiceGroups: libraryDiceGroups,
-                    systemSettings: newSystemSettings
-                }).then((htmlString) => {
-                    htmlString = this.addTitleToOptions(htmlString, '[data-colorset] option');
-
+                const seed = this.isRoleMode ? {} : this.currentGlobalAppearance;
+                const newSystemSettings = this.isRoleMode ? '' : this._renderSystemSettings(this.currentGlobalAppearance.system, diceType, this.currentRole);
+                const buffer = this.isRoleMode ? this._readFormAppearance() : null;
+                this._renderAppearanceTab(diceType, seed, this.currentRole, newSystemSettings, buffer).then((htmlString) => {
                     let tabName = diceType.toUpperCase();
                     let insertBefore = null;
                     this.element.querySelectorAll(".dsn-appearance-tabs .item").forEach(el => {
@@ -1494,6 +1906,8 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
 
     onReset() {
         this.reset = true;
+        this._roleBuffers = {};
+        this._roleHiddenSlots = {};
         this.render();
         this.changeTab("general", "dsn-main", { force: true });
     }
@@ -1527,6 +1941,17 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
 
     async _updateObject(event, formData) {
         formData = this.parseInputs(formData.object);
+
+        if (this.isRoleMode) {
+            await Promise.all(this.systemSettingsDialogList.map((dialog) => dialog.close()));
+            this._roleBuffers[this.currentRole] = this._readFormAppearance();
+        } else {
+            this._roleBuffers[this.currentRole] = formData.appearance;
+        }
+        if (this.isWorldRole) {
+            return this._updateWorldRoleScope();
+        }
+        formData.appearance = foundry.utils.deepClone(this._getRoleBuffer("basic"));
 
         if (this.isActor) {
             return this._updateActorAppearance(formData);
@@ -1589,7 +2014,14 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
                 formData.appearance[scope].systemSettings = Object.fromEntries(Object.entries(formData.appearance[scope].systemSettings).filter(([key]) => systemSettingsIDs.includes(key)));
             }
         }
-        let currentSettings = Dice3D.CONFIG();
+        let currentSettings = DsnSettings.CONFIG();
+
+        if (this.reset) {
+            await this.document.unsetFlag("dice-so-nice", "roleAppearance");
+        } else {
+            const roleSystemsInUse = await this._writeRoleAppearance();
+            for (const system of roleSystemsInUse) systemsInUse.add(system);
+        }
 
         //required
         await game.user.unsetFlag("dice-so-nice", "sfxList");
@@ -1597,7 +2029,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         await game.user.unsetFlag("dice-so-nice", "settings");
 
         //system settings won't be merged here because insertValues is false
-        let appearance = foundry.utils.mergeObject(Dice3D.APPEARANCE(), formData.appearance, { insertKeys: true, insertValues: false, applyOperators: true });
+        let appearance = foundry.utils.mergeObject(DsnSettings.APPEARANCE(), formData.appearance, { insertKeys: true, insertValues: false, applyOperators: true });
 
         //add back system settings and library die refs (mergeObject drops them)
         for (let scope of scopedAppearance) {
@@ -1616,9 +2048,9 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         }
 
         delete formData.appearance;
-        let settings = foundry.utils.mergeObject(Dice3D.CONFIG(), formData, { insertKeys: false, insertValues: false, applyOperators: true });
+        let settings = foundry.utils.mergeObject(DsnSettings.CONFIG(), formData, { insertKeys: false, insertValues: false, applyOperators: true });
 
-        // preserve settings that have no field in this form
+        //preserve settings that have no field in this form
         settings.rollingArea = currentSettings.rollingArea;
         settings.protectPersistent = currentSettings.protectPersistent;
 
@@ -1629,7 +2061,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         game.socket.emit("module.dice-so-nice", { type: "update", user: game.user.id });
         DiceSFXManager.init();
         for (let system of systemsInUse) {
-            this.diceFactory.systems.get(system).loadSettings();
+            this.diceFactory.systems.get(system)?.loadSettings();
         }
         ui.notifications.info(game.i18n.localize("DICESONICE.saveMessage"));
 
@@ -1665,10 +2097,12 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
             if (system && system.settings.length > 0) {
                 const systemSettingsIDs = system.settings.map(s => s.id);
                 formData.appearance[scope].systemSettings = Object.fromEntries(
-                    Object.entries(formData.appearance[scope].systemSettings).filter(([key]) => systemSettingsIDs.includes(key))
+                    Object.entries(formData.appearance[scope].systemSettings ?? {}).filter(([key]) => systemSettingsIDs.includes(key))
                 );
             }
         }
+
+        await this._writeRoleAppearance();
 
         await this.document.unsetFlag("dice-so-nice", "appearance");
         await this.document.setFlag("dice-so-nice", "appearance", formData.appearance);
@@ -1686,6 +2120,17 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         ui.notifications.info(game.i18n.localize("DICESONICE.saveMessage"));
     }
 
+    async _updateWorldRoleScope() {
+        const scope = this._prepareRoleScope(this._roleBuffers[this.roleId], { role: this.roleId });
+        await this.document.setFlag("dice-so-nice", "roleAppearance", { [this.roleId]: scope });
+
+        DiceLibrary.preloadAssets();
+        this.diceFactory.preloadPresets(false);
+
+        game.socket.emit("module.dice-so-nice", { type: "update", user: game.user.id, role: this.roleId });
+        ui.notifications.info(game.i18n.localize("DICESONICE.saveMessage"));
+    }
+
     static async _onResetActor() {
         if (!this.isActor) return;
 
@@ -1695,6 +2140,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         });
         if (!confirmed) return;
 
+        await this.document.unsetFlag("dice-so-nice", "roleAppearance");
         await this.document.unsetFlag("dice-so-nice", "appearance");
 
         const uuid = this.document.uuid;
@@ -1722,6 +2168,11 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
                 selected: selected.has(opt.id)
             };
         });
+    }
+
+    _sfxFormulaRolesHint() {
+        const roles = game.dice3d?.DiceFactory?.getRoles?.().map(role => role.id) ?? [];
+        return game.i18n.format("DICESONICE.sfxFormulaRolesHint", { roles: roles.join(", ") });
     }
 
     _initSlimSelects() {
@@ -1814,6 +2265,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         formulaInput.name = `sfxLine[${ID}][formula]`;
         formulaInput.value = formula;
         formulaInput.placeholder = game.i18n.localize("DICESONICE.sfxFormulaPlaceholder");
+        formulaInput.title = this._sfxFormulaRolesHint();
         formulaInput.autocomplete = "off";
         formulaDiv.appendChild(formulaInput);
         const errorIcon = document.createElement("i");
@@ -1889,6 +2341,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         if (this.showcaseView) this.showcaseView.stopAnimation();
         if (this.diceScene) this.diceScene.clearScene();
         if (!this.noScene) this.diceFactory.disposeCachedMaterials("showcase");
+        if (this.isWorldRole) this.options.onScopeSaved?.(this.roleId);
     }
 
     static async _onSubmit(event, form, formData) {
@@ -1900,7 +2353,6 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
             dialog.close();
         });
 
-        //await super._onSubmit(event, options);
-        this._updateObject(event, formData);
+        await this._updateObject(event, formData);
     }
 }

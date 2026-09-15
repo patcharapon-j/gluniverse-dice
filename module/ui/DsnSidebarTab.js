@@ -1,5 +1,5 @@
 import { DiceConfig } from './DiceConfig.js';
-import { Dice3D } from '../Dice3D.js';
+import { DsnSettings } from '../settings/DsnSettings.js';
 import { Utils } from '../Utils.js';
 import { COMPOUND_DICE } from '../DiceNotation.js';
 
@@ -105,8 +105,22 @@ export class DsnSidebarTab extends HandlebarsApplicationMixin(AbstractSidebarTab
         const savesObject = game.user.getFlag("dice-so-nice", "saves");
         const saveNames = savesObject ? Object.keys(savesObject) : [];
 
-        const visibility = box ? (Dice3D.CONFIG().visibility || "all") : "all";
+        const worldInteractive = game.settings.get("dice-so-nice", "interactiveThrows");
+        const userInteractive = box ? (DsnSettings.CONFIG().interactiveThrowsUser || "default") : "default";
+        const interactive = {
+            available: box ? (DsnSettings.interactiveThrowsAvailable() && worldInteractive !== "0") : false,
+            world0: worldInteractive === "0",
+            world1: worldInteractive === "1",
+            world2: worldInteractive === "2",
+            userDefault: userInteractive === "default",
+            userDisabled: userInteractive === "disabled",
+            userOff: userInteractive === "off",
+            userOn: userInteractive === "on"
+        };
+
+        const visibility = box ? (DsnSettings.CONFIG().visibility || "all") : "all";
         return Object.assign(context, {
+            interactive,
             persistentDiceEnabled,
             ready: !!box,
             dice: diceContext,
@@ -115,7 +129,7 @@ export class DsnSidebarTab extends HandlebarsApplicationMixin(AbstractSidebarTab
             visibilityAll: visibility === "all",
             visibilityMine: visibility === "mine",
             visibilityNone: visibility === "none",
-            protectPersistent: box ? !!Dice3D.CONFIG().protectPersistent : false,
+            protectPersistent: box ? !!DsnSettings.CONFIG().protectPersistent : false,
             saves: {
                 hasSaves: saveNames.length > 0,
                 list: saveNames
@@ -128,14 +142,31 @@ export class DsnSidebarTab extends HandlebarsApplicationMixin(AbstractSidebarTab
         const select = this.element.querySelector("[data-action=setVisibility]");
         if (select) {
             select.addEventListener("change", (ev) => {
-                game.dice3d?.setVisibility(ev.currentTarget.value);
+                game.dice3d?.persistent.setVisibility(ev.currentTarget.value);
             });
         }
 
         const protect = this.element.querySelector("[data-action=setProtectPersistent]");
         if (protect) {
             protect.addEventListener("change", (ev) => {
-                game.dice3d?.setProtectPersistent(ev.currentTarget.checked);
+                game.dice3d?.persistent.setProtected(ev.currentTarget.checked);
+            });
+        }
+
+        const interactiveWorld = this.element.querySelector("[data-action=setInteractiveWorld]");
+        if (interactiveWorld) {
+            interactiveWorld.addEventListener("change", async (ev) => {
+                await game.settings.set("dice-so-nice", "interactiveThrows", ev.currentTarget.value);
+                this.render(false);
+            });
+        }
+
+        const interactiveUser = this.element.querySelector("[data-action=setInteractiveUser]");
+        if (interactiveUser) {
+            interactiveUser.addEventListener("change", async (ev) => {
+                const settings = game.user.getFlag("dice-so-nice", "settings") || {};
+                await game.user.setFlag("dice-so-nice", "settings", { ...settings, interactiveThrowsUser: ev.currentTarget.value });
+                this.render(false);
             });
         }
 
@@ -224,15 +255,15 @@ export class DsnSidebarTab extends HandlebarsApplicationMixin(AbstractSidebarTab
         const places = COMPOUND_DICE[faces];
         if (places) {
             const linkGroupId = foundry.utils.randomID();
-            const primary = await dice3d.spawnPersistentDie(places[0].type, null, { linkGroupId, digitPlace: 0 });
+            const primary = await dice3d.persistent.spawn(places[0].type, null, { linkGroupId, digitPlace: 0 });
             if (!primary) return;
             for (let p = 1; p < places.length; p++) {
-                await dice3d.spawnPersistentDie(places[p].type, null, { linkGroupId, linkGroupSecondary: true, digitPlace: p });
+                await dice3d.persistent.spawn(places[p].type, null, { linkGroupId, linkGroupSecondary: true, digitPlace: p });
             }
             return;
         }
 
-        await dice3d.spawnPersistentDie(type);
+        await dice3d.persistent.spawn(type);
     }
 
     async _remove(type) {
@@ -248,11 +279,11 @@ export class DsnSidebarTab extends HandlebarsApplicationMixin(AbstractSidebarTab
             const ids = box.persistentDiceList
                 .filter(m => m.userData.linkGroupId === linkGroupId)
                 .map(m => m.userData.persistentId);
-            await Promise.all(ids.map(id => game.dice3d.removePersistentDie(id)));
+            await Promise.all(ids.map(id => game.dice3d.persistent.remove(id)));
             return;
         }
 
-        await game.dice3d.removePersistentDie(mesh.userData.persistentId);
+        await game.dice3d.persistent.remove(mesh.userData.persistentId);
     }
 
     async _clearMine() {
@@ -263,7 +294,7 @@ export class DsnSidebarTab extends HandlebarsApplicationMixin(AbstractSidebarTab
             "DICESONICE.persistentDiceToolboxClearMineConfirm"
         );
         if (!confirmed) return;
-        await dice3d.clearPersistentDice({ ownerUserId: game.user.id });
+        await dice3d.persistent.clear({ ownerUserId: game.user.id });
     }
 
     async _clearAll() {
@@ -275,6 +306,6 @@ export class DsnSidebarTab extends HandlebarsApplicationMixin(AbstractSidebarTab
             "DICESONICE.persistentDiceToolboxClearAllConfirm"
         );
         if (!confirmed) return;
-        await dice3d.clearPersistentDice();
+        await dice3d.persistent.clear();
     }
 }

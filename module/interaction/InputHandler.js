@@ -257,6 +257,7 @@ export class InputHandler {
 	_isPersistentGrabBlocked(root) {
 		if (root.userData?.pendingReplay) return true;
 		if (root.userData?.lockedBy && root.userData.lockedBy !== game.user?.id) return true;
+		if (root.userData?.guest && root.userData.reservedForUserId !== game.user?.id && !game.user?.isGM) return true;
 		const ownerUserId = root.userData?.ownerUserId;
 		if (!ownerUserId || ownerUserId === game.user?.id || game.user?.isGM) return false;
 		const settings = game.users.get(ownerUserId)?.getFlag("dice-so-nice", "settings");

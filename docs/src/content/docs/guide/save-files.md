@@ -23,7 +23,7 @@ The Profiles & Data tab lets you manage your dice configuration. You can save mu
 
 These options are only available to the Game Master:
 
-- **Push my config to players** - Push your current dice configuration to every other player, including disconnected ones. You can choose which parts to push: dice appearance, special effects, and/or preferences & display settings.
+- **Push my config to players** - Push your current dice configuration to every other player, including disconnected ones. You can choose which parts to push: basic dice appearance, special effects, and/or preferences & display settings. Role appearances are not pushed: set them world-wide from the [Dice Roles table](/foundryvtt-dice-so-nice/guide/preferences/#dice-roles-table-gm-only) instead.
 
 ## Reset
 
