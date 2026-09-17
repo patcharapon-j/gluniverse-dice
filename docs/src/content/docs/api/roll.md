@@ -257,6 +257,17 @@ game.dice3d
     .then(() => console.log('Animation ended'));
 ```
 
+## Getting the screen position of a die
+Projects a die mesh to viewport coordinates, in CSS pixels. Useful to place any DOM element or canvas effect on top of a 3D die. It accounts for the rolling area offset and returns `null` when the 3D canvas is not ready.
+```js
+/**
+ * Project a die mesh to screen space
+ * @param {Object3D} dicemesh
+ * @returns {{x: Number, y: Number}|null}
+ */
+game.dice3d.getScreenPosition(dicemesh);
+```
+
 ## Accessing the list of Dice Systems
 If you need to create your own Dice Settings dialog, you will probably need to access the list of existing (and loaded) systems.
 ```js

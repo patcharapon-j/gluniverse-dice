@@ -5,7 +5,7 @@ import { DiceColors, TEXTURELIST, COLORSETS } from './engine/DiceColors.js';
 import { DiceSFXManager } from './sfx/DiceSFXManager.js';
 import { Utils } from './Utils.js';
 import { ThinFilmFresnelMap } from './libs/ThinFilmFresnelMap.js';
-import { TextureLoader } from 'three';
+import { TextureLoader, Vector3 } from 'three';
 import { DiceTourMain } from './tours/DiceTourMain.js';
 import { DiceSFX } from './sfx/DiceSFX.js';
 import { DiceSystem } from './DiceSystem.js';
@@ -779,6 +779,23 @@ export class Dice3D {
     enableDebugMode() {
         if(this.box)
             this.box.debugMode = true;
+    }
+
+    /**
+     * Project a die mesh to screen space
+     * @param {Object3D} dicemesh A die mesh, as received by a macro special effect
+     * @returns {{x: Number, y: Number}|null} Viewport coordinates in CSS pixels, null when the 3D box is not ready
+     */
+    getScreenPosition(dicemesh) {
+        const camera = this.box?.camera;
+        if (!camera || !dicemesh?.isObject3D) return null;
+        //the mesh is in a scaled container, so we read the world position
+        const projected = dicemesh.getWorldPosition(new Vector3()).project(camera);
+        const rect = this.canvas.getBoundingClientRect();
+        return {
+            x: rect.left + (projected.x + 1) / 2 * rect.width,
+            y: rect.top + (1 - projected.y) / 2 * rect.height
+        };
     }
 
     /**

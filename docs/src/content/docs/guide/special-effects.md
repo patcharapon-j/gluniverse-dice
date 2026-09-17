@@ -169,6 +169,7 @@ Executes a Foundry macro when the trigger fires. The macro receives a context ob
 | `messageId` | The chat message ID for this roll |
 | `roll` | The Foundry Roll object |
 | `dsnDie` | The triggering die (`type`, `result`, `options`) |
+| `dicemesh` | The Three.js mesh of the triggering die |
 | `playSFX(sfxId)` | Trigger another visual effect on the same die |
 
 #### Example: Critical Hit Celebration
@@ -198,6 +199,20 @@ const { roll, dsnDie, playSFX } = scope;
 const skillValue = roll.options?.skillValue;
 if (skillValue && dsnDie.result <= Math.ceil(skillValue * 0.05)) {
     playSFX("PlayConfettiStrength3");
+}
+```
+
+#### Example: Playing an effect at the die position
+
+`dicemesh` gives access to the 3D object of the die. Use `game.dice3d.getScreenPosition(dicemesh)` to convert it to viewport coordinates, for example to play an animation from another module on top of the die.
+
+```javascript
+const { dicemesh } = scope;
+
+const pos = game.dice3d.getScreenPosition(dicemesh);
+if (pos) {
+    // pos.x and pos.y are in CSS pixels, relative to the viewport
+    console.log(`The die landed at ${Math.round(pos.x)}, ${Math.round(pos.y)}`);
 }
 ```
 
