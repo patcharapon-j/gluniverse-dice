@@ -200,7 +200,8 @@ export class DiceSystem {
     }
 
     updateSettings(diceType = "global", settings, role = "basic") {
-        this._scopedSettings.set(`${role}:${diceType}`, {...settings});
+        const key = diceType.includes(":") ? diceType : `${role}:${diceType}`;
+        this._scopedSettings.set(key, {...settings});
     }
 
     loadSettings() {
