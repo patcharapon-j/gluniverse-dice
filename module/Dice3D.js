@@ -194,7 +194,8 @@ export class Dice3D {
      * This trigger can then be pulled by a system, a module or a macro
      * @param {String} id : Identifier of the trigger, ex: fate3df
      * @param {String} name : Localized name of the trigger, ex: Fate Roll
-     * @param {Array(String)} results : Array of possible results for this trigger, ex: ["-3","3","0"]
+     * @param {Array(String|Object)} results : Array of possible results for this trigger, ex: ["-3","3","0"]
+     *        A result can also be an object with a localized name, ex: [{id: "hope", name: "With Hope"}]
      */
     addSFXTrigger(id, name, results) {
         if (DiceSFXManager.EXTRA_TRIGGER_RESULTS[id])
@@ -202,7 +203,10 @@ export class Dice3D {
         DiceSFXManager.EXTRA_TRIGGER_TYPE.push({ id: id, name: name });
         DiceSFXManager.EXTRA_TRIGGER_RESULTS[id] = [];
         results.forEach((res) => {
-            DiceSFXManager.EXTRA_TRIGGER_RESULTS[id].push({ id: res, name: res });
+            if (typeof res === "object")
+                DiceSFXManager.EXTRA_TRIGGER_RESULTS[id].push({ id: String(res.id), name: res.name ?? String(res.id) });
+            else
+                DiceSFXManager.EXTRA_TRIGGER_RESULTS[id].push({ id: res, name: res });
         });
     }
 

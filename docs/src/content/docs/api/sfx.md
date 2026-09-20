@@ -17,8 +17,10 @@ Triggers should be added in the `diceSoNiceReady` [hook](/foundryvtt-dice-so-nic
  * This trigger can then be pulled by a system, a module or a macro
  * @param {String} id : Identifier of the trigger, ex: fate4df
  * @param {String} name : Localized name of the trigger, ex: Fate Roll
- * @param {Array(String)} results : Array of possible results for this trigger, 
+ * @param {Array(String|Object)} results : Array of possible results for this trigger, 
  *        ie: ["-3","3","0"]
+ *        A result can also be an object with a localized name,
+ *        ie: [{id: "hope", name: "With Hope"}]
  * @returns
  */
 game.dice3d.addSFXTrigger(id, name, results);
@@ -28,6 +30,17 @@ game.dice3d.addSFXTrigger(id, name, results);
 ```javascript
 game.dice3d.addSFXTrigger('fate4df', 'Fate Roll', [
     '-4','-3','-2','-1','0','1','2','3','4'
+]);
+```
+
+### Example with named results
+When the results are not numbers, you can give each one a localized name. The `name` is what users see in the special effects settings. The `id` is what `options.sfx.result` must match when [activating the trigger](#activating-a-trigger).
+
+```javascript
+game.dice3d.addSFXTrigger('duality', 'Duality Dice', [
+    { id: 'hope', name: 'With Hope' },
+    { id: 'fear', name: 'With Fear' },
+    { id: 'critical', name: 'Critical' }
 ]);
 ```
 

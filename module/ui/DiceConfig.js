@@ -2157,9 +2157,13 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
     _buildSlimSelectOptions(dicetype, selectedValues = []) {
         if (!dicetype || !this.possibleResultList[dicetype]) return [];
         const selected = new Set(Array.isArray(selectedValues) ? selectedValues : [selectedValues]);
+        const isExtraTrigger = !!DiceSFXManager.EXTRA_TRIGGER_RESULTS[dicetype];
         return this.possibleResultList[dicetype].map(opt => {
             let displayText = opt.id;
-            if (opt.name !== opt.id) {
+            //we assume that a custom trigger result added with a name means the ID doesn't mean much
+            if (isExtraTrigger) {
+                displayText = opt.name;
+            } else if (opt.name !== opt.id) {
                 displayText = `${opt.name} (${opt.id})`;
             }
             return {
