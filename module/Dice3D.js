@@ -329,6 +329,7 @@ export class Dice3D {
         this._installPointerCapture();
         this._buildDiceBox();
         this.diceLibrary = new DiceLibrary();
+        DiceSFXManager.init();
 
         if (DsnSettings.CONFIG().visibility === "none") {
             DiceColors.initColorSets();
@@ -349,7 +350,6 @@ export class Dice3D {
             });
         }
 
-        DiceSFXManager.init();
         this._welcomeMessage();
         this._registerTours();
     }
