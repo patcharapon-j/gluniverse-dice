@@ -1,4 +1,4 @@
-import { Vector2 } from 'three';
+import { ShaderChunk, Vector2 } from 'three';
 
 export class ShaderUtils {
 
@@ -19,6 +19,11 @@ export class ShaderUtils {
 
         if (this.userData.advancedGlassMask) {
             ShaderUtils.glassMaskShaderFragment(shader);
+        }
+
+        if (this.userData.modelScaleUniform) {
+            shader.uniforms.dsnModelScale = this.userData.modelScaleUniform;
+            ShaderUtils.modelScaleShaderFragment(shader);
         }
 
         if (this.userData.detailNormalMap) {
@@ -150,6 +155,21 @@ export class ShaderUtils {
 				totalDiffuse = mix( totalDiffuse, transmitted.rgb, material.transmission );
 
 			#endif`
+		);
+	}
+
+	//gltf models are scaled down by a container.
+	//this create an issue for attenuationDistance that works in world units, so we scale it
+	static modelScaleShaderFragment(shader) {
+		shader.fragmentShader = /* glsl */`
+			uniform float dsnModelScale;
+			${shader.fragmentShader}
+		`.replace(
+			/* glsl */`#include <transmission_fragment>`,
+			ShaderChunk.transmission_fragment
+		).replace(
+			/* glsl */`material.attenuationDistance = attenuationDistance;`,
+			/* glsl */`material.attenuationDistance = attenuationDistance * ( dsnModelScale > 0.0 ? dsnModelScale : 1.0 );`
 		);
 	}
 

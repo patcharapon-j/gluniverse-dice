@@ -1071,6 +1071,9 @@ export class DiceFactory {
 					material = uniqueMaterial.clone();
 					material = this.systems.get(appearance.system).processMaterial(type, material, appearance);
 					material.onBeforeCompile = ShaderUtils.applyDiceSoNiceShader;
+					material.userData.modelScaleUniform = { value: 1 };
+					const systemProgramCacheKey = material.customProgramCacheKey;
+					material.customProgramCacheKey = () => "dsnModelScale" + systemProgramCacheKey.call(material);
 
 					if(!this.realisticLighting){
 						material.envMap = scopedTextureCache.textureCube;
@@ -1079,6 +1082,8 @@ export class DiceFactory {
 					//finally, we cache the material
 					this.baseMaterialCache[baseMaterialCacheString] = material;
 				}
+				material.userData.modelScaleUniform.value = dicemesh.userData.modelScale;
+
 				//replace the original material with the processed based on the model material uuid
 				dicemesh.traverse((child) => {
 					if(child.isMesh) {
