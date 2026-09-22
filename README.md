@@ -63,6 +63,13 @@ A huge thank you to everyone who has contributed code, models, translations, and
 
 [View all contributors](https://gitlab.com/riccisi/foundryvtt-dice-so-nice/-/graphs/master)
 
+# Sponsors and partners
+
+Dice So Nice! is free and open source, and some of its development has been funded by companies who chose to invest in a tool the whole community gets to use. Thank you.
+
+- **[Foundry VTT](https://foundryvtt.com)** — Official partner since 2022. Foundry VTT supports the ongoing development of Dice So Nice! and works with us on the rolling API that makes deep 3D dice integration possible.
+- **[Metamorphic Digital](https://www.metamorphic-digital.com/)** — Sponsored the custom physics shape API (`addDiceShape`, v6.3.0), which lets custom 3D models roll on their own collider.
+
 # Acknowledgment
 
 Based on the "Online 3D dice roller" by Anton Natarov, published under public domain.

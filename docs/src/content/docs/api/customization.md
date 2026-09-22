@@ -202,6 +202,10 @@ This only works with Foundry VTT v14+ which bundles Font Awesome 7 Pro. For olde
 
 ## Adding a custom physics shape
 
+:::note
+The development of this feature was sponsored by [Metamorphic Digital](https://www.metamorphic-digital.com/). Thank you!
+:::
+
 By default, a DicePreset with a custom 3D model inherits the collision shape of its die type: a rhombic dodecahedron model would still tumble and land like the standard d12. `addDiceShape` registers a named collision shape, and a preset with a custom 3D model can reference it through the `shape` argument of `addDicePreset`. The die then rolls on its own collider, lands flush on its own faces, and reads results from them.
 
 ```javascript
