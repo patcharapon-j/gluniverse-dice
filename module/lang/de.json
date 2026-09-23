@@ -298,5 +298,12 @@
     "DICESONICE.TextureLizard": "Eidechse",
     "DICESONICE.TextureBird": "Vogel",
     "DICESONICE.glyphPicker.cat.music_audio": "Musik",
-    "DICESONICE.interactiveThrowsDisabled": "Deaktiviert"
+    "DICESONICE.interactiveThrowsDisabled": "Deaktiviert",
+    "DICESONICE.glyphPicker.cat.animals": "Tiere",
+    "DICESONICE.glyphPicker.cat.halloween": "Halloween",
+    "DICESONICE.CompositeDestinationIn": "Maske",
+    "DICESONICE.glyphPicker.tabEmoji": "Emoji",
+    "DICESONICE.glyphPicker.cat.astronomy": "Astronomie",
+    "DICESONICE.glyphPicker.cat.weather": "Wetter",
+    "DICESONICE.glyphPicker.cat.nature": "Natur"
 }
