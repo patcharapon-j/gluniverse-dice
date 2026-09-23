@@ -102,7 +102,7 @@
     "DICESONICE.TextureCheetah": "Gepard",
     "DICESONICE.TextureAstralSea": "Astrales Meer",
     "DICESONICE.TextureWood": "Holz",
-    "DICESONICE.TextureMetal": "Metal",
+    "DICESONICE.TextureMetal": "Metall",
     "DICESONICE.TextureNone": "Kein / Auto (Theme)",
     "DICESONICE.TextureRadial": "Radial",
     "DICESONICE.TextureBronze1": "Bronze - 1",
@@ -288,5 +288,15 @@
     "DICESONICE.AmbianceNeutral": "Neutral",
     "DICESONICE.AmbianceTavern": "Taverne",
     "DICESONICE.AmbianceNeon": "Neon",
-    "DICESONICE.skipAnimationOnInactiveTab": "Überspringe Animationen wenn der Tab inaktiv ist"
+    "DICESONICE.skipAnimationOnInactiveTab": "Überspringe Animationen wenn der Tab inaktiv ist",
+    "DICESONICE.sidebarTabTitle": "Dice So Nice",
+    "DICESONICE.forceCharacterOwnerAppearanceDisabled": "Deaktiviert",
+    "DICESONICE.glyphPicker.cat.punctuation_symbols": "Symbole",
+    "DICESONICE.glyphPicker.cat.religion": "Religion",
+    "DICESONICE.CustomDiceTermFaceValue": "Wert",
+    "DICESONICE.TextureDragon": "Drache",
+    "DICESONICE.TextureLizard": "Eidechse",
+    "DICESONICE.TextureBird": "Vogel",
+    "DICESONICE.glyphPicker.cat.music_audio": "Musik",
+    "DICESONICE.interactiveThrowsDisabled": "Deaktiviert"
 }
