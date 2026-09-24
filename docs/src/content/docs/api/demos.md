@@ -57,3 +57,30 @@ https://github.com/Musrha/vampire-5th-dice-roller
 let r = await new Roll('2d20').evaluate();
 r.toMessage();
 ```
+
+### Sequencer animation under a die
+A macro for the [Macro special effect](/foundryvtt-dice-so-nice/guide/special-effects/#macro) that plays a [JB2A](https://foundryvtt.com/packages/JB2A_DnD5e) animation under the die, with [Sequencer](https://foundryvtt.com/packages/sequencer). Create it as a script macro, then pick it in a special effects line.
+
+`game.dice3d.getScreenPosition` gives the position of the die on the screen. Sequencer's screen space plays the animation at that position, under the 3D dice, and in screen pixels so the canvas zoom doesn't change its size.
+
+```javascript
+const { dicemesh } = scope;
+const pos = game.dice3d.getScreenPosition(dicemesh);
+if (!pos) return;
+
+// size of the die on screen: project a copy of it moved one radius to the right
+if (!dicemesh.geometry.boundingSphere) dicemesh.geometry.computeBoundingSphere();
+const edge = dicemesh.clone(false);
+dicemesh.getWorldPosition(edge.position).x += dicemesh.geometry.boundingSphere.radius * dicemesh.getWorldScale(edge.scale).x;
+const dieSize = 2 * (game.dice3d.getScreenPosition(edge).x - pos.x);
+
+new Sequence()
+    .effect()
+        .file("jb2a.particle_burst.01.circle.bluepurple")
+        .screenSpace()
+        .screenSpaceAnchor({ x: 0, y: 0 }) // pos is measured from the top left corner of the screen
+        .screenSpacePosition(pos)
+        .size(dieSize * 3)
+        .locally() // every client runs the macro with its own screen position
+    .play();
+```
