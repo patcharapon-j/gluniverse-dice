@@ -12,6 +12,8 @@ import {DiceShapeLibrary} from './DiceShapeLibrary.js';
 import {DiceSystem} from '../DiceSystem.js';
 import {DiceLibrary} from './DiceLibrary.js';
 import {DiceRoleRegistry} from './DiceRoleRegistry.js';
+import {DiceSFXManager} from '../sfx/DiceSFXManager.js';
+import {DsnSettings} from '../settings/DsnSettings.js';
 import {Utils} from '../Utils.js';
 import {TARGET_D6_EDGE_METERS} from './SceneConstants.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -47,9 +49,6 @@ export class DiceFactory {
 
 		this.baseScale = TARGET_D6_EDGE_METERS;
 		this.showcaseScale = TARGET_D6_EDGE_METERS * 1.2;
-
-		this.preferredSystem = "standard";
-		this.preferredColorset = "custom";
 
 		this.cache_hits = 0;
 		this.cache_misses = 0;
@@ -518,14 +517,7 @@ export class DiceFactory {
 		};
 		const preloadPresetsByUser = (user) => {
 			collectFromRoleScopes(user.getFlag("dice-so-nice", "roleAppearance"));
-			let appearance = user.getFlag("dice-so-nice", "appearance") ? foundry.utils.duplicate(user.getFlag("dice-so-nice", "appearance")) : null;
-			if(!appearance){
-				appearance = {global:{}};
-				if(this.preferredSystem != "standard")
-					appearance.global.system = this.preferredSystem;
-				if(this.preferredColorset != "custom")
-					appearance.global.colorset = this.preferredColorset;
-			}
+			let appearance = DsnSettings.APPEARANCE(user);
 			//load basic model
 			this.systems.get("standard").dice.forEach((obj) =>{
 				activePresets.push(obj);
@@ -674,7 +666,7 @@ export class DiceFactory {
 
 	//See dice3d.addSystem for public API
 	addSystem(system, mode="default"){
-		const roleDefaultsSource = system;
+		const source = system;
 		if(system.constructor.name === 'DiceSystem'){ //note: do not use instanceof, it breaks on The Forge
 			this.systems.set(system.id, system);
 			mode = system.mode;
@@ -684,13 +676,22 @@ export class DiceFactory {
 			
 		}
 		system.loadSettings();
-		if(mode != "default" && this.preferredSystem == "standard")
-			this.preferredSystem = system.id;
-		const roleDefaults = roleDefaultsSource?.roleDefaults;
+		//the legacy preferred mode is a basic role default
+		if(mode != "default")
+			this.addRole({id: "basic", defaults: {global: {system: system.id}}}, {package: system.id});
+		const roleDefaults = source?.roleDefaults;
 		if(roleDefaults && typeof roleDefaults === "object"){
 			for(const [roleId, scope] of Object.entries(roleDefaults))
 				this.addRole({id: roleId, defaults: scope}, {package: system.id});
 		}
+		if(source._sfxDefaults?.length){
+			DiceSFXManager.addDefaults(source._sfxDefaults);
+			source._sfxDefaults = [];
+		}
+		//when DSN stored a copy, flag the package's own object too so its later setRoleDefaults calls reach the roles
+		system._registered = true;
+		if(source !== system && typeof source.setRoleDefaults === "function")
+			source._registered = true;
 	}
 
 	//stores a shape bundle in the shape library.
@@ -2098,8 +2099,7 @@ export class DiceFactory {
 			2) A flavor/notation colorset
 			3) The colorset of the diceobj
 			4) The colorset configured by the player for this dice type
-			5) A preferred system set by a module/system (done in main.js)
-			6) The global colorset of the player
+			5) The global colorset of the player (package basic defaults are applied in DsnSettings.APPEARANCE)
 		*/
 
 		const role = dicenotation?.role ?? "basic";

@@ -13,16 +13,21 @@ import { DiceSystem } from '../dice-so-nice/api.js';
  * Register a new system
  * The id is to be used with the addDicePreset method
  * The name can be a localized string
+ * (legacy) The third argument is the mode: keep it on "default"
  * The group is a string used to group systems in the list.
  *   Could be the name of the brand or a collection.
- * The mode: "preferred" or "default".
- *   "preferred" enables this system by default until
- *   a user changes it. "default" adds it as a choice.
  * @param {DiceSystem} mySystem
  */
-const mySystem = new DiceSystem(id, name, mode, group);
+const mySystem = new DiceSystem(id, name, 'default', group);
 dice3d.addSystem(mySystem);
 ```
+
+Adding a system makes it a choice in the players' dice settings. To make it the look new players start with, use [`setRoleDefaults`](#role-defaults-on-a-dice-preset).
+
+:::note[Legacy]
+Older code may pass `"preferred"` as the mode, or as the second argument of `dice3d.addSystem`. It still works, but new code should use `setRoleDefaults`.
+:::
+
 ### More info
 You can do a lot more with "Dice So Nice" systems. Check [Custom shaders](/foundryvtt-dice-so-nice/api/shaders/) and [System settings](/foundryvtt-dice-so-nice/api/system-settings/) to find more.
 
@@ -39,48 +44,63 @@ dice3d.addSystem(HDSystem);
 
 ## Role defaults on a dice preset
 
-A `DiceSystem` can carry role defaults. They are registered when the system is added, with the same merge rule as [`addRole`](/foundryvtt-dice-so-nice/api/roles/#registering-a-role):
+Use `setRoleDefaults(roleId, scope)` to set the default look of a [dice role](/foundryvtt-dice-so-nice/api/roles/). The `basic` role is the look of regular dice: set it to give new players your dice right away.
 
 ```javascript
 import { DiceSystem } from '../dice-so-nice/api.js';
 
-const pack = new DiceSystem('my-dice', 'My Dice', 'default', 'My Dice Pack');
-pack.roleDefaults = {
-    hope: { global: { system: 'my-dice', colorset: 'my-hope-theme' } },
-    fear: { global: { system: 'my-dice', colorset: 'my-fear-theme' } }
-};
-dice3d.addSystem(pack);
+Hooks.once('diceSoNiceReady', (dice3d) => {
+    const pack = new DiceSystem('my-dice', 'My Dice', 'default', 'My Dice Pack');
+    pack.setRoleDefaults('basic', { global: { system: 'my-dice', colorset: 'my-colorful-theme' } });
+    pack.setRoleDefaults('my-role1', { global: { system: 'my-dice', colorset: 'my-dark-theme' } });
+    pack.setRoleDefaults('my-role2', {
+        global: { system: 'my-dice' },
+        d12: { material: 'metal' }
+    });
+    dice3d.addSystem(pack);
+});
 ```
+
+`scope` has a `global` slot and optional slots per die type (`d4`, `d20`...). Each slot accepts `colorset`, `system`, `texture`, `material`, `font`, `labelColor`, `diceColor`, `outlineColor`, `edgeColor` and `systemSettings`. Leave out what you don't want to set.
+
+:::note
+When two packages set the same field of the same role, the last one wins.
+:::
+
+:::note[Players who already saved their settings]
+The `basic` look is only a starting point: players who already saved their dice settings keep their own look.
+:::
+
+No `DiceSystem` in your package? Use [`addRole`](/foundryvtt-dice-so-nice/api/roles/#registering-a-role) with the same defaults: `dice3d.addRole({ id: 'basic', defaults: { global: { colorset: 'my-colorful-theme' } } }, { package: 'my-module' })`.
+
+To also give new players a special effect, see [Default special effects](/foundryvtt-dice-so-nice/api/sfx/#default-special-effects).
 
 ## Limiting a system to some roles
 
-By default a system is listed in the dice appearance pickers of every role. A `DiceSystem` can narrow that with two lists of role ids (`basic` included):
+By default a system is listed for every role in the players' dice settings. Two methods change that:
 
-- `includeRoles`: the system is only listed for these roles.
-- `excludeRoles`: the system is never listed for these roles. It wins over `includeRoles`.
-
-A system can only carry one 3D model per die type, so a set with a different model for some roles ships one system per model. The lists keep each one where it belongs, and the systems can share the same name:
+- `includeRoles(...roleIds)`: list the system only for these roles.
+- `excludeRoles(...roleIds)`: hide the system from these roles.
 
 ```javascript
 import { DiceSystem } from '../dice-so-nice/api.js';
 
-const base = new DiceSystem('my-dice', 'My Dice', 'default', 'My Dice Pack');
-base.includeRoles = ['basic'];
+Hooks.once('diceSoNiceReady', (dice3d) => {
+    const base = new DiceSystem('my-dice', 'My Dice', 'default', 'My Dice Pack');
+    base.includeRoles('basic');
+    base.setRoleDefaults('basic', { global: { system: 'my-dice' } });
 
-const hope = new DiceSystem('my-dice-hope', 'My Dice', 'default', 'My Dice Pack');
-hope.includeRoles = ['hope'];
-hope.roleDefaults = { hope: { global: { system: 'my-dice-hope' } } };
+    const variant = new DiceSystem('my-dice-role1', 'My Dice', 'default', 'My Dice Pack');
+    variant.includeRoles('my-role1');
+    variant.setRoleDefaults('my-role1', { global: { system: 'my-dice-role1' } });
 
-const fear = new DiceSystem('my-dice-fear', 'My Dice', 'default', 'My Dice Pack');
-fear.includeRoles = ['fear'];
-fear.roleDefaults = { fear: { global: { system: 'my-dice-fear' } } };
-
-dice3d.addSystem(base);
-dice3d.addSystem(hope);
-dice3d.addSystem(fear);
+    dice3d.addSystem(base);
+    dice3d.addSystem(variant);
+    // then add the presets of each system with dice3d.addDicePreset
+});
 ```
 
-The lists only filter the pickers. A system a player already chose for a role stays listed and keeps rendering, and a role left on "Inherit" still takes the basic system, even when that system excludes the role. Point each role at its own system with role defaults, as above.
+These lists only change what players can pick.
 
 ## Preloading Presets
 

@@ -257,13 +257,11 @@ You can create custom colorsets either to give more choices to players in the co
 /**
  * Add a colorset (theme)
  * @param {Object} colorset (see below)
- * @param {String} mode= "default","preferred"
- * The "mode" parameter have 2 modes :
- * - "default" only register the colorset
- * - "preferred" apply the colorset if the player didn't already change his dice appearance for this world.
  */
-dice3d.addColorset(colorset, mode);
+dice3d.addColorset(colorset);
 ```
+Adding a colorset makes it a choice in the players' theme list. To make it the theme new players start with, use [`setRoleDefaults`](/foundryvtt-dice-so-nice/api/dice-systems/#role-defaults-on-a-dice-preset).
+
 The `colorset` parameter has the following attributes:
 - **name** A string ID for the colorset
 - **description** Localized string for settings
@@ -309,25 +307,22 @@ These two properties let you ship one set of label or background images and regi
 **Note 2:** If you omit some of these attributes, Dice So Nice! will use the player config instead. For example, omitting "material" uses each player's selected material. This lets users customize slightly even with your colorset. To lock down appearance completely, set every attribute.
 ### Examples
 ```javascript
-dice3d.addColorset(
-    {
-        name: '13a',
-        description: '13th Age Red/Gold',
-        category: '13th Age',
-        foreground: '#9F8003',
-        background: '#9F8',
-        texture: '13Ared',
-        edge: '#9F8003',
-        material: 'chrome',
-        font: 'Arial Black',
-        fontScale: {
-            d6: 1.1,
-            df: 2.5
-        },
-        visibility: 'visible'
+dice3d.addColorset({
+    name: '13a',
+    description: '13th Age Red/Gold',
+    category: '13th Age',
+    foreground: '#9F8003',
+    background: '#9F8',
+    texture: '13Ared',
+    edge: '#9F8003',
+    material: 'chrome',
+    font: 'Arial Black',
+    fontScale: {
+        d6: 1.1,
+        df: 2.5
     },
-    'preferred'
-);
+    visibility: 'visible'
+});
 
 dice3d.addColorset({
     name: 'rainbow',

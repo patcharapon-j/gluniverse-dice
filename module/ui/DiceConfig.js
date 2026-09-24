@@ -272,12 +272,6 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
             this.showcaseView = new ShowcaseView(this.diceScene, this.diceFactory);
             this.showcaseView.showExtraDice = config.showExtraDice;
 
-            if (!game.user.getFlag("dice-so-nice", "appearance") && !this.document.getFlag("dice-so-nice", "appearance")) {
-                if (this.diceFactory.preferredSystem != "standard")
-                    config.appearance.global.system = this.diceFactory.preferredSystem;
-                if (this.diceFactory.preferredColorset != "standard")
-                    config.appearance.global.colorset = this.diceFactory.preferredColorset;
-            }
             config.diceLibrary = DiceLibrary.getLibraryForUser(game.user);
             if (this.isWorldRole) {
                 config.role = this.roleId;
@@ -335,9 +329,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
 
         let specialEffectsList = [];
         let specialEffectsPromises = [];
-        let specialEffects = DsnSettings.SFX();
-        if (this.reset)
-            specialEffects = [];
+        let specialEffects = this.reset ? DsnSettings.DEFAULT_SFX() : DsnSettings.SFX();
         this.triggerTypeList = [...triggerTypeList, ...DiceSFXManager.EXTRA_TRIGGER_TYPE];
         foundry.utils.mergeObject(this.possibleResultList, DiceSFXManager.EXTRA_TRIGGER_RESULTS, { applyOperators: true });
 
@@ -550,10 +542,14 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         const navAppearance = {};
         for (const diceType of tabsList) {
             const slot = appearance[diceType] ?? {};
+            //sparse slots (package defaults, custom term sync) must show what they inherit or a save writes the select defaults
             if (!roleMode && diceType != "global") {
-                for (const field of ["labelColor", "diceColor", "outlineColor", "edgeColor"]) {
+                const inheritsSystem = !slot.system;
+                for (const field of ["system", "colorset", "texture", "material", "font", "labelColor", "diceColor", "outlineColor", "edgeColor"]) {
                     if (!slot[field]) slot[field] = appearance.global[field];
                 }
+                if (inheritsSystem && !slot.systemSettings && appearance.global.systemSettings)
+                    slot.systemSettings = foundry.utils.deepClone(appearance.global.systemSettings);
             }
             if (slot.system && slot.systemSettings && this.diceFactory.systems.has(slot.system))
                 this.diceFactory.systems.get(slot.system).updateSettings(diceType, slot.systemSettings, role);
@@ -785,7 +781,6 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         }
         this.toggleCustomization();
         this.filterSystems();
-        this.setPreferredOptions();
 
         this._initSlimSelects();
 
@@ -1182,6 +1177,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
             return;
         }
 
+        const saved = DsnSettings.SAVED(game.user);
         if (data.appearance) {
             await game.user.unsetFlag("dice-so-nice", "appearance");
             await game.user.setFlag("dice-so-nice", "appearance", data.appearance);
@@ -1206,15 +1202,17 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         if (data.diceLibrary) {
             await this._importLibraryDice(data.diceLibrary);
         }
+        await DsnSettings.markSaved(game.user, saved, { appearance: !!data.appearance, sfx: !!data.sfxList });
+        game.socket.emit("module.dice-so-nice", { type: "update", user: game.user.id });
     }
 
     async actionGMPushConfig(parts) {
         if (!game.user.isGM) return;
 
-        //collect the GM's current flag values once - offline users get written the same payload
+        //collect the GM's effective values once, package defaults included - offline users get written the same payload
         const payload = {};
         if (parts.appearance) {
-            const appearance = foundry.utils.deepClone(game.user.getFlag("dice-so-nice", "appearance") || {});
+            const appearance = DsnSettings.APPEARANCE(game.user);
             //strip cross-user library die refs - they point at the GM's library and won't resolve for other users
             for (const scope in appearance) {
                 if (!appearance.hasOwnProperty(scope)) continue;
@@ -1226,7 +1224,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
             payload.appearance = appearance;
         }
         if (parts.sfxList) {
-            payload.sfxList = foundry.utils.deepClone(game.user.getFlag("dice-so-nice", "sfxList") || []);
+            payload.sfxList = DsnSettings.SFX_LIST(game.user);
         }
         if (parts.settings) {
             payload.settings = foundry.utils.deepClone(game.user.getFlag("dice-so-nice", "settings") || {});
@@ -1237,10 +1235,12 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         const pushedIds = [];
         for (const user of targets) {
             try {
+                const saved = DsnSettings.SAVED(user);
                 for (const key of Object.keys(payload)) {
                     await user.unsetFlag("dice-so-nice", key);
                     await user.setFlag("dice-so-nice", key, payload[key]);
                 }
+                await DsnSettings.markSaved(user, saved, { appearance: !!parts.appearance, sfx: !!parts.sfxList });
                 pushedIds.push(user.id);
             } catch (err) {
                 console.error(`[Dice So Nice] Failed to push config to ${user.name}:`, err);
@@ -1430,20 +1430,6 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
                 });
             }
         });
-    }
-
-    setPreferredOptions() {
-        if (this.isWorldRole) return;
-        if (!game.user.getFlag("dice-so-nice", "appearance") && !this.document.getFlag("dice-so-nice", "appearance")) {
-            if (this.diceFactory.preferredSystem != "standard") {
-                const el = this.element.querySelector('.tabAppearance[data-tab="global"] [data-system]');
-                if (el) el.value = this.diceFactory.preferredSystem;
-            }
-            if (this.diceFactory.preferredColorset != "custom") {
-                const el = this.element.querySelector('.tabAppearance[data-tab="global"] [data-colorset]');
-                if (el) el.value = this.diceFactory.preferredColorset;
-            }
-        }
     }
 
     //"userId:dieId" => {libraryDieId, libraryDieOwner}
@@ -1855,8 +1841,6 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         let dice = this.showcaseView.findShowcaseDie(pos);
         if (dice) {
             let diceType = this.showcaseView.findRootObject(dice.object).userData;
-            if (!this.document.getFlag("dice-so-nice", "appearance") && (this.diceFactory.preferredSystem != "standard" || this.diceFactory.preferredColorset != "custom"))
-                this.getShowcaseAppearance();
             if (this.element.querySelector(`.dsn-appearance-tabs [data-tab="${diceType}"]`)) {
                 this.activateAppearanceTab(diceType);
             } else {
@@ -1956,6 +1940,10 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
             return this._updateActorAppearance(formData);
         }
 
+        if (this.reset) {
+            return this._clearUserRecord();
+        }
+
         //Remove custom settings if custom isn't selected to prevent losing them in the user save
         let sfxLine = formData.sfxLine;
         if (sfxLine) {
@@ -2015,12 +2003,8 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         }
         let currentSettings = DsnSettings.CONFIG();
 
-        if (this.reset) {
-            await this.document.unsetFlag("dice-so-nice", "roleAppearance");
-        } else {
-            const roleSystemsInUse = await this._writeRoleAppearance();
-            for (const system of roleSystemsInUse) systemsInUse.add(system);
-        }
+        const roleSystemsInUse = await this._writeRoleAppearance();
+        for (const system of roleSystemsInUse) systemsInUse.add(system);
 
         //required
         await game.user.unsetFlag("dice-so-nice", "sfxList");
@@ -2028,7 +2012,8 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         await game.user.unsetFlag("dice-so-nice", "settings");
 
         //system settings won't be merged here because insertValues is false
-        let appearance = foundry.utils.mergeObject(DsnSettings.APPEARANCE(), formData.appearance, { insertKeys: true, insertValues: false, applyOperators: true });
+        //merge on the plain defaults: a die type tab from a package default that the player removed must not come back
+        let appearance = foundry.utils.mergeObject(DsnSettings.DEFAULT_APPEARANCE(), formData.appearance, { insertKeys: true, insertValues: false, applyOperators: true });
 
         //add back system settings and library die refs (mergeObject drops them)
         for (let scope of scopedAppearance) {
@@ -2055,7 +2040,8 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
 
         await game.user.setFlag('dice-so-nice', 'settings', settings);
         await game.user.setFlag("dice-so-nice", "appearance", appearance);
-        await game.user.setFlag("dice-so-nice", "sfxList", sfxLine);
+        await game.user.setFlag("dice-so-nice", "sfxList", sfxLine ?? []);
+        await game.user.setFlag("dice-so-nice", "saved", { appearance: true, sfx: true });
 
         game.socket.emit("module.dice-so-nice", { type: "update", user: game.user.id });
         DiceSFXManager.init();
@@ -2071,6 +2057,31 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         } else {
             game.dice3d.update(settings);
         }
+    }
+
+    //save after a reset: clear the player's settings so they start from the package defaults again
+    async _clearUserRecord() {
+        const currentSettings = DsnSettings.CONFIG();
+        for (const key of ["saved", "sfxList", "appearance", "roleAppearance", "settings"])
+            await game.user.unsetFlag("dice-so-nice", key);
+        //no field in this form for these two
+        const kept = {};
+        if (currentSettings.rollingArea) kept.rollingArea = currentSettings.rollingArea;
+        if (currentSettings.protectPersistent) kept.protectPersistent = currentSettings.protectPersistent;
+        if (!foundry.utils.isEmpty(kept))
+            await game.user.setFlag("dice-so-nice", "settings", kept);
+
+        game.socket.emit("module.dice-so-nice", { type: "update", user: game.user.id });
+        DiceSFXManager.init();
+        for (const system of this.diceFactory.systems.values())
+            system.loadSettings();
+        ui.notifications.info(game.i18n.localize("DICESONICE.saveMessage"));
+
+        const settings = DsnSettings.CONFIG();
+        if (Utils.RELOAD_REQUIRED_IF_MODIFIED.some(setting => settings[setting] != currentSettings[setting]))
+            foundry.applications.settings.SettingsConfig.reloadConfirm();
+        else
+            game.dice3d.update(settings);
     }
 
     async _updateActorAppearance(formData) {

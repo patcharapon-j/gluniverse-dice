@@ -16,6 +16,7 @@ import { PlayMacro } from './PlayMacro.js';
 import { PlaySoundCustom } from './PlaySoundCustom.js';
 import { PlaySoundEpicFail } from './PlaySoundEpicFail.js';
 import { PlaySoundEpicWin } from './PlaySoundEpicWin.js';
+import { DsnSettings } from '../settings/DsnSettings.js';
 
 export const DiceSFXManager = {
     SFX_MODE_CLASS : {
@@ -39,6 +40,8 @@ export const DiceSFXManager = {
     SFX_CLASS : {},
     EXTRA_TRIGGER_TYPE : [],
     EXTRA_TRIGGER_RESULTS : {},
+    //lines players without a saved setup start with, in registration order
+    DEFAULT_LINES : [],
     renderQueue : [],
     garbageCollector : [],
     GLTFLoader : null,
@@ -62,14 +65,11 @@ export const DiceSFXManager = {
 
         let sfxUniqueList = [];
         game.users.forEach((user) => {
-            let sfxList = user.getFlag("dice-so-nice", "sfxList");
-            if(sfxList){
-                Object.values(sfxList).forEach((line) => {
-                    if(line.specialEffect && !Array.isArray(line.specialEffect)){
-                        sfxUniqueList.push(line.specialEffect);
-                    } 
-                });
-            }
+            DsnSettings.SFX_LIST(user).forEach((line) => {
+                if(line.specialEffect && !Array.isArray(line.specialEffect)){
+                    sfxUniqueList.push(line.specialEffect);
+                } 
+            });
         });
         //remove duplicate
         sfxUniqueList = sfxUniqueList.filter((v, i, a) => a.indexOf(v) === i);
@@ -95,7 +95,7 @@ export const DiceSFXManager = {
                 if(DiceSFXManager.SFX_MODE_CLASS[id]){
                     await DiceSFXManager.addSFXMode(DiceSFXManager.SFX_MODE_CLASS[id]);
                 } else {
-                    return;
+                    return resolve();
                 }
             }
             
@@ -114,6 +114,10 @@ export const DiceSFXManager = {
                         if(sfxInstance.enableGC)
                             DiceSFXManager.garbageCollector.push(sfxInstance);
                     }
+                    resolve();
+                }).catch(err => {
+                    //a broken effect must not block the throw animation
+                    console.error(err);
                     resolve();
                 });
             }, delay);
@@ -155,5 +159,15 @@ export const DiceSFXManager = {
     registerSFXModeClass : function(sfxClass){
         DiceSFXManager.SFX_MODE_CLASS[sfxClass.id] = sfxClass;
         DiceSFXManager.SFX_MODE_LIST[sfxClass.id] = sfxClass.specialEffectName;
+    },
+    //See dice3d.addSFXDefaults for public API
+    addDefaults : function(lines){
+        for(const line of lines){
+            const clean = foundry.utils.deepClone(line);
+            clean.options = {...(clean.options ?? {})};
+            //global lines are a gm choice, a package cannot force them on the table
+            delete clean.options.isGlobal;
+            DiceSFXManager.DEFAULT_LINES.push(clean);
+        }
     }
 }

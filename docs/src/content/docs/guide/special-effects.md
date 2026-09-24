@@ -17,6 +17,8 @@ Each SFX row has a **trigger condition** (which dice and results to match) and a
 
 The **Show other players' special effects** checkbox controls whether SFX from other players play on your screen.
 
+Your game system or a dice module may add default rows. Edit or delete them like any other row.
+
 ## Basic Triggers
 
 By default, each SFX row uses Basic mode: pick a dice type and one or more results from dropdown menus.

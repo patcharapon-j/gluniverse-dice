@@ -27,4 +27,4 @@ These options are only available to the Game Master:
 
 ## Reset
 
-- **Reset to Default** - Reset all settings to their default values. This cannot be undone.
+- **Reset to Default** - Reset all settings to their default values, including the defaults of your game system and dice modules. This cannot be undone.

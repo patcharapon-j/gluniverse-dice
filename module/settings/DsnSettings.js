@@ -1,5 +1,6 @@
 import { Utils } from '../Utils.js';
 import { DiceLibrary } from '../engine/DiceLibrary.js';
+import { DiceSFXManager } from '../sfx/DiceSFXManager.js';
 
 //resolves the effective dsn settings of a user: options, appearance, role scopes and special effects
 //reads game.dice3d lazily for the factory defaults and the box, so it works before the facade exists
@@ -147,11 +148,38 @@ export class DsnSettings {
         };
     }
 
+    //what a player without a saved setup gets, shown by the settings reset
     static ALL_DEFAULT_OPTIONS(user = game.user) {
         let options = foundry.utils.mergeObject(DsnSettings.DEFAULT_OPTIONS, { appearance: DsnSettings.DEFAULT_APPEARANCE(user) }, { applyOperators: true });
-        options.appearance.global.system = game.dice3d.DiceFactory.preferredSystem;
-        options.appearance.global.colorset = game.dice3d.DiceFactory.preferredColorset;
+        foundry.utils.mergeObject(options.appearance, DsnSettings.PACKAGE_APPEARANCE(user), { applyOperators: true });
+        options.specialEffects = DsnSettings.DEFAULT_SFX();
         return options;
+    }
+
+    //did the player save their own look and their own sfx lines? what is not saved comes from the package defaults
+    //players from before 6.4 have no "saved" flag: a form save always wrote appearance.global, so it counts as saved
+    static SAVED(user = game.user) {
+        const marker = user.getFlag("dice-so-nice", "saved");
+        if (marker) return { appearance: !!marker.appearance, sfx: !!marker.sfx };
+        const legacy = !!user.getFlag("dice-so-nice", "appearance")?.global;
+        return { appearance: legacy, sfx: legacy || user.getFlag("dice-so-nice", "sfxList") !== undefined };
+    }
+
+    //"before" is SAVED(user) read before writing the flags: writing appearance.global changes the answer for a pre 6.4 player
+    static async markSaved(user, before, { appearance = false, sfx = false } = {}) {
+        if (!appearance && !sfx) return;
+        await user.setFlag("dice-so-nice", "saved", { appearance: before.appearance || appearance, sfx: before.sfx || sfx });
+    }
+
+    //basic role defaults registered by packages
+    static PACKAGE_APPEARANCE(user = game.user) {
+        const defaults = game.dice3d?.DiceFactory?.getRole("basic")?.defaults;
+        if (!defaults || foundry.utils.isEmpty(defaults)) return {};
+        return Utils.sanitizeAppearance(foundry.utils.duplicate(defaults), user);
+    }
+
+    static DEFAULT_SFX() {
+        return foundry.utils.deepClone(DiceSFXManager.DEFAULT_LINES);
     }
 
     static CONFIG(user = game.user) {
@@ -164,7 +192,11 @@ export class DsnSettings {
 
     static APPEARANCE(user = game.user, actor = null) {
         let userAppearance = user.getFlag("dice-so-nice", "appearance") ? foundry.utils.duplicate(user.getFlag("dice-so-nice", "appearance")) : {};
-        let appearance = foundry.utils.mergeObject(DsnSettings.DEFAULT_APPEARANCE(user), userAppearance, { applyOperators: true });
+        let appearance = DsnSettings.DEFAULT_APPEARANCE(user);
+        //a player who never saved their look starts from the package defaults
+        if (!DsnSettings.SAVED(user).appearance)
+            appearance = foundry.utils.mergeObject(appearance, DsnSettings.PACKAGE_APPEARANCE(user), { applyOperators: true });
+        appearance = foundry.utils.mergeObject(appearance, userAppearance, { applyOperators: true });
         delete appearance.dimensions;
         if (actor) {
             let actorAppearance = actor.getFlag("dice-so-nice", "appearance");
@@ -216,16 +248,17 @@ export class DsnSettings {
         return context;
     }
 
+    //the sfx lines of a user, without the showOthersSFX filter of SFX()
+    static SFX_LIST(user = game.user) {
+        if (!DsnSettings.SAVED(user).sfx) return DsnSettings.DEFAULT_SFX();
+        const sfxArray = user.getFlag("dice-so-nice", "sfxList");
+        return Array.isArray(sfxArray) ? foundry.utils.duplicate(sfxArray) : [];
+    }
+
     static SFX(user = game.user) {
-        let sfxArray;
-        if (DsnSettings.CONFIG().showOthersSFX || user.id == game.user.id)
-            sfxArray = user.getFlag("dice-so-nice", "sfxList") ? foundry.utils.duplicate(user.getFlag("dice-so-nice", "sfxList")) : [];
-        else
-            sfxArray = [];
-        if (!Array.isArray(sfxArray)) {
-            sfxArray = [];
-        }
-        return sfxArray;
+        if (!DsnSettings.CONFIG().showOthersSFX && user.id != game.user.id)
+            return [];
+        return DsnSettings.SFX_LIST(user);
     }
 
     /**
@@ -243,12 +276,6 @@ export class DsnSettings {
             }
         });
         let config = foundry.utils.mergeObject({ appearance: DsnSettings.APPEARANCE(user, actor) }, { specialEffects: specialEffects }, { applyOperators: true });
-        if (dicefactory && !user.getFlag("dice-so-nice", "appearance") && !actor?.getFlag("dice-so-nice", "appearance")) {
-            if (dicefactory.preferredSystem != "standard")
-                config.appearance.global.system = dicefactory.preferredSystem;
-            if (dicefactory.preferredColorset != "custom")
-                config.appearance.global.colorset = dicefactory.preferredColorset;
-        }
         config.diceLibrary = DiceLibrary.getLibraryForUser(user);
         config.roleContext = DsnSettings.ROLE_CONTEXT(user, actor);
         return config;

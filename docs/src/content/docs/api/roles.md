@@ -34,7 +34,9 @@ Declaring `role` through `getDSNProperties()` makes Dice So Nice! ignore `.type`
 
 ## Registering a role
 
-Systems and modules register roles from the `diceSoNiceReady` hook with `dice3d.addRole(role, { package })`. The package id is optional and only used in conflict warnings. Registering an id that already exists merges into it.
+Systems and modules register roles from the `diceSoNiceReady` hook with `dice3d.addRole(role, { package })`. The package id is optional. Registering an id that already exists merges into it. When two packages set the same default field, the last one wins.
+
+Registering `basic` with `defaults` gives regular dice a default look for new players, see [Basic dice](#basic-dice).
 
 ```javascript
 Hooks.once('diceSoNiceReady', (dice3d) => {
@@ -74,7 +76,7 @@ A role record has the following fields:
 
 ## Roles and dice systems
 
-A `DiceSystem` can carry default appearances for roles, and can be limited to the pickers of some roles. This is how a dice set ships a different 3D model for some roles. See [Role defaults on a dice preset](/foundryvtt-dice-so-nice/api/dice-systems/#role-defaults-on-a-dice-preset) and [Limiting a system to some roles](/foundryvtt-dice-so-nice/api/dice-systems/#limiting-a-system-to-some-roles).
+A `DiceSystem` can set default looks for roles with `setRoleDefaults`, and be listed only for some roles with `includeRoles` and `excludeRoles`. This is how a dice set ships a different 3D model for some roles. See [Role defaults on a dice preset](/foundryvtt-dice-so-nice/api/dice-systems/#role-defaults-on-a-dice-preset) and [Limiting a system to some roles](/foundryvtt-dice-so-nice/api/dice-systems/#limiting-a-system-to-some-roles).
 
 ## Appearance resolution
 
@@ -82,12 +84,16 @@ For a die in a role, each appearance field is resolved separately and the first 
 
 1. the player's own appearance for that role, when the role is customizable
 2. the world appearance set by the GM in the Dice Roles table
-3. the defaults registered with `addRole` or `roleDefaults`
+3. the defaults registered with `addRole` or `setRoleDefaults`
 4. the player's basic global appearance
 
 At each step the slot of the die type is read before the global slot. Per-actor appearance and the "Force roll appearance to owner" setting apply to roles the same way they apply to basic dice. A die's own `options.appearance`, when a system sets one, is merged last and wins over the whole role resolution.
 
 Role appearances can also reference a die from the [Dice Library](/foundryvtt-dice-so-nice/guide/dice-library/). World appearances reference dice from the world library, which the GM edits and every client can read.
+
+### Basic dice
+
+Basic dice don't follow this list: they use the player's own settings. Defaults registered for `basic` are only the look a player starts with.
 
 ## Built-in roles
 

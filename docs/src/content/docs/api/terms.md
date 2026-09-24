@@ -55,8 +55,13 @@ Hooks.once('init', async function () {
 Now that your new die is registered in Foundry, Dice So Nice! will automatically detect it. Customize its appearance using the [Customization API](/foundryvtt-dice-so-nice/api/customization/).
 [Check the Customization API for more options](/foundryvtt-dice-so-nice/api/customization/)
 ```javascript
+import { DiceSystem } from '../dice-so-nice/api.js';
+
 Hooks.once('diceSoNiceReady', (dice3d) => {
-    dice3d.addSystem({ id: 'szimfonia', name: 'Szimfonia' }, 'preferred');
+    const szimfonia = new DiceSystem('szimfonia', 'Szimfonia');
+    // new players start with this set on the ds die
+    szimfonia.setRoleDefaults('basic', { ds: { system: 'szimfonia' } });
+    dice3d.addSystem(szimfonia);
     dice3d.addDicePreset({
         type: 'ds',
         labels: [

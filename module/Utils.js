@@ -1,5 +1,6 @@
 import { TEXTURELIST, COLORSETS } from './engine/DiceColors.js';
 import { DiceLibrary } from './engine/DiceLibrary.js';
+import { DsnSettings } from './settings/DsnSettings.js';
 
 /**
  * Generic utilities class...
@@ -413,6 +414,7 @@ export class Utils {
         let savesObject = game.user.getFlag("dice-so-nice", "saves");
         let save = new Map(Object.entries(savesObject)).get(name);
 
+        const saved = DsnSettings.SAVED(game.user);
         if (save.appearance) {
             await game.user.unsetFlag("dice-so-nice", "appearance");
             await game.user.setFlag("dice-so-nice", "appearance", save.appearance);
@@ -427,9 +429,11 @@ export class Utils {
             await game.user.unsetFlag("dice-so-nice", "sfxList");
             await game.user.setFlag("dice-so-nice", "sfxList", save.sfxList);
         }
+        //write the marker before the settings block, it can reload the page
+        await DsnSettings.markSaved(game.user, saved, { appearance: !!save.appearance, sfx: !!save.sfxList });
         if (save.settings) {
             //For each Utils.RELOAD_REQUIRED_IF_MODIFIED check if the value has changed and reload if so
-            let settings = game.user.getFlag("dice-so-nice", "settings");
+            let settings = game.user.getFlag("dice-so-nice", "settings") ?? {};
             let reloadRequired = false;
             Utils.RELOAD_REQUIRED_IF_MODIFIED.forEach(key => {
                 if (settings.hasOwnProperty(key) && save.settings.hasOwnProperty(key) && settings[key] != save.settings[key]) {
@@ -448,6 +452,7 @@ export class Utils {
             await game.user.setFlag("dice-so-nice", "diceLibrary", save.diceLibrary);
             await game.dice3d.diceLibrary.load();
         }
+        game.socket.emit("module.dice-so-nice", { type: "update", user: game.user.id });
         ui.notifications.info(game.i18n.format("DICESONICE.loadMessage", { name }));
     }
 

@@ -53,6 +53,45 @@ r.dice[0].options.sfx = { id: 'fate4df', result: r.result };
 r.toMessage();
 ```
 
+## Default special effects
+Your package can give new players default special effect lines. Players find them in their **Special Effects** settings and can edit or delete them like their own lines.
+
+With a `DiceSystem`, add one line per call with `addSFXDefault`:
+
+```javascript
+import { DiceSystem } from '../dice-so-nice/api.js';
+
+Hooks.once('diceSoNiceReady', (dice3d) => {
+    const pack = new DiceSystem('my-dice', 'My Dice', 'default', 'My Dice Pack');
+    pack.addSFXDefault({ diceType: 'd20', onResult: ['20'], specialEffect: 'PlayAnimationParticleSparkles' });
+    dice3d.addSystem(pack);
+});
+```
+
+Without a `DiceSystem`, use `dice3d.addSFXDefaults`:
+
+```javascript
+Hooks.once('diceSoNiceReady', (dice3d) => {
+    dice3d.addSFXDefaults([
+        { diceType: 'd20', onResult: ['20'], specialEffect: 'PlaySoundEpicWin' },
+        { mode: 'advanced', formula: 'd20 == 1', specialEffect: 'PlaySoundEpicFail' }
+    ]);
+});
+```
+
+A line has the same fields as a line in the settings:
+
+- **diceType** - a die type (`"d20"`) or the id of a [custom trigger](#adding-a-type-of-trigger).
+- **onResult** - the results that play the effect (`["20"]`, `["critical"]`).
+- **specialEffect** - the effect id, see [`getSFXModes()`](#listing-available-special-effects).
+- **options** (optional) - the effect options, for example `{ path: 'modules/my-module/sounds/crit.ogg' }` for `PlaySoundCustom`.
+
+For an advanced line, replace `diceType` and `onResult` with `mode: 'advanced'` and a [formula](/foundryvtt-dice-so-nice/guide/special-effects/#advanced-triggers-formulas).
+
+:::note[Players who already saved their settings]
+Default lines only go to players who never saved their special effects.
+:::
+
 ## Triggering a special effect
 You can also pass a fully defined special effect to a roll that will be played regardless of the users' settings.
 We recommend to system developers to add a setting for users to disable these automated effects if they wish to.

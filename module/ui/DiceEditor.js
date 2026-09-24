@@ -54,13 +54,13 @@ export class DiceEditor extends HandlebarsApplicationMixin(ApplicationV2) {
             this.libraryDie = foundry.utils.deepClone(libraryDie);
             this.isNew = false;
         } else {
-            //init from current appearance, prefer live DiceConfig form values over persisted flag
+            //init from current appearance, prefer live DiceConfig form values over the user settings
             const factory = game.dice3d.box.dicefactory;
             const diceConfig = options.diceConfig || null;
             const showcase = diceConfig ? diceConfig.getShowcaseAppearance() : null;
             const appearances = showcase
                 ? showcase.appearance
-                : (game.user.getFlag("dice-so-nice", "appearance") || {});
+                : DsnSettings.APPEARANCE(game.user);
             const roleNotation = DsnSettings._roleNotation(showcase?.role);
             let resolved = factory.getAppearanceForDice(appearances, dieType, roleNotation, showcase?.roleContext ?? null);
 
