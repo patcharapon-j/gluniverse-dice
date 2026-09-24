@@ -251,7 +251,7 @@
     "DICESONICE.TourMainTitleGotoDiceSoNiceSettings": "3D-Würfeleinstellungen",
     "DICESONICE.TourMainContentGotoDiceSoNiceSettings": "Öffne deine persönlichen 3D-Würfeleinstellungen, um deine Würfel anzupassen.",
     "DICESONICE.TourMainTitleShow3DDice": "Wo die Magie stattfindet",
-    "DICESONICE.TourMainContentShow3DDice": "Dies ist die 3D-Würfelvorschau. Hier kannst du deine eigenen Würfel sehen. Jede SpielerIn hat ihre eigenen Würfel. Du kannst einen Würfel anklicken, um diesen anzupassen.",
+    "DICESONICE.TourMainContentShow3DDice": "Dies ist die 3D-Würfelvorschau. Hier kannst du deine Würfel sehen. Jede SpielerIn hat ihre eigenen Würfel. Du kannst einen Würfel anklicken, um diesen anzupassen.",
     "DICESONICE.TourMainTitleShowAppearance": "Aussehen",
     "DICESONICE.TourMainContentShowAppearance": "Unterhalb der Vorschau kannst du das Aussehen deiner Würfel anpassen. Durchsuche die verfügbaren Designs oder erstelle deine eigenen.",
     "DICESONICE.TourMainTitleShowPreferences": "Präferenzen",
@@ -305,5 +305,6 @@
     "DICESONICE.glyphPicker.tabEmoji": "Emoji",
     "DICESONICE.glyphPicker.cat.astronomy": "Astronomie",
     "DICESONICE.glyphPicker.cat.weather": "Wetter",
-    "DICESONICE.glyphPicker.cat.nature": "Natur"
+    "DICESONICE.glyphPicker.cat.nature": "Natur",
+    "DICESONICE.advancedGlass": "Erweitertes Transparenz-Rendering"
 }
