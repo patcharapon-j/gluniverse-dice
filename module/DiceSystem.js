@@ -60,10 +60,9 @@ export class DiceSystem {
         this._settings = [];
         this._scopedSettings = new Map();
         this._roleDefaults = {};
-        this._sfxDefaults = [];
         this._includeRoles = null;
         this._excludeRoles = null;
-        //set by the dice factory, later adder calls forward straight to the registries
+        //set by the dice factory, later setRoleDefaults calls forward straight to the roles
         this._registered = false;
 
         this._listeners = [];
@@ -101,37 +100,25 @@ export class DiceSystem {
     }
 
     set roleDefaults(value) {
-        this._roleDefaults = {};
-        for (const [roleId, scope] of Object.entries(value ?? {}))
-            this.setRoleDefaults(roleId, scope);
+        this._roleDefaults = (value && typeof value === "object") ? value : {};
     }
 
     /**
-     * Set the default look of a role for this package.
+     * Make this system the default for a role.
      * Can be called before or after the system is added. The basic look is what players start with,
      * until they save their own dice settings.
      * @param {string} roleId - a role id ("basic", "hope", "fire"...)
-     * @param {Object} scope - `{ global?: {...}, d4?: {...}, ... }`, each slot accepts the appearance
-     *   fields (colorset, system, texture, material, font, labelColor, diceColor, outlineColor, edgeColor, systemSettings)
+     * @param {Object} [scope] - `{ global?: {...}, d4?: {...}, ... }` to limit the system to some die types, or to add
+     *   look fields (colorset, texture, material, font, labelColor, diceColor, outlineColor, edgeColor, systemSettings).
+     *   Every slot uses this system. Without scope, the global slot does.
      */
-    setRoleDefaults(roleId, scope) {
+    setRoleDefaults(roleId, scope = {}) {
         const slots = foundry.utils.deepClone(scope);
+        if (foundry.utils.isEmpty(slots)) slots.global = {};
+        for (const fields of Object.values(slots)) fields.system = this.id;
         this._roleDefaults[roleId] = foundry.utils.mergeObject(this._roleDefaults[roleId] ?? {}, slots, { inplace: false });
         if (this._registered)
             game.dice3d.addRole({ id: roleId, defaults: slots }, { package: this.id });
-    }
-
-    /**
-     * Declare a special effect line that players without a saved dice setup start with.
-     * Can be called before or after the system is added. Lines from several packages add up.
-     * @param {Object} line - `{ diceType, onResult: [String], specialEffect, options? }`, or
-     *   `{ mode: "advanced", formula, specialEffect, options? }`
-     */
-    addSFXDefault(line) {
-        if (this._registered)
-            game.dice3d.addSFXDefaults([line]);
-        else
-            this._sfxDefaults.push(line);
     }
 
     /**

@@ -56,19 +56,7 @@ r.toMessage();
 ## Default special effects
 Your package can give new players default special effect lines. Players find them in their **Special Effects** settings and can edit or delete them like their own lines.
 
-With a `DiceSystem`, add one line per call with `addSFXDefault`:
-
-```javascript
-import { DiceSystem } from '../dice-so-nice/api.js';
-
-Hooks.once('diceSoNiceReady', (dice3d) => {
-    const pack = new DiceSystem('my-dice', 'My Dice', 'default', 'My Dice Pack');
-    pack.addSFXDefault({ diceType: 'd20', onResult: ['20'], specialEffect: 'PlayAnimationParticleSparkles' });
-    dice3d.addSystem(pack);
-});
-```
-
-Without a `DiceSystem`, use `dice3d.addSFXDefaults`:
+Register them with `dice3d.addSFXDefaults`:
 
 ```javascript
 Hooks.once('diceSoNiceReady', (dice3d) => {

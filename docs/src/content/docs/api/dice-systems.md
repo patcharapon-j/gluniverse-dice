@@ -22,7 +22,7 @@ const mySystem = new DiceSystem(id, name, 'default', group);
 dice3d.addSystem(mySystem);
 ```
 
-Adding a system makes it a choice in the players' dice settings. To make it the look new players start with, use [`setRoleDefaults`](#role-defaults-on-a-dice-preset).
+Adding a system makes it a choice in the players' dice settings. To make it the look new players start with, use [`setRoleDefaults`](#making-a-system-the-default-for-a-role).
 
 :::note[Legacy]
 Older code may pass `"preferred"` as the mode, or as the second argument of `dice3d.addSystem`. It still works, but new code should use `setRoleDefaults`.
@@ -42,26 +42,26 @@ const HDSystem = new DiceSystem(
 dice3d.addSystem(HDSystem);
 ```
 
-## Role defaults on a dice preset
+## Making a system the default for a role
 
-Use `setRoleDefaults(roleId, scope)` to set the default look of a [dice role](/foundryvtt-dice-so-nice/api/roles/). The `basic` role is the look of regular dice: set it to give new players your dice right away.
+Use `setRoleDefaults(roleId)` to make your system the default for a [dice role](/foundryvtt-dice-so-nice/api/roles/). The `basic` role is the look of regular dice: set it to give new players your dice right away.
 
 ```javascript
 import { DiceSystem } from '../dice-so-nice/api.js';
 
 Hooks.once('diceSoNiceReady', (dice3d) => {
     const pack = new DiceSystem('my-dice', 'My Dice', 'default', 'My Dice Pack');
-    pack.setRoleDefaults('basic', { global: { system: 'my-dice', colorset: 'my-colorful-theme' } });
-    pack.setRoleDefaults('my-role1', { global: { system: 'my-dice', colorset: 'my-dark-theme' } });
-    pack.setRoleDefaults('my-role2', {
-        global: { system: 'my-dice' },
-        d12: { material: 'metal' }
-    });
+    // regular dice
+    pack.setRoleDefaults('basic');
+    // with a matching colorset
+    pack.setRoleDefaults('my-role1', { global: { colorset: 'my-dark-theme' } });
+    // only the d20 of this role
+    pack.setRoleDefaults('my-role2', { d20: {} });
     dice3d.addSystem(pack);
 });
 ```
 
-`scope` has a `global` slot and optional slots per die type (`d4`, `d20`...). Each slot accepts `colorset`, `system`, `texture`, `material`, `font`, `labelColor`, `diceColor`, `outlineColor`, `edgeColor` and `systemSettings`. Leave out what you don't want to set.
+The second argument is optional. Its `global` slot and die type slots (`d4`, `d20`...) accept `colorset`, `texture`, `material`, `font`, `labelColor`, `diceColor`, `outlineColor`, `edgeColor` and `systemSettings`. Every slot you give uses your system.
 
 :::note
 When two packages set the same field of the same role, the last one wins.
@@ -71,7 +71,7 @@ When two packages set the same field of the same role, the last one wins.
 The `basic` look is only a starting point: players who already saved their dice settings keep their own look.
 :::
 
-No `DiceSystem` in your package? Use [`addRole`](/foundryvtt-dice-so-nice/api/roles/#registering-a-role) with the same defaults: `dice3d.addRole({ id: 'basic', defaults: { global: { colorset: 'my-colorful-theme' } } }, { package: 'my-module' })`.
+To set a role's look without a system of your own, like a colorset from a theme module, use [`addRole`](/foundryvtt-dice-so-nice/api/roles/#registering-a-role): `dice3d.addRole({ id: 'basic', defaults: { global: { colorset: 'my-colorful-theme' } } }, { package: 'my-module' })`.
 
 To also give new players a special effect, see [Default special effects](/foundryvtt-dice-so-nice/api/sfx/#default-special-effects).
 
@@ -88,11 +88,11 @@ import { DiceSystem } from '../dice-so-nice/api.js';
 Hooks.once('diceSoNiceReady', (dice3d) => {
     const base = new DiceSystem('my-dice', 'My Dice', 'default', 'My Dice Pack');
     base.includeRoles('basic');
-    base.setRoleDefaults('basic', { global: { system: 'my-dice' } });
+    base.setRoleDefaults('basic');
 
     const variant = new DiceSystem('my-dice-role1', 'My Dice', 'default', 'My Dice Pack');
     variant.includeRoles('my-role1');
-    variant.setRoleDefaults('my-role1', { global: { system: 'my-dice-role1' } });
+    variant.setRoleDefaults('my-role1');
 
     dice3d.addSystem(base);
     dice3d.addSystem(variant);

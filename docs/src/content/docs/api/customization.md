@@ -260,7 +260,7 @@ You can create custom colorsets either to give more choices to players in the co
  */
 dice3d.addColorset(colorset);
 ```
-Adding a colorset makes it a choice in the players' theme list. To make it the theme new players start with, use [`setRoleDefaults`](/foundryvtt-dice-so-nice/api/dice-systems/#role-defaults-on-a-dice-preset).
+Adding a colorset makes it a choice in the players' theme list. To make it the theme new players start with, register it as a `basic` default with [`addRole`](/foundryvtt-dice-so-nice/api/roles/#registering-a-role): `dice3d.addRole({ id: 'basic', defaults: { global: { colorset: 'my-colorset' } } }, { package: 'my-module' })`.
 
 The `colorset` parameter has the following attributes:
 - **name** A string ID for the colorset

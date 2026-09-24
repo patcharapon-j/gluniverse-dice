@@ -26,7 +26,7 @@ export class Dice3D {
      * The id is to be used with addDicePreset
      * The name can be a localized string
      * @param {Object} system {id, name, group} or instance of DiceSystem
-     * @param {String} mode "default" or "preferred". Kept for compatibility: "preferred" is a basic role default, use DiceSystem.setRoleDefaults("basic", ...) instead.
+     * @param {String} mode "default" or "preferred". Kept for compatibility: "preferred" is a basic role default, use DiceSystem.setRoleDefaults("basic") instead.
      * @param {String} group Group to display in the dice selector. Can be any string, like the dice maker name or a brand
      */
     addSystem(system, mode = "default") {
@@ -162,7 +162,7 @@ export class Dice3D {
     /**
      * Add a colorset (theme)
      * @param {Object} colorset 
-     * @param {String} mode = "default", "preferred". Kept for compatibility: "preferred" is a basic role default, use addRole or DiceSystem.setRoleDefaults instead.
+     * @param {String} mode = "default", "preferred". Kept for compatibility: "preferred" is a basic role default, use addRole instead.
      */
     async addColorset(colorset, mode = "default") {
         let defaultValues = {
@@ -213,7 +213,7 @@ export class Dice3D {
     /**
      * Register special effect lines that players without a saved dice setup start with.
      * They show in the player settings as ordinary lines the player can edit or delete.
-     * Lines from several packages add up. For a package that ships a dice set, DiceSystem.addSFXDefault does the same.
+     * Lines from several packages add up.
      * @param {Array<Object>} lines - `{ diceType, onResult: [String], specialEffect, options? }`, or
      *   `{ mode: "advanced", formula, specialEffect, options? }`. diceType is a die type ("d20") or a trigger id
      *   registered with addSFXTrigger, specialEffect a mode id from getSFXModes

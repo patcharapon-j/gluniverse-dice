@@ -76,7 +76,7 @@ A role record has the following fields:
 
 ## Roles and dice systems
 
-A `DiceSystem` can set default looks for roles with `setRoleDefaults`, and be listed only for some roles with `includeRoles` and `excludeRoles`. This is how a dice set ships a different 3D model for some roles. See [Role defaults on a dice preset](/foundryvtt-dice-so-nice/api/dice-systems/#role-defaults-on-a-dice-preset) and [Limiting a system to some roles](/foundryvtt-dice-so-nice/api/dice-systems/#limiting-a-system-to-some-roles).
+A `DiceSystem` can make itself the default for roles with `setRoleDefaults`, and be listed only for some roles with `includeRoles` and `excludeRoles`. This is how a dice set ships a different 3D model for some roles. See [Making a system the default for a role](/foundryvtt-dice-so-nice/api/dice-systems/#making-a-system-the-default-for-a-role) and [Limiting a system to some roles](/foundryvtt-dice-so-nice/api/dice-systems/#limiting-a-system-to-some-roles).
 
 ## Appearance resolution
 
