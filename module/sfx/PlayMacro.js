@@ -28,7 +28,7 @@ export class PlayMacro extends DiceSFX {
         };
 
         try {
-            await macro.execute({ messageId, roll, dsnDie, playSFX });
+            await macro.execute({ messageId, roll, dsnDie, dicemesh, playSFX });
         } catch (err) {
             console.error(`[Dice So Nice] SFX macro "${macro.name}" threw an error:`, err);
         }

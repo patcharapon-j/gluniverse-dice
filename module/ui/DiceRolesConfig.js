@@ -132,8 +132,7 @@ export class DiceRolesConfig extends HandlebarsApplicationMixin(ApplicationV2) {
             this._initRows();
         }
 
-        const systemList = Utils.prepareSystemList();
-        const presetOptions = Object.entries(systemList).map(([id, cfg]) => ({ id, name: cfg.label }));
+        const presetOptions = (row) => Object.entries(Utils.prepareSystemList(row.id, row.system)).map(([id, cfg]) => ({ id, name: cfg.label }));
 
         const colorsetList = Utils.prepareColorsetList();
         const colorsetGroups = {};
@@ -169,7 +168,7 @@ export class DiceRolesConfig extends HandlebarsApplicationMixin(ApplicationV2) {
                 hasModifiers: r.modifiers.length > 0,
                 typesText: r.typesText,
                 isCustomScope: r.isCustomScope,
-                presets: presetOptions.map(p => ({ ...p, selected: !r.isCustomScope && p.id === r.system })),
+                presets: presetOptions(r).map(p => ({ ...p, selected: !r.isCustomScope && p.id === r.system })),
                 presetBlankSelected: !r.isCustomScope && !r.system,
                 colorsetGroups: colorsetGroupList.map(g => ({
                     group: g.group,

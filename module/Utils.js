@@ -1,5 +1,6 @@
 import { TEXTURELIST, COLORSETS } from './engine/DiceColors.js';
 import { DiceLibrary } from './engine/DiceLibrary.js';
+import { DsnSettings } from './settings/DsnSettings.js';
 
 /**
  * Generic utilities class...
@@ -25,7 +26,7 @@ export class Utils {
         return ticker;
     }
 
-    static DATA_FORMAT_VERSION = "6.3";
+    static DATA_FORMAT_VERSION = "6.4";
     static RELOAD_REQUIRED_IF_MODIFIED = ["canvasZIndex", "bumpMapping", "useHighDPI", "glow", "antialiasing", "rollingArea", "advancedGlass", "ambiance", "visibility"];
 
     /**
@@ -188,6 +189,18 @@ export class Utils {
             migrated = true;
         }
 
+        if(Utils.isVersionLessThan(formatversion, "6.4")) {
+            //add the "saved" flag
+            await Promise.all(game.users.map(async (user) => {
+                if (user.getFlag("dice-so-nice", "saved")) return;
+                const appearance = !!user.getFlag("dice-so-nice", "appearance")?.global;
+                const sfx = appearance || user.getFlag("dice-so-nice", "sfxList") !== undefined;
+                if (appearance || sfx)
+                    await user.setFlag("dice-so-nice", "saved", { appearance, sfx });
+            }));
+            migrated = true;
+        }
+
         await game.settings.set("dice-so-nice", "formatVersion", Utils.DATA_FORMAT_VERSION);
         if (migrated)
             ui.notifications.info(game.i18n.format("DICESONICE.migrateMessage", { version: Utils.DATA_FORMAT_VERSION }));
@@ -341,9 +354,12 @@ export class Utils {
         return Object.fromEntries(Object.entries(colorsetList).sort((a, b) => a[1].label.localeCompare(b[1].label)));
     };
 
-    static prepareSystemList() {
+    //keep: the saved choice stays listed even when the role filters it out
+    static prepareSystemList(role = null, keep = null) {
         let systems = game.dice3d.box.dicefactory.systems;
-        return [...systems.values()].sort((systemA, systemB) => {
+        //a package may bundle an older copy of DiceSystem without the role lists
+        const listed = role ? [...systems.values()].filter(system => system.id === keep || (system.isAvailableForRole?.(role) ?? true)) : [...systems.values()];
+        return listed.sort((systemA, systemB) => {
             // Direct comparison since we're now working directly with the values
             if (systemA.id === "standard") {
                 return -1;
@@ -424,9 +440,11 @@ export class Utils {
             await game.user.unsetFlag("dice-so-nice", "sfxList");
             await game.user.setFlag("dice-so-nice", "sfxList", save.sfxList);
         }
+        //write the marker before the settings block, it can reload the page
+        await DsnSettings.markSaved(game.user, { appearance: !!save.appearance, sfx: !!save.sfxList });
         if (save.settings) {
             //For each Utils.RELOAD_REQUIRED_IF_MODIFIED check if the value has changed and reload if so
-            let settings = game.user.getFlag("dice-so-nice", "settings");
+            let settings = game.user.getFlag("dice-so-nice", "settings") ?? {};
             let reloadRequired = false;
             Utils.RELOAD_REQUIRED_IF_MODIFIED.forEach(key => {
                 if (settings.hasOwnProperty(key) && save.settings.hasOwnProperty(key) && settings[key] != save.settings[key]) {
@@ -445,6 +463,7 @@ export class Utils {
             await game.user.setFlag("dice-so-nice", "diceLibrary", save.diceLibrary);
             await game.dice3d.diceLibrary.load();
         }
+        game.socket.emit("module.dice-so-nice", { type: "update", user: game.user.id });
         ui.notifications.info(game.i18n.format("DICESONICE.loadMessage", { name }));
     }
 

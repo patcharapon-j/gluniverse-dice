@@ -183,7 +183,7 @@ export class DiceRoleRegistry {
 			return;
 		}
 		const id = role.id;
-		const entry = this._registeredRoles.get(id) ?? {id, package: null, defaults: {}, detectors: {modifiers: [], types: []}, owners: {}};
+		const entry = this._registeredRoles.get(id) ?? {id, package: null, defaults: {}, detectors: {modifiers: [], types: []}};
 		if(role.label !== undefined) entry.label = role.label;
 		if(role.group !== undefined) entry.group = role.group;
 		if(role.customizable !== undefined) entry.customizable = !!role.customizable;
@@ -201,15 +201,7 @@ export class DiceRoleRegistry {
 		if(role.defaults && typeof role.defaults === "object"){
 			for(const [slot, fields] of Object.entries(role.defaults)){
 				if(!fields || typeof fields !== "object") continue;
-				const owners = entry.owners[slot] ??= {};
-				const current = entry.defaults[slot] ?? {};
-				for(const field of Object.keys(fields)){
-					const previous = owners[field];
-					if(previous !== undefined && previous !== packageId && current[field] !== undefined && current[field] !== fields[field])
-						console.warn(`Dice So Nice! | addRole: role "${id}" default "${slot}.${field}" set by "${previous ?? "unknown"}" is overridden by "${packageId ?? "unknown"}"`);
-					owners[field] = packageId;
-				}
-				entry.defaults[slot] = foundry.utils.mergeObject(current, fields, {inplace: false});
+				entry.defaults[slot] = foundry.utils.mergeObject(entry.defaults[slot] ?? {}, fields, {inplace: false});
 			}
 		}
 		if(packageId) entry.package = packageId;

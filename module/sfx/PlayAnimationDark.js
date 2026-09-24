@@ -33,6 +33,8 @@ export class PlayAnimationDark extends DiceSFX {
         this.baseMaterial = this.glowingMesh.material;
         this.glowingMesh.material = this.baseMaterial.clone();
         this.glowingMesh.material.onBeforeCompile = ShaderUtils.applyDiceSoNiceShader;
+        //prevent a shader recompile
+        this.glowingMesh.material.customProgramCacheKey = this.baseMaterial.customProgramCacheKey;
         foundry.audio.AudioHelper.play({
 			src: PlayAnimationDark.sound,
             volume: this.volume

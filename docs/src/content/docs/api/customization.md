@@ -40,36 +40,8 @@ Before using the customization API, you must ensure that "Dice So Nice" is ready
 Your package should also be using es6 modules to be able to import "Dice So Nice" APIs
 
 ## Adding a custom model system (aka dice face preset)
-A system (or "Dice Presets" for players) allows you to store a list of custom dice model and customize it with settings, animations or custom shaders.
-```javascript
-import { DiceSystem } from '../dice-so-nice/api.js';
-/**
- * Register a new system
- * The id is to be used with the addDicePreset method
- * The name can be a localized string
- * The group is a string used to group systems in the list.
- *   Could be the name of the brand or a collection.
- * The mode: "preferred" or "default".
- *   "preferred" enables this system by default until
- *   a user changes it. "default" adds it as a choice.
- * @param {DiceSystem} mySystem
- */
-const mySystem = new DiceSystem(id, name, mode, group);
-dice3d.addSystem(mySystem);
-```
-### More info
-You can do a lot more with "Dice So Nice" systems. Check [Custom shaders](/foundryvtt-dice-so-nice/api/shaders/) and [System settings](/foundryvtt-dice-so-nice/api/system-settings/) to find more.
+See [Dice Systems](/foundryvtt-dice-so-nice/api/dice-systems/).
 
-### Examples
-```javascript
-const HDSystem = new DiceSystem(
-    'trs-housedivided',
-    'A House Divided',
-    'default',
-    'The Rollsmith'
-);
-dice3d.addSystem(HDSystem);
-```
 ## Adding a custom DicePreset (dice faces)
 A custom DicePreset will override a default dice type when its system is selected in the "Dice So Nice" settings.
 Note: the texture files size have to be **256*256 pixels**
@@ -202,6 +174,10 @@ This only works with Foundry VTT v14+ which bundles Font Awesome 7 Pro. For olde
 
 ## Adding a custom physics shape
 
+:::note
+The development of this feature was sponsored by [Metamorphic Digital](https://www.metamorphic-digital.com/). Thank you!
+:::
+
 By default, a DicePreset with a custom 3D model inherits the collision shape of its die type: a rhombic dodecahedron model would still tumble and land like the standard d12. `addDiceShape` registers a named collision shape, and a preset with a custom 3D model can reference it through the `shape` argument of `addDicePreset`. The die then rolls on its own collider, lands flush on its own faces, and reads results from them.
 
 ```javascript
@@ -281,13 +257,11 @@ You can create custom colorsets either to give more choices to players in the co
 /**
  * Add a colorset (theme)
  * @param {Object} colorset (see below)
- * @param {String} mode= "default","preferred"
- * The "mode" parameter have 2 modes :
- * - "default" only register the colorset
- * - "preferred" apply the colorset if the player didn't already change his dice appearance for this world.
  */
-dice3d.addColorset(colorset, mode);
+dice3d.addColorset(colorset);
 ```
+Adding a colorset makes it a choice in the players' theme list. To make it the theme new players start with, use [`setRoleDefaults`](/foundryvtt-dice-so-nice/api/dice-systems/#role-defaults-on-a-dice-preset).
+
 The `colorset` parameter has the following attributes:
 - **name** A string ID for the colorset
 - **description** Localized string for settings
@@ -333,25 +307,22 @@ These two properties let you ship one set of label or background images and regi
 **Note 2:** If you omit some of these attributes, Dice So Nice! will use the player config instead. For example, omitting "material" uses each player's selected material. This lets users customize slightly even with your colorset. To lock down appearance completely, set every attribute.
 ### Examples
 ```javascript
-dice3d.addColorset(
-    {
-        name: '13a',
-        description: '13th Age Red/Gold',
-        category: '13th Age',
-        foreground: '#9F8003',
-        background: '#9F8',
-        texture: '13Ared',
-        edge: '#9F8003',
-        material: 'chrome',
-        font: 'Arial Black',
-        fontScale: {
-            d6: 1.1,
-            df: 2.5
-        },
-        visibility: 'visible'
+dice3d.addColorset({
+    name: '13a',
+    description: '13th Age Red/Gold',
+    category: '13th Age',
+    foreground: '#9F8003',
+    background: '#9F8',
+    texture: '13Ared',
+    edge: '#9F8003',
+    material: 'chrome',
+    font: 'Arial Black',
+    fontScale: {
+        d6: 1.1,
+        df: 2.5
     },
-    'preferred'
-);
+    visibility: 'visible'
+});
 
 dice3d.addColorset({
     name: 'rainbow',
@@ -462,134 +433,10 @@ r.toMessage();
 ```
 
 ## Dice roles
-
-A **role** is what a die means in your game: `hope`, `wild`, `fire`, `acid`... Every die has exactly one role. `basic` is the default and is what a player's regular appearance settings describe. Every other role resolves to its own appearance, so a `hope` d12 can use a different preset and theme than a basic d12.
-
-Detection runs in this order and the first match wins:
-
-1. **Explicit role** set by the system: `term.options.dsnRole` on a die term, or a `role` path declared through [`getDSNProperties()`](/foundryvtt-dice-so-nice/api/roll/#declaring-roll-properties-with-getdsnproperties) on the Roll class.
-2. **Modifier token** declared by a role (`detectors.modifiers`). The token is matched exactly against the modifier command: `h` matches `h` and `h2`, not `hp`.
-3. **`term.options.type`** then **`term.options.flavor`** matched against `detectors.types` of every role, then against the built-in damage type ids. `Roll.options.type` and `Roll.options.flavor` are merged down into each contained die term, so a system can set them once at the roll level.
-
-Dice that match nothing are `basic`. A player who turns off the **Apply optional dice role appearances** preference sends every *optional* role back to `basic`, whichever way it was detected: built-in damage types and roles created by the GM are optional, registered roles are not unless they say so.
-
-### Tagging dice explicitly
-
-```javascript
-// on a die term
-let r = await new Roll('1d12 + 1d12').evaluate();
-r.dice[0].options.dsnRole = 'hope';
-r.dice[1].options.dsnRole = 'fear';
-r.toMessage();
-
-// from the Roll class, resolved per roll scope
-class DamageRoll extends Roll {
-    getDSNProperties() {
-        return { role: 'options.damageType' };
-    }
-}
-```
-
-Declaring `role` through `getDSNProperties()` makes Dice So Nice! ignore `.type` and `.flavor` for that roll's dice and trust the declared path only. See [Declaring Roll properties with `getDSNProperties`](/foundryvtt-dice-so-nice/api/roll/#declaring-roll-properties-with-getdsnproperties) for the full convention.
-
-### Registering a role
-
-Systems and modules register roles from the `diceSoNiceReady` hook with `dice3d.addRole(role, { package })`. The package id is optional and only used in conflict warnings. Registering an id that already exists merges into it.
-
-```javascript
-Hooks.once('diceSoNiceReady', (dice3d) => {
-    // detected through a roll modifier declared by the system's own die term
-    dice3d.addRole({
-        id: 'hope',
-        label: 'Hope',
-        group: 'My Game',
-        customizable: true,
-        dieTypes: ['d6', 'd12', 'd20'],
-        defaults: { global: { colorset: 'radiant' } },
-        detectors: { modifiers: ['h'] }
-    }, { package: 'my-system' });
-
-    // a damage type detected through the type or flavor of the roll
-    dice3d.addRole({
-        id: 'sacred',
-        label: 'Sacred',
-        group: 'DICESONICE.DamageTypes',
-        optional: true,
-        detectors: { types: ['sacred', 'holy'] },
-        defaults: { global: { colorset: 'radiant' } }
-    }, { package: 'my-system' });
-});
-```
-
-A role record has the following fields:
-
-- **id** - role id (`hope`, `fire`).
-- **label** - display name, can be a localization key.
-- **group** - group shown in the UIs (the name of your game, `"DICESONICE.DamageTypes"`...), can be a localization key.
-- **customizable** - when `true`, players can pick this role in their dice settings and give it their own look. The GM can flip any role from the Dice Roles table.
-- **optional** - when `true`, the player preference "Apply optional dice role appearances" turns this role off. Defaults to `false`: set it on roles that are a coloring convention laid over the player's dice (damage types) rather than dice of their own. The GM can flip it from the Dice Roles table.
-- **dieTypes** - optional die type whitelist (`["d6", "d12"]`). Only narrows what the player settings show for this role; it does not affect detection or resolution.
-- **defaults** - the default appearance of the role: `{ global?: {...}, d4?: {...}, d12?: {...} }`. Each slot accepts the same fields as a player appearance (`colorset`, `system`, `texture`, `material`, `font`, `labelColor`, `diceColor`, `outlineColor`, `edgeColor`...). Missing fields are inherited.
-- **detectors** - `{ modifiers?: [...], types?: [...] }`. `modifiers` are roll modifier tokens declared by the system's own dice term class, `types` are matched against the type or flavor of the roll.
-
-### Role defaults on a dice preset
-
-A `DiceSystem` can carry role defaults. They are registered when the system is added, with the same merge rule as `addRole`:
-
-```javascript
-import { DiceSystem } from '../dice-so-nice/api.js';
-
-const pack = new DiceSystem('my-dice', 'My Dice', 'default', 'My Dice Pack');
-pack.roleDefaults = {
-    hope: { global: { system: 'my-dice', colorset: 'my-hope-theme' } },
-    fear: { global: { system: 'my-dice', colorset: 'my-fear-theme' } }
-};
-dice3d.addSystem(pack);
-```
-
-### Appearance resolution
-
-For a die in a role, each appearance field is resolved separately and the first value found wins:
-
-1. the player's own appearance for that role, when the role is customizable
-2. the world appearance set by the GM in the Dice Roles table
-3. the defaults registered with `addRole` or `roleDefaults`
-4. the player's basic global appearance
-
-At each step the slot of the die type is read before the global slot. Per-actor appearance and the "Force roll appearance to owner" setting apply to roles the same way they apply to basic dice. A die's own `options.appearance`, when a system sets one, is merged last and wins over the whole role resolution.
-
-Role appearances can also reference a die from the [Dice Library](/foundryvtt-dice-so-nice/guide/dice-library/). World appearances reference dice from the world library, which the GM edits and every client can read.
-
-### Built-in roles
-
-The following damage types are built-in roles in the "Damage Types" group: `fire`, `acid`, `cold`, `radiant`, `poison`, `thunder`, `lightning`, `air`, `water`, `earth`, `force`, `psychic`, `necrotic`, `ice`. Each is detected through its id and defaults to the matching colorset.
+See [Dice Roles](/foundryvtt-dice-so-nice/api/roles/).
 
 ## Preloading Presets
-
-If your system registers internal presets that users may never select in their settings, you can force-preload them to avoid a lag on the first roll that uses them. Call this once after registering your presets from the `diceSoNiceReady` hook.
-
-```javascript
-/**
- * Force preload of every dice preset registered under a given system id.
- * Useful for systems that register internal presets users may never select
- * in their settings, avoiding first-roll lag.
- * @param {String} systemId
- * @returns {Promise<void>}
- */
-dice3d.preloadPresets(systemId);
-```
-
-### Example
-```javascript
-Hooks.once('diceSoNiceReady', async (dice3d) => {
-    // Register your system and presets first...
-    dice3d.addSystem(mySystem);
-    dice3d.addDicePreset({ type: "d6", labels: [...], system: "my-system" });
-
-    // Then preload them
-    await dice3d.preloadPresets("my-system");
-});
-```
+See [Dice Systems](/foundryvtt-dice-so-nice/api/dice-systems/#preloading-presets).
 
 ## Show all extra dice by default for new users
 If your system make use of the extra dice type (D3, D5, D7, D14, D16, D24, and D30), you can make them visible by default in the dice settings.

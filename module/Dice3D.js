@@ -5,7 +5,7 @@ import { DiceColors, TEXTURELIST, COLORSETS } from './engine/DiceColors.js';
 import { DiceSFXManager } from './sfx/DiceSFXManager.js';
 import { Utils } from './Utils.js';
 import { ThinFilmFresnelMap } from './libs/ThinFilmFresnelMap.js';
-import { TextureLoader } from 'three';
+import { TextureLoader, Vector3 } from 'three';
 import { DiceTourMain } from './tours/DiceTourMain.js';
 import { DiceSFX } from './sfx/DiceSFX.js';
 import { DiceSystem } from './DiceSystem.js';
@@ -26,7 +26,7 @@ export class Dice3D {
      * The id is to be used with addDicePreset
      * The name can be a localized string
      * @param {Object} system {id, name, group} or instance of DiceSystem
-     * @param {Boolean} mode "default,preferred". Default will add the system as a choice. Preferred will be enabled for all users unless they change their settings.
+     * @param {String} mode "default" or "preferred". Kept for compatibility: "preferred" is a basic role default, use DiceSystem.setRoleDefaults("basic", ...) instead.
      * @param {String} group Group to display in the dice selector. Can be any string, like the dice maker name or a brand
      */
     addSystem(system, mode = "default") {
@@ -86,8 +86,7 @@ export class Dice3D {
 
     /**
      * Register or extend a dice role. Registering an existing id merges into it:
-     * detectors are unioned, defaults are merged field by field (last write wins, with a console warning
-     * when a field set by another package is overridden).
+     * detectors are unioned, defaults are merged field by field (the last registration wins).
      * @param {Object} role
      * @param {String} role.id - role id (e.g. "hope", "fire")
      * @param {String} [role.label] - display name, can be a localization key
@@ -99,7 +98,7 @@ export class Dice3D {
      * @param {Object} [role.detectors] - `{ modifiers?: [String], types?: [String] }`. A modifier token must be
      *   declared by a dice term class (Foundry's Die or one in CONFIG.Dice.terms)
      * @param {Object} [options]
-     * @param {String} [options.package] - id of the registering package, used in conflict warnings
+     * @param {String} [options.package] - id of the registering package, shown in the Dice Roles table and in warnings
      */
     addRole(role, options = {}) {
         this.DiceFactory.addRole(role, options);
@@ -163,7 +162,7 @@ export class Dice3D {
     /**
      * Add a colorset (theme)
      * @param {Object} colorset 
-     * @param {Object} mode = "default", "preferred"
+     * @param {String} mode = "default", "preferred". Kept for compatibility: "preferred" is a basic role default, use addRole or DiceSystem.setRoleDefaults instead.
      */
     async addColorset(colorset, mode = "default") {
         let defaultValues = {
@@ -185,8 +184,9 @@ export class Dice3D {
         if (colorset.font && !foundry.applications.settings.menus.FontConfig.getAvailableFonts().includes(colorset.font)) {
             await foundry.applications.settings.menus.FontConfig.loadFont(colorset.font, { editor: false, fonts: [] });
         }
+        //the legacy preferred mode is a basic role default
         if (mode == "preferred")
-            this.DiceFactory.preferredColorset = colorset.name;
+            this.DiceFactory.addRole({ id: "basic", defaults: { global: { colorset: colorset.name } } }, { package: colorset.name });
     }
 
     /**
@@ -194,7 +194,8 @@ export class Dice3D {
      * This trigger can then be pulled by a system, a module or a macro
      * @param {String} id : Identifier of the trigger, ex: fate3df
      * @param {String} name : Localized name of the trigger, ex: Fate Roll
-     * @param {Array(String)} results : Array of possible results for this trigger, ex: ["-3","3","0"]
+     * @param {Array(String|Object)} results : Array of possible results for this trigger, ex: ["-3","3","0"]
+     *        A result can also be an object with a localized name, ex: [{id: "hope", name: "With Hope"}]
      */
     addSFXTrigger(id, name, results) {
         if (DiceSFXManager.EXTRA_TRIGGER_RESULTS[id])
@@ -202,8 +203,23 @@ export class Dice3D {
         DiceSFXManager.EXTRA_TRIGGER_TYPE.push({ id: id, name: name });
         DiceSFXManager.EXTRA_TRIGGER_RESULTS[id] = [];
         results.forEach((res) => {
-            DiceSFXManager.EXTRA_TRIGGER_RESULTS[id].push({ id: res, name: res });
+            if (typeof res === "object")
+                DiceSFXManager.EXTRA_TRIGGER_RESULTS[id].push({ id: String(res.id), name: res.name ?? String(res.id) });
+            else
+                DiceSFXManager.EXTRA_TRIGGER_RESULTS[id].push({ id: res, name: res });
         });
+    }
+
+    /**
+     * Register special effect lines that players without a saved dice setup start with.
+     * They show in the player settings as ordinary lines the player can edit or delete.
+     * Lines from several packages add up. For a package that ships a dice set, DiceSystem.addSFXDefault does the same.
+     * @param {Array<Object>} lines - `{ diceType, onResult: [String], specialEffect, options? }`, or
+     *   `{ mode: "advanced", formula, specialEffect, options? }`. diceType is a die type ("d20") or a trigger id
+     *   registered with addSFXTrigger, specialEffect a mode id from getSFXModes
+     */
+    addSFXDefaults(lines) {
+        DiceSFXManager.addDefaults(lines);
     }
 
     /**
@@ -325,15 +341,19 @@ export class Dice3D {
         this._installPointerCapture();
         this._buildDiceBox();
         this.diceLibrary = new DiceLibrary();
+        DiceSFXManager.init();
 
         if (DsnSettings.CONFIG().visibility === "none") {
             DiceColors.initColorSets();
             Hooks.call("diceSoNiceReady", this);
+            DiceSFXManager.init();
         } else {
             DiceColors.loadTextures(TEXTURELIST, async (images) => {
                 DiceColors.initColorSets();
 
                 Hooks.call("diceSoNiceReady", this);
+                //again with the default lines packages registered in the hook
+                DiceSFXManager.init();
                 await this.DiceFactory._loadFonts();
                 await this.diceLibrary.load();
                 await CustomDiceTerms.applyDefaultAppearances();
@@ -345,7 +365,6 @@ export class Dice3D {
             });
         }
 
-        DiceSFXManager.init();
         this._welcomeMessage();
         this._registerTours();
     }
@@ -504,16 +523,18 @@ export class Dice3D {
         this.dice3dRenderers.board.dispose();
         this.dice3dRenderers.board = null;
 
-        //save previous systems
+        //save previous systems and roles
         const systemBackup = this.DiceFactory.systems;
+        const roleRegistryBackup = this.DiceFactory.roleRegistry;
 
         this.box.clearScene();
         this._buildCanvas();
         this._buildDiceBox();
         this.box.soundManager.preloadSounds();
 
-        // Restore previous systems
+        // Restore previous systems and roles
         this.DiceFactory.systems = systemBackup;
+        this.DiceFactory.roleRegistry = roleRegistryBackup;
     }
 
     _installWelcomeButtons() {
@@ -779,6 +800,23 @@ export class Dice3D {
     enableDebugMode() {
         if(this.box)
             this.box.debugMode = true;
+    }
+
+    /**
+     * Project a die mesh to screen space
+     * @param {Object3D} dicemesh A die mesh, as received by a macro special effect
+     * @returns {{x: Number, y: Number}|null} Viewport coordinates in CSS pixels, null when the 3D box is not ready
+     */
+    getScreenPosition(dicemesh) {
+        const camera = this.box?.camera;
+        if (!camera || !dicemesh?.isObject3D) return null;
+        //the mesh is in a scaled container, so we read the world position
+        const projected = dicemesh.getWorldPosition(new Vector3()).project(camera);
+        const rect = this.canvas.getBoundingClientRect();
+        return {
+            x: rect.left + (projected.x + 1) / 2 * rect.width,
+            y: rect.top + (1 - projected.y) / 2 * rect.height
+        };
     }
 
     /**

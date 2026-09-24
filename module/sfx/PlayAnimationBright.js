@@ -40,6 +40,8 @@ export class PlayAnimationBright extends DiceSFX {
             this.glowingMesh.material.emissiveMap = this.baseMaterial.userData.emissiveMapFull;
         }
         this.glowingMesh.material.onBeforeCompile = ShaderUtils.applyDiceSoNiceShader;
+        //prevent a shader recompile
+        this.glowingMesh.material.customProgramCacheKey = this.baseMaterial.customProgramCacheKey;
         foundry.audio.AudioHelper.play({
             src: PlayAnimationBright.sound,
             volume: this.volume

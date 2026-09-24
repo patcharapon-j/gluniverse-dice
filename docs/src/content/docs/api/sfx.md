@@ -17,8 +17,10 @@ Triggers should be added in the `diceSoNiceReady` [hook](/foundryvtt-dice-so-nic
  * This trigger can then be pulled by a system, a module or a macro
  * @param {String} id : Identifier of the trigger, ex: fate4df
  * @param {String} name : Localized name of the trigger, ex: Fate Roll
- * @param {Array(String)} results : Array of possible results for this trigger, 
+ * @param {Array(String|Object)} results : Array of possible results for this trigger, 
  *        ie: ["-3","3","0"]
+ *        A result can also be an object with a localized name,
+ *        ie: [{id: "hope", name: "With Hope"}]
  * @returns
  */
 game.dice3d.addSFXTrigger(id, name, results);
@@ -31,6 +33,17 @@ game.dice3d.addSFXTrigger('fate4df', 'Fate Roll', [
 ]);
 ```
 
+### Example with named results
+When the results are not numbers, you can give each one a localized name. The `name` is what users see in the special effects settings. The `id` is what `options.sfx.result` must match when [activating the trigger](#activating-a-trigger).
+
+```javascript
+game.dice3d.addSFXTrigger('duality', 'Duality Dice', [
+    { id: 'hope', name: 'With Hope' },
+    { id: 'fear', name: 'With Fear' },
+    { id: 'critical', name: 'Critical' }
+]);
+```
+
 ## Activating a trigger
 To activate a trigger, you have to pass it as options on the targeted DiceTerm in your roll.
 
@@ -39,6 +52,45 @@ let r = await new Roll('4df').evaluate();
 r.dice[0].options.sfx = { id: 'fate4df', result: r.result };
 r.toMessage();
 ```
+
+## Default special effects
+Your package can give new players default special effect lines. Players find them in their **Special Effects** settings and can edit or delete them like their own lines.
+
+With a `DiceSystem`, add one line per call with `addSFXDefault`:
+
+```javascript
+import { DiceSystem } from '../dice-so-nice/api.js';
+
+Hooks.once('diceSoNiceReady', (dice3d) => {
+    const pack = new DiceSystem('my-dice', 'My Dice', 'default', 'My Dice Pack');
+    pack.addSFXDefault({ diceType: 'd20', onResult: ['20'], specialEffect: 'PlayAnimationParticleSparkles' });
+    dice3d.addSystem(pack);
+});
+```
+
+Without a `DiceSystem`, use `dice3d.addSFXDefaults`:
+
+```javascript
+Hooks.once('diceSoNiceReady', (dice3d) => {
+    dice3d.addSFXDefaults([
+        { diceType: 'd20', onResult: ['20'], specialEffect: 'PlaySoundEpicWin' },
+        { mode: 'advanced', formula: 'd20 == 1', specialEffect: 'PlaySoundEpicFail' }
+    ]);
+});
+```
+
+A line has the same fields as a line in the settings:
+
+- **diceType** - a die type (`"d20"`) or the id of a [custom trigger](#adding-a-type-of-trigger).
+- **onResult** - the results that play the effect (`["20"]`, `["critical"]`).
+- **specialEffect** - the effect id, see [`getSFXModes()`](#listing-available-special-effects).
+- **options** (optional) - the effect options, for example `{ path: 'modules/my-module/sounds/crit.ogg' }` for `PlaySoundCustom`.
+
+For an advanced line, replace `diceType` and `onResult` with `mode: 'advanced'` and a [formula](/foundryvtt-dice-so-nice/guide/special-effects/#advanced-triggers-formulas).
+
+:::note[Players who already saved their settings]
+Default lines only go to players who never saved their special effects.
+:::
 
 ## Triggering a special effect
 You can also pass a fully defined special effect to a roll that will be played regardless of the users' settings.

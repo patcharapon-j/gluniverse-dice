@@ -60,6 +60,11 @@ export class DiceSystem {
         this._settings = [];
         this._scopedSettings = new Map();
         this._roleDefaults = {};
+        this._sfxDefaults = [];
+        this._includeRoles = null;
+        this._excludeRoles = null;
+        //set by the dice factory, later adder calls forward straight to the registries
+        this._registered = false;
 
         this._listeners = [];
 
@@ -88,9 +93,7 @@ export class DiceSystem {
     }
 
     /**
-     * Registrant defaults per role, applied through dice3d.addRole when the system is registered.
-     * Shape: `{ <roleId>: { global?: {...}, d4?: {...}, ... } }` where each slot accepts the appearance
-     * fields (colorset, system, texture, material, font, labelColor, diceColor, outlineColor, edgeColor, systemSettings).
+     * Registrant defaults per role. Kept for compatibility
      * @type {Object}
      */
     get roleDefaults() {
@@ -98,7 +101,73 @@ export class DiceSystem {
     }
 
     set roleDefaults(value) {
-        this._roleDefaults = (value && typeof value === "object") ? value : {};
+        this._roleDefaults = {};
+        for (const [roleId, scope] of Object.entries(value ?? {}))
+            this.setRoleDefaults(roleId, scope);
+    }
+
+    /**
+     * Set the default look of a role for this package.
+     * Can be called before or after the system is added. The basic look is what players start with,
+     * until they save their own dice settings.
+     * @param {string} roleId - a role id ("basic", "hope", "fire"...)
+     * @param {Object} scope - `{ global?: {...}, d4?: {...}, ... }`, each slot accepts the appearance
+     *   fields (colorset, system, texture, material, font, labelColor, diceColor, outlineColor, edgeColor, systemSettings)
+     */
+    setRoleDefaults(roleId, scope) {
+        const slots = foundry.utils.deepClone(scope);
+        this._roleDefaults[roleId] = foundry.utils.mergeObject(this._roleDefaults[roleId] ?? {}, slots, { inplace: false });
+        if (this._registered)
+            game.dice3d.addRole({ id: roleId, defaults: slots }, { package: this.id });
+    }
+
+    /**
+     * Declare a special effect line that players without a saved dice setup start with.
+     * Can be called before or after the system is added. Lines from several packages add up.
+     * @param {Object} line - `{ diceType, onResult: [String], specialEffect, options? }`, or
+     *   `{ mode: "advanced", formula, specialEffect, options? }`
+     */
+    addSFXDefault(line) {
+        if (this._registered)
+            game.dice3d.addSFXDefaults([line]);
+        else
+            this._sfxDefaults.push(line);
+    }
+
+    /**
+     * List this system in the dice appearance pickers of these roles only. Calls add up.
+     * @param {...(string|string[])} roleIds - role ids, "basic" included
+     * @return {DiceSystem} this system, for chaining
+     */
+    includeRoles(...roleIds) {
+        this._includeRoles = this._addRoleIds(this._includeRoles, roleIds);
+        return this;
+    }
+
+    /**
+     * Hide this system from the dice appearance pickers of these roles. Wins over includeRoles. Calls add up.
+     * @param {...(string|string[])} roleIds - role ids, "basic" included
+     * @return {DiceSystem} this system, for chaining
+     */
+    excludeRoles(...roleIds) {
+        this._excludeRoles = this._addRoleIds(this._excludeRoles, roleIds);
+        return this;
+    }
+
+    /**
+     * Whether this system is listed in the dice appearance pickers of a role.
+     * @param {string} roleId - a role id, "basic" included
+     * @return {boolean}
+     */
+    isAvailableForRole(roleId) {
+        if (this._excludeRoles?.includes(roleId)) return false;
+        return !this._includeRoles || this._includeRoles.includes(roleId);
+    }
+
+    _addRoleIds(list, roleIds) {
+        const ids = new Set([...(list ?? []), ...roleIds.flat()]);
+        //an empty whitelist would hide the system everywhere
+        return ids.size ? [...ids] : null;
     }
 
     get settings() {
