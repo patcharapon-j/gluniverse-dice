@@ -341,9 +341,12 @@ export class Utils {
         return Object.fromEntries(Object.entries(colorsetList).sort((a, b) => a[1].label.localeCompare(b[1].label)));
     };
 
-    static prepareSystemList() {
+    //keep: the saved choice stays listed even when the role filters it out
+    static prepareSystemList(role = null, keep = null) {
         let systems = game.dice3d.box.dicefactory.systems;
-        return [...systems.values()].sort((systemA, systemB) => {
+        //a package may bundle an older copy of DiceSystem without the role lists
+        const listed = role ? [...systems.values()].filter(system => system.id === keep || (system.isAvailableForRole?.(role) ?? true)) : [...systems.values()];
+        return listed.sort((systemA, systemB) => {
             // Direct comparison since we're now working directly with the values
             if (systemA.id === "standard") {
                 return -1;

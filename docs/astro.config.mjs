@@ -59,6 +59,7 @@ export default defineConfig({
 							label: 'Customization',
 							items: [
 								{ label: 'Colors & Themes', slug: 'api/customization' },
+								{ label: 'Dice Roles', slug: 'api/roles' },
 								{ label: 'Custom Terms', slug: 'api/terms' },
 								{ label: 'Custom 3D Models', slug: 'api/3d-models' },
 								{ label: 'TexturePacker', slug: 'api/texturepacker' },
@@ -67,6 +68,7 @@ export default defineConfig({
 						{
 							label: 'Dice Systems',
 							items: [
+								{ label: 'Overview', slug: 'api/dice-systems' },
 								{ label: 'System Settings', slug: 'api/system-settings' },
 								{ label: 'Custom Shaders', slug: 'api/shaders' },
 								{ label: 'Special Effects', slug: 'api/sfx' },

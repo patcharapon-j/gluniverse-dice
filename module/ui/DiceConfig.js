@@ -194,7 +194,6 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
                 "smaa": "DICESONICE.SMAA",
                 "msaa": "DICESONICE.MSAA"
             }),
-            systemList: Utils.prepareSystemList(),
             soundsSurfaceList: Utils.localize({
                 "felt": "DICESONICE.SurfaceFelt",
                 "wood_table": "DICESONICE.SurfaceWoodTable",
@@ -519,7 +518,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
             inheritLabel: game.i18n.localize("DICESONICE.Inherit"),
             preview: preview,
             inheritCls: inheritCls,
-            systemList: lists.systemList,
+            systemList: Utils.prepareSystemList(role, appearance.system),
             colorsetList: lists.colorsetList,
             textureList: lists.textureList,
             materialList: lists.materialList,

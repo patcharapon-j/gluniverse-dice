@@ -60,6 +60,8 @@ export class DiceSystem {
         this._settings = [];
         this._scopedSettings = new Map();
         this._roleDefaults = {};
+        this._includeRoles = null;
+        this._excludeRoles = null;
 
         this._listeners = [];
 
@@ -99,6 +101,51 @@ export class DiceSystem {
 
     set roleDefaults(value) {
         this._roleDefaults = (value && typeof value === "object") ? value : {};
+    }
+
+    /**
+     * Role ids this system is listed for in the dice appearance pickers. `null` lists it for every role.
+     * Only the pickers are filtered: a system already saved for a role keeps rendering.
+     * @type {string[]|null}
+     */
+    get includeRoles() {
+        return this._includeRoles;
+    }
+
+    set includeRoles(value) {
+        this._includeRoles = this._validateRoleList(value, "includeRoles");
+    }
+
+    /**
+     * Role ids this system is hidden from in the dice appearance pickers. Wins over `includeRoles`.
+     * @type {string[]|null}
+     */
+    get excludeRoles() {
+        return this._excludeRoles;
+    }
+
+    set excludeRoles(value) {
+        this._excludeRoles = this._validateRoleList(value, "excludeRoles");
+    }
+
+    /**
+     * Whether this system is listed in the dice appearance pickers of a role.
+     * @param {string} roleId - a role id, "basic" included
+     * @return {boolean}
+     */
+    isAvailableForRole(roleId) {
+        if (this._excludeRoles?.includes(roleId)) return false;
+        return !this._includeRoles || this._includeRoles.includes(roleId);
+    }
+
+    _validateRoleList(value, field) {
+        if (value === null || value === undefined) return null;
+        if (!Array.isArray(value) || value.some(id => typeof id !== "string" || !id.length)) {
+            console.warn(`Dice So Nice! | DiceSystem.${field}: expected an array of role ids, the list is ignored (system "${this.id}")`);
+            return null;
+        }
+        //an empty whitelist would hide the system everywhere
+        return value.length ? [...new Set(value)] : null;
     }
 
     get settings() {
