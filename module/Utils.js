@@ -26,7 +26,7 @@ export class Utils {
         return ticker;
     }
 
-    static DATA_FORMAT_VERSION = "6.3";
+    static DATA_FORMAT_VERSION = "6.4";
     static RELOAD_REQUIRED_IF_MODIFIED = ["canvasZIndex", "bumpMapping", "useHighDPI", "glow", "antialiasing", "rollingArea", "advancedGlass", "ambiance", "visibility"];
 
     /**
@@ -186,6 +186,18 @@ export class Utils {
             if (!game.settings.get("dice-so-nice", "rolesMigrated")) {
                 await Utils.migrateDamageTypeMap();
             }
+            migrated = true;
+        }
+
+        if(Utils.isVersionLessThan(formatversion, "6.4")) {
+            //add the "saved" flag
+            await Promise.all(game.users.map(async (user) => {
+                if (user.getFlag("dice-so-nice", "saved")) return;
+                const appearance = !!user.getFlag("dice-so-nice", "appearance")?.global;
+                const sfx = appearance || user.getFlag("dice-so-nice", "sfxList") !== undefined;
+                if (appearance || sfx)
+                    await user.setFlag("dice-so-nice", "saved", { appearance, sfx });
+            }));
             migrated = true;
         }
 
@@ -414,7 +426,6 @@ export class Utils {
         let savesObject = game.user.getFlag("dice-so-nice", "saves");
         let save = new Map(Object.entries(savesObject)).get(name);
 
-        const saved = DsnSettings.SAVED(game.user);
         if (save.appearance) {
             await game.user.unsetFlag("dice-so-nice", "appearance");
             await game.user.setFlag("dice-so-nice", "appearance", save.appearance);
@@ -430,7 +441,7 @@ export class Utils {
             await game.user.setFlag("dice-so-nice", "sfxList", save.sfxList);
         }
         //write the marker before the settings block, it can reload the page
-        await DsnSettings.markSaved(game.user, saved, { appearance: !!save.appearance, sfx: !!save.sfxList });
+        await DsnSettings.markSaved(game.user, { appearance: !!save.appearance, sfx: !!save.sfxList });
         if (save.settings) {
             //For each Utils.RELOAD_REQUIRED_IF_MODIFIED check if the value has changed and reload if so
             let settings = game.user.getFlag("dice-so-nice", "settings") ?? {};

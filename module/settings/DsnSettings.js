@@ -157,18 +157,15 @@ export class DsnSettings {
     }
 
     //did the player save their own look and their own sfx lines? what is not saved comes from the package defaults
-    //players from before 6.4 have no "saved" flag: a form save always wrote appearance.global, so it counts as saved
     static SAVED(user = game.user) {
         const marker = user.getFlag("dice-so-nice", "saved");
-        if (marker) return { appearance: !!marker.appearance, sfx: !!marker.sfx };
-        const legacy = !!user.getFlag("dice-so-nice", "appearance")?.global;
-        return { appearance: legacy, sfx: legacy || user.getFlag("dice-so-nice", "sfxList") !== undefined };
+        return { appearance: !!marker?.appearance, sfx: !!marker?.sfx };
     }
 
-    //"before" is SAVED(user) read before writing the flags: writing appearance.global changes the answer for a pre 6.4 player
-    static async markSaved(user, before, { appearance = false, sfx = false } = {}) {
+    static async markSaved(user, { appearance = false, sfx = false } = {}) {
         if (!appearance && !sfx) return;
-        await user.setFlag("dice-so-nice", "saved", { appearance: before.appearance || appearance, sfx: before.sfx || sfx });
+        const saved = DsnSettings.SAVED(user);
+        await user.setFlag("dice-so-nice", "saved", { appearance: saved.appearance || appearance, sfx: saved.sfx || sfx });
     }
 
     //basic role defaults registered by packages

@@ -1177,7 +1177,6 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
             return;
         }
 
-        const saved = DsnSettings.SAVED(game.user);
         if (data.appearance) {
             await game.user.unsetFlag("dice-so-nice", "appearance");
             await game.user.setFlag("dice-so-nice", "appearance", data.appearance);
@@ -1202,7 +1201,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         if (data.diceLibrary) {
             await this._importLibraryDice(data.diceLibrary);
         }
-        await DsnSettings.markSaved(game.user, saved, { appearance: !!data.appearance, sfx: !!data.sfxList });
+        await DsnSettings.markSaved(game.user, { appearance: !!data.appearance, sfx: !!data.sfxList });
         game.socket.emit("module.dice-so-nice", { type: "update", user: game.user.id });
     }
 
@@ -1235,12 +1234,11 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         const pushedIds = [];
         for (const user of targets) {
             try {
-                const saved = DsnSettings.SAVED(user);
                 for (const key of Object.keys(payload)) {
                     await user.unsetFlag("dice-so-nice", key);
                     await user.setFlag("dice-so-nice", key, payload[key]);
                 }
-                await DsnSettings.markSaved(user, saved, { appearance: !!parts.appearance, sfx: !!parts.sfxList });
+                await DsnSettings.markSaved(user, { appearance: !!parts.appearance, sfx: !!parts.sfxList });
                 pushedIds.push(user.id);
             } catch (err) {
                 console.error(`[Dice So Nice] Failed to push config to ${user.name}:`, err);
