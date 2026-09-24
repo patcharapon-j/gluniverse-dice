@@ -317,5 +317,6 @@
     "DICESONICE.configTitleWorldRole": "3D-Würfel-Einstellungen - Aussehen in der Welt: {role}",
     "DICESONICE.migrateMessageError": "Die Migration der 'Dice So Nice'-Einstellungen ist fehlgeschlagen, 3D-Würfel sind in dieser Sitzung deaktiviert. Details findest du in der Konsole (F12).",
     "DICESONICE.persistentDiceToolboxClearAllConfirm": "Alle dauerhaften Würfel aus der Szene entfernen, einschließlich derer die anderen Spielern gehören?",
-    "DICESONICE.settingsDisplay": "Anzeige"
+    "DICESONICE.settingsDisplay": "Anzeige",
+    "DICESONICE.keybindingDeleteSelected": "Entferne die ausgewählten dauerhaften Würfel"
 }
