@@ -60,7 +60,7 @@ import { DiceSystem } from '../dice-so-nice/api.js';
 Hooks.once('diceSoNiceReady', (dice3d) => {
     const szimfonia = new DiceSystem('szimfonia', 'Szimfonia');
     // new players start with this set on the ds die
-    szimfonia.setRoleDefaults('basic', { ds: { system: 'szimfonia' } });
+    szimfonia.setRoleDefaults('basic');
     dice3d.addSystem(szimfonia);
     dice3d.addDicePreset({
         type: 'ds',

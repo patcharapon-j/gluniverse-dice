@@ -12,7 +12,6 @@ import {DiceShapeLibrary} from './DiceShapeLibrary.js';
 import {DiceSystem} from '../DiceSystem.js';
 import {DiceLibrary} from './DiceLibrary.js';
 import {DiceRoleRegistry} from './DiceRoleRegistry.js';
-import {DiceSFXManager} from '../sfx/DiceSFXManager.js';
 import {DsnSettings} from '../settings/DsnSettings.js';
 import {Utils} from '../Utils.js';
 import {TARGET_D6_EDGE_METERS} from './SceneConstants.js';
@@ -683,10 +682,6 @@ export class DiceFactory {
 		if(roleDefaults && typeof roleDefaults === "object"){
 			for(const [roleId, scope] of Object.entries(roleDefaults))
 				this.addRole({id: roleId, defaults: scope}, {package: system.id});
-		}
-		if(source._sfxDefaults?.length){
-			DiceSFXManager.addDefaults(source._sfxDefaults);
-			source._sfxDefaults = [];
 		}
 		//when DSN stored a copy, flag the package's own object too so its later setRoleDefaults calls reach the roles
 		system._registered = true;
