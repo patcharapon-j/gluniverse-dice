@@ -34,7 +34,7 @@ To customize your dice:
 2. Find **Dice So Nice!** in the list.
 3. Click the **Dice So Nice!** button to open the configuration dialog.
 
-You can also open the configuration dialog from the **Dice So Nice! sidebar tab** (visible in the right sidebar unless hidden by the GM).
+You can also open the configuration dialog from the [Dice So Nice! sidebar tab](#sidebar-tab).
 
 The settings dialog has several tabs:
 
@@ -50,7 +50,7 @@ GM settings are configured in the Module Settings panel and affect all players i
 
 ### Action Buttons
 
-Three buttons are available in the Dice So Nice! section of Module Settings:
+Four buttons are available in the Dice So Nice! section of Module Settings:
 
 - **Dice So Nice!** - Opens the main configuration dialog.
 - **Rollable Area** - Opens the rollable area configuration (see [Rollable Area](/foundryvtt-dice-so-nice/guide/rollable-area/)).
@@ -66,6 +66,20 @@ Most GM settings are self-explanatory from their in-app labels and hints. The fo
 - **Same-message rolls are merged** - When a single chat message contains multiple rolls, play all dice at once instead of sequentially by roll order.
 - **Show Ghost dice for hidden rolls** - Shows faceless dice to players on GM/Blind rolls. Three options: disabled, visible to all players, or visible to the roll author only.
 - **Dice can be flipped** - Lets newly rolling dice flip settled dice on impact. Purely visual, does not affect results.
+
+## Sidebar Tab
+
+The Dice So Nice! tab in the right sidebar (the d20 icon) gathers the controls you use during a session. The GM can hide it from the module settings.
+
+![Dice So Nice! sidebar tab](../../../assets/persistent-dice-toolbox.webp)
+
+- **Open 3D Dice Config** - Opens the configuration dialog.
+- **Dice visibility** - Show all players' dice, only yours, or none. Same setting as in the [Preferences](/foundryvtt-dice-so-nice/guide/preferences/#visibility) tab.
+- **Protect my persistent dice** - Prevents other players from grabbing or throwing your persistent dice. The GM can always grab them.
+- **Interactive throws (world)** (GM only) - Disables or allows [interactive throws](/foundryvtt-dice-so-nice/guide/interactive-throws/) in the world.
+- **Interactive throws** - Your own interactive throws preference, same as in the Preferences tab.
+- **Persistent Dice** - Adds and removes [persistent dice](/foundryvtt-dice-so-nice/guide/persistent-dice/) on the tabletop.
+- **Saved Profiles** - Loads one of your [saved profiles](/foundryvtt-dice-so-nice/guide/save-files/) in one click. Only shown when you have at least one.
 
 ## Keyboard Shortcuts
 

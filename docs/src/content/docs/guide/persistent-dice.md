@@ -12,11 +12,13 @@ Persistent dice use Foundry VTT's built-in random number generator (RNG) to dete
 
 ## Adding Dice
 
-Use the **Persistent Dice Toolbox** to add dice to the tabletop:
+Persistent dice must first be enabled by the GM in the module settings (**Enable persistent dice on tabletop**).
 
-1. Open the toolbox from the scene controls.
-2. Select the die type you want to add (d4, d6, d8, d10, d12, d20, etc.).
-3. The die appears on the tabletop using your current appearance settings.
+Use the **Persistent Dice** section of the [Dice So Nice! sidebar tab](/foundryvtt-dice-so-nice/guide/getting-started/#sidebar-tab) to add dice to the tabletop:
+
+1. Open the Dice So Nice! tab in the right sidebar.
+2. Click **+** next to the die type you want to add (d4, d6, d8, d10, d12, d20, etc.). **Show more dice types** lists the less common ones.
+3. The die appears on the tabletop using your current appearance settings, at your **Persistent dice spawn location** (see [Preferences](/foundryvtt-dice-so-nice/guide/preferences/#persistent-dice)).
 
 ![Persistent dice toolbox](../../../assets/persistent-dice-toolbox.webp)
 
@@ -41,17 +43,19 @@ Use the **Persistent Dice Toolbox** to add dice to the tabletop:
 
 ## Removing Dice
 
-- Use the **Remove** button in the toolbox to remove the most recently placed die.
-- Or drag a die to the **trash zone** to remove it.
+- Click **−** next to a die type to remove your most recently placed die of that type.
+- Select dice and press **Delete** or **Backspace** to remove them.
+- **Clear my dice** removes all your persistent dice. The GM also gets **Clear all dice**, which removes every player's dice.
 
 ## Visibility
 
-You can toggle the visibility of all persistent dice from the toolbox. This hides/shows them without removing them.
+The **Dice visibility** setting of the sidebar tab also applies to persistent dice: *Show only mine* hides the other players' dice without removing them.
 
 ## Multiplayer
 
 - All players in the world can see persistent dice placed by any player.
 - Dice use the placing player's appearance settings.
 - When a player picks up a die, it is **locked** for other players - only one person can interact with a die at a time.
+- Check **Protect my persistent dice** in the sidebar tab to prevent other players from grabbing or throwing your dice. The GM can always grab them.
 - Positions are synchronized across different screen resolutions using relative coordinates.
 
