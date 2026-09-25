@@ -49,7 +49,7 @@
     "DICESONICE.globalAnimationSpeedHint": "Setze die Animationsgeschwindigkeit für alle Spieler anstatt ihrer eigenen Einstellungen zu verwenden",
     "DICESONICE.disabledDuringCombat": "Während dem Kampf ausgeschalten",
     "DICESONICE.disabledDuringCombatHint": "Schalte 3D Würfel Animationen aus, während ein Kampf aktiv ist.",
-    "DICESONICE.enabledSimultaneousRolls": "Gleichzeite Würfe werden zusammengefasst",
+    "DICESONICE.enabledSimultaneousRolls": "Gleichzeitige Würfe zusammenfassen",
     "DICESONICE.enabledSimultaneousRollsHint": "Kombiniere gleichzeitige Würfe in einer einzelnen Animation anstatt darauf zu warten, dass jeder Wurf endet.",
     "DICESONICE.canvasZIndex": "Position der 3D Ebene",
     "DICESONICE.immediatelyDisplayChatMessages": "Chat-Nachrichten sofort anzeigen",
