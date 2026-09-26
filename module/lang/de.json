@@ -340,5 +340,13 @@
     "DICESONICE.DiceRolesConfigMenuHint": "Durch Würfe können Würfel in einem Spiel eine besondere Bedeutung haben (z. B. eine Schadensart, ein Segen, ein Fluch ...) und ihr eigenes Erscheinungsbild erhalten. Lege das allgemeine Aussehen jeden Wurfs fest, erstelle eigene eigenen Würfe und entscheide, welche davon durch Spieler angepasst werden dürfen.",
     "DICESONICE.DiceRolesInherit": "'- Übernehmen -'",
     "DICESONICE.RoleLoadFromSave": "Lade Speicherstand…",
-    "DICESONICE.sidebarTabLoadSave": "Laden"
+    "DICESONICE.sidebarTabLoadSave": "Laden",
+    "DICESONICE.DiceRolesConfigMenuLabel": "Würfelwurf konfigurieren",
+    "DICESONICE.hideSidebarTab": "'Dice So Nice'-Seitenleisten-Reiter ausblenden",
+    "DICESONICE.TourMainContentGotoDsnSidebar": "Klicke auf den Reiter 'Dice So Nice' in der Seitenleiste. Dies ist dein Schnellzugriff, um Würfel zu erzeugen, dauerhafte Würfel zu verwalten und die Einstellungen zu öffnen.",
+    "DICESONICE.TourMainTitleGotoDsnSidebar": "'Dice So Nice'-Reiter",
+    "DICESONICE.ghostDiceForPlayerRollsOnly": "Nur für Spielerwürfe (GM-Würfe ausblenden)",
+    "DICESONICE.CustomDiceTermConfigHint": "Definiert benutzerdefinierte Würfeltypen, die in Würfelformeln verwendet werden können (z. B. /r 1dw). Jeder benutzerdefinierte Würfel nutzt eine Bezeichnung aus einem Buchstaben, eine vorhandene physische Form und deine eigenen Augen-/Zahlenwerte.",
+    "DICESONICE.interactiveThrowsAllowedOff": "Erlaubt (standardmäßig deaktiviert)",
+    "DICESONICE.interactiveThrowsAllowedOn": "Erlaubt (standardmäßig aktiviert)"
 }
