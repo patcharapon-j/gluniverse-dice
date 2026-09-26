@@ -336,5 +336,9 @@
     "DICESONICE.DiceRolesConfigMenu": "Würfelwürfe",
     "DICESONICE.DiceRolesConfigTitle": "Würfelwürfe",
     "DICESONICE.DiceRolesColumnRole": "Würfeln",
-    "DICESONICE.DiceRolesColumnGroup": "Gruppe"
+    "DICESONICE.DiceRolesColumnGroup": "Gruppe",
+    "DICESONICE.DiceRolesConfigMenuHint": "Durch Würfe können Würfel in einem Spiel eine besondere Bedeutung haben (z. B. eine Schadensart, ein Segen, ein Fluch ...) und ihr eigenes Erscheinungsbild erhalten. Lege das allgemeine Aussehen jeden Wurfs fest, erstelle eigene eigenen Würfe und entscheide, welche davon durch Spieler angepasst werden dürfen.",
+    "DICESONICE.DiceRolesInherit": "'- Übernehmen -'",
+    "DICESONICE.RoleLoadFromSave": "Lade Savefile…",
+    "DICESONICE.sidebarTabLoadSave": "Laden"
 }
