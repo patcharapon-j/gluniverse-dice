@@ -318,5 +318,14 @@
     "DICESONICE.migrateMessageError": "Die Migration der 'Dice So Nice'-Einstellungen ist fehlgeschlagen, 3D-Würfel sind in dieser Sitzung deaktiviert. Details findest du in der Konsole (F12).",
     "DICESONICE.persistentDiceToolboxClearAllConfirm": "Alle dauerhaften Würfel aus der Szene entfernen, einschließlich derer die anderen Spielern gehören?",
     "DICESONICE.settingsDisplay": "Anzeige",
-    "DICESONICE.keybindingDeleteSelected": "Entferne die ausgewählten dauerhaften Würfel"
+    "DICESONICE.keybindingDeleteSelected": "Entferne die ausgewählten dauerhaften Würfel",
+    "DICESONICE.persistentDice": "Aktiviere 'dauerhafte Würfel' auf dem Spieltisch",
+    "DICESONICE.disabledForManualRolls": "Deaktiviert für manuell eingegebene Würfe",
+    "DICESONICE.disabledForManualRollsHint": "Überspringe die 3D-Würfel-Animationen, wenn jeder Würfel eines Wurfs interaktiv abgehandelt wurde (z. B. im Modus für die manuelle Eingabe oder bei Modulen für physische Würfel).",
+    "DICESONICE.forceCharacterOwnerAppearance": "Verwende das Würfel-Aussehen des Charakterbesitzers",
+    "DICESONICE.forceCharacterOwnerAppearanceHint": "Wenn ein Wurf für einen spielereigenen Charakter durchgeführt wird (z. B. wenn der GM für einen Spieler würfelt), wird das Würfeldesign des Charakterbesitzers anstelle das der Person verwendet, die den Wurf ausführt.",
+    "DICESONICE.forceCharacterOwnerAppearanceInitiative": "Nur Initiativwurf",
+    "DICESONICE.forceCharacterOwnerAppearanceAll": "Alle Würfe",
+    "DICESONICE.interactiveThrowsHint": "Lässt die Spieler ein Würfelergebnis erzeugen, indem sie die Würfel selbst in die Hand nehmen und auf eine Tischoberfläche werfen. Das Würfelergebnis wird weiterhin von Foundry bestimmt; der Wurf dient lediglich zu dessen Darstellung. Erfordert Würfelinteraktion, dauerhafte Würfel sowie Chat-Nachrichten, die nicht sofort angezeigt werden.",
+    "DICESONICE.interactiveThrowsUserDisabled": "Nie"
 }
