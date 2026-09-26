@@ -332,5 +332,9 @@
     "DICESONICE.CustomDiceTermConfigMenuLabel": "Bedingungen für benutzerdefinierte Würfel",
     "DICESONICE.CustomDiceTermConfigTitle": "Bedingungen für benutzerdefinierte Würfel",
     "DICESONICE.CustomDiceTermNone": "Noch keine benutzerdefinierten Würfel definiert.",
-    "DICESONICE.CustomDiceTermConfigMenuHint": "Erstelle benutzerdefinierte Würfeltypen mit individuellen Seitenwerten."
+    "DICESONICE.CustomDiceTermConfigMenuHint": "Erstelle benutzerdefinierte Würfeltypen mit individuellen Seitenwerten.",
+    "DICESONICE.DiceRolesConfigMenu": "Würfelwürfe",
+    "DICESONICE.DiceRolesConfigTitle": "Würfelwürfe",
+    "DICESONICE.DiceRolesColumnRole": "Würfeln",
+    "DICESONICE.DiceRolesColumnGroup": "Gruppe"
 }
