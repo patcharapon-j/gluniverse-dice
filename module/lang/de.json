@@ -331,5 +331,6 @@
     "DICESONICE.CustomDiceTermConfigMenu": "Bedingungen für individuelle Würfel",
     "DICESONICE.CustomDiceTermConfigMenuLabel": "Bedingungen für benutzerdefinierte Würfel",
     "DICESONICE.CustomDiceTermConfigTitle": "Bedingungen für benutzerdefinierte Würfel",
-    "DICESONICE.CustomDiceTermNone": "Noch keine benutzerdefinierten Würfel definiert."
+    "DICESONICE.CustomDiceTermNone": "Noch keine benutzerdefinierten Würfel definiert.",
+    "DICESONICE.CustomDiceTermConfigMenuHint": "Erstelle benutzerdefinierte Würfeltypen mit individuellen Seitenwerten."
 }
