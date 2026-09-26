@@ -329,6 +329,7 @@
     "DICESONICE.interactiveThrowsHint": "Lässt die Spieler ein Würfelergebnis erzeugen, indem sie die Würfel selbst in die Hand nehmen und auf eine Tischoberfläche werfen. Das Würfelergebnis wird weiterhin von Foundry bestimmt; der Wurf dient lediglich zu dessen Darstellung. Erfordert Würfelinteraktion, dauerhafte Würfel sowie Chat-Nachrichten, die nicht sofort angezeigt werden.",
     "DICESONICE.interactiveThrowsUserDisabled": "Nie",
     "DICESONICE.CustomDiceTermConfigMenu": "Bedingungen für individuelle Würfel",
-    "DICESONICE.CustomDiceTermConfigMenuLabel": "Bedingungen für individuelle Würfel",
-    "DICESONICE.CustomDiceTermConfigTitle": "Bedingungen für individuelle Würfel"
+    "DICESONICE.CustomDiceTermConfigMenuLabel": "Bedingungen für benutzerdefinierte Würfel",
+    "DICESONICE.CustomDiceTermConfigTitle": "Bedingungen für benutzerdefinierte Würfel",
+    "DICESONICE.CustomDiceTermNone": "Noch keine benutzerdefinierten Würfel definiert."
 }
