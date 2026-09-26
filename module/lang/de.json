@@ -276,8 +276,8 @@
     "DICESONICE.ghostDiceDisabled": "Geisterwürfel deaktivieren",
     "DICESONICE.ChatCommandCompletionDescription": "Trage eine Würfel Formel ein.",
     "DICESONICE.ChatCommandDescription": "Würfle 3D Würfel ohne Chat Nachricht",
-    "DICESONICE.hide3dDiceOnSecretRolls": "Verberge 3D Würfel bei GM/versteckten Würfen",
-    "DICESONICE.hide3dDiceOnSecretRollsHint": "Zeige anderen Spielern keine 3D Würfel beim GM/versteckten Wurf.",
+    "DICESONICE.hide3dDiceOnSecretRolls": "Verberge 3D-Würfel bei GM-/versteckten Würfen",
+    "DICESONICE.hide3dDiceOnSecretRollsHint": "Zeige anderen Spielern keine 3D-Würfel beim GM-/versteckten Wurf.",
     "DICESONICE.ghostDiceForAll": "An alle Spieler",
     "DICESONICE.ghostDiceForRollAuthor": "Nur für den Würfelnden",
     "DICESONICE.ExportLibrary": "Exportiere meine Würfel-Bibliothek",
@@ -327,5 +327,8 @@
     "DICESONICE.forceCharacterOwnerAppearanceInitiative": "Nur Initiativwurf",
     "DICESONICE.forceCharacterOwnerAppearanceAll": "Alle Würfe",
     "DICESONICE.interactiveThrowsHint": "Lässt die Spieler ein Würfelergebnis erzeugen, indem sie die Würfel selbst in die Hand nehmen und auf eine Tischoberfläche werfen. Das Würfelergebnis wird weiterhin von Foundry bestimmt; der Wurf dient lediglich zu dessen Darstellung. Erfordert Würfelinteraktion, dauerhafte Würfel sowie Chat-Nachrichten, die nicht sofort angezeigt werden.",
-    "DICESONICE.interactiveThrowsUserDisabled": "Nie"
+    "DICESONICE.interactiveThrowsUserDisabled": "Nie",
+    "DICESONICE.CustomDiceTermConfigMenu": "Bedingungen für individuelle Würfel",
+    "DICESONICE.CustomDiceTermConfigMenuLabel": "Bedingungen für individuelle Würfel",
+    "DICESONICE.CustomDiceTermConfigTitle": "Bedingungen für individuelle Würfel"
 }
