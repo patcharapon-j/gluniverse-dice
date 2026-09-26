@@ -208,7 +208,7 @@
     "DICESONICE.MaterialIridescent": "Schillernd",
     "DICESONICE.MaterialStone": "Stein",
     "DICESONICE.System.SpectrumDice": "Spektrum",
-    "DICESONICE.muteSoundSecretRolls": "Alle Töne für GM/Blind/Selbstwürfe stummschalten",
+    "DICESONICE.muteSoundSecretRolls": "Alle Töne für GM-/Blind-/Selbstwürfe stummschalten",
     "DICESONICE.showGhostDiceHint": "Wenn möglich, zeige den Spielern einen Würfel ohne Zahlen, wenn du einen GM- oder Blind-Wurf machst.",
     "DICESONICE.immersiveDarkness": "Immersiver Dunkelheitsmodus aktivieren (Würfel reagieren auf die Beleuchtung der Szene)",
     "DICESONICE.disabledForInitiativeHint": "Deaktivieren Sie den 3D-Würfelwurf beim Würfeln der Initiative auf dem Kampftracker.",
