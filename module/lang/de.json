@@ -240,8 +240,8 @@
     "DICESONICE.ImportNoFile": "Keine Datei gefunden. Wähle eine Datei zum Import.",
     "DICESONICE.sfxOptionsCustomSound": "Audiodatei wählen",
     "DICESONICE.sfxOptionsMacro": "Makro wählen",
-    "DICESONICE.RollableAreaConfig": "Würfelarealseinstellungen",
-    "DICESONICE.RollableAreaConfigTitle": "Würfelarealseinstellungen",
+    "DICESONICE.RollableAreaConfig": "Würfelarealeinstellungen",
+    "DICESONICE.RollableAreaConfigTitle": "Würfelarealeinstellungen",
     "DICESONICE.RollableAreaText": "Würfelareal",
     "DICESONICE.RollableAreaConfigDescription1": "Bewege und/oder passe den Bereich \"Würfelareal\" an, in welchem die 3D-Würfelanimationen angezeigt werden.",
     "DICESONICE.Restore": "Wiederherstellen",
@@ -266,7 +266,7 @@
     "DICESONICE.sfxOptionsMuteSound": "Audio stummschalten",
     "DICESONICE.PlayAnimationOutline": "Animation: Umriss",
     "DICESONICE.onlyShowMyDice": "Zeige nur meine Würfel",
-    "DICESONICE.resetWelcomeMessageHint": "Dadurch wird die Willkommensnachricht für alle Spieler zurückgesetzt. Sie sehen die Willkommensnachricht erneut, wenn sie das nächste Mal dieser Welt beitreten.",
+    "DICESONICE.resetWelcomeMessageHint": "Dadurch wird die Willkommensnachricht für alle Spieler erneut angezeigt, wenn sie das nächste Mal diese Welt beitreten.",
     "DICESONICE.SystemOptions": "Systemeinstellungen",
     "DICESONICE.forceCharacterOwnerAppearanceForInitiativeHint": "Wenn aktiviert, wird beim Würfeln der Initiative aus dem Kampftracker das Aussehen des Würfels des Charakters verwendet, unabhängig vom Autor des Wurfs (z.B. Spielleiter).",
     "DICESONICE.forceCharacterOwnerAppearanceForInitiative": "Nutze die Würfel des Besitzers für die Initiative",
@@ -353,5 +353,8 @@
     "DICESONICE.persistentDiceHint": "Ermöglicht es Spielern, interaktive 3D-Würfel auf dem Spieltisch zu platzieren, die aufgehoben, geschüttelt und geworfen werden können, um Wurfergebnisse zu erzielen. Erfordert die Aktivierung der Option 'Erlaube Interaktion mit gewürfelten Würfeln'.",
     "DICESONICE.CustomDiceTermSaved": "{denomination} wurde gespeichert.",
     "DICESONICE.CustomDiceTermImportError": "Der Import der individuellen Würfel ist fehlgeschlagen.",
-    "DICESONICE.interactiveThrows": "Interaktive Würfelwürfe"
+    "DICESONICE.interactiveThrows": "Interaktive Würfelwürfe",
+    "DICESONICE.keybindingDismissEphemeral": "Entferne sichtbare Würfel",
+    "DICESONICE.keybindingDeleteSelectedHint": "Entfernt die dauerhaften Würfel, die du aktuell ausgewählt hast. Spieler, die keine GM sind, können nur ihre eigenen Würfel löschen.",
+    "DICESONICE.keybindingDismissEphemeralHint": "Entfernt sofort alle nicht-dauerhaften 3D-Würfel, die sich gerade auf dem Bildschirm befinden."
 }
