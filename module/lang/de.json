@@ -356,5 +356,13 @@
     "DICESONICE.interactiveThrows": "Interaktive Würfelwürfe",
     "DICESONICE.keybindingDismissEphemeral": "Entferne sichtbare Würfel",
     "DICESONICE.keybindingDeleteSelectedHint": "Entfernt die dauerhaften Würfel, die du aktuell ausgewählt hast. Spieler, die keine GM sind, können nur ihre eigenen Würfel löschen.",
-    "DICESONICE.keybindingDismissEphemeralHint": "Entfernt sofort alle nicht-dauerhaften 3D-Würfel, die sich gerade auf dem Bildschirm befinden."
+    "DICESONICE.keybindingDismissEphemeralHint": "Entfernt sofort alle nicht-dauerhaften 3D-Würfel, die sich gerade auf dem Bildschirm befinden.",
+    "DICESONICE.visibilityNone": "Alle ausblenden",
+    "DICESONICE.visibilityAll": "Zeige alle Würfel aller Spieler",
+    "DICESONICE.visibility": "Sichtbarkeit der Würfel",
+    "DICESONICE.visibilityMine": "Nur meine anzeigen",
+    "DICESONICE.sidebarTabOpenConfig": "Öffne 3D-Würfel-Einstellungen",
+    "DICESONICE.persistentDiceToolboxShowExtras": "Zeige weitere Würfeltypen",
+    "DICESONICE.interactiveThrowsUser": "Interaktive Würfe",
+    "DICESONICE.interactiveThrowsWorld": "Interaktive Würfe (Welt)"
 }
