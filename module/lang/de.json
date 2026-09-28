@@ -364,5 +364,12 @@
     "DICESONICE.sidebarTabOpenConfig": "Öffne 3D-Würfel-Einstellungen",
     "DICESONICE.persistentDiceToolboxShowExtras": "Zeige weitere Würfeltypen",
     "DICESONICE.interactiveThrowsUser": "Interaktive Würfe",
-    "DICESONICE.interactiveThrowsWorld": "Interaktive Würfe (Welt)"
+    "DICESONICE.interactiveThrowsWorld": "Interaktive Würfe (Welt)",
+    "DICESONICE.persistentDiceToolboxClearMine": "Entferne meine Würfel",
+    "DICESONICE.persistentDiceToolboxClearAllConfirmTitle": "Entferne alle dauerhaften Würfel",
+    "DICESONICE.persistentDiceToolboxClearMineConfirmTitle": "Entferne meine dauerhaften Würfel",
+    "DICESONICE.persistentDiceToolboxClearAll": "Entferne alle Würfel",
+    "DICESONICE.interactiveThrowsUserDefault": "Welt-Standardeinstellung",
+    "DICESONICE.interactiveThrowsUserOff": "Nur auf Anfrage",
+    "DICESONICE.interactiveThrowsUserOn": "Wann immer möglich"
 }
