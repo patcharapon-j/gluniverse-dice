@@ -67,7 +67,7 @@
     "DICESONICE.allowInteractivityHint": "Lässt Spieler 3D Würfel greifen und werfen, nachdem diese auf dem Tisch gewürfelt wurden (dies hat keinen Einfluss auf das Ergebnis)",
     "DICESONICE.Add": "Hinzufügen",
     "DICESONICE.Delete": "Löschen",
-    "DICESONICE.diceType": "Würfel-Typ",
+    "DICESONICE.diceType": "Würf.-Typ",
     "DICESONICE.onResult": "Bei Ergebnis",
     "DICESONICE.specialEffect": "Spezialeffekt",
     "DICESONICE.PlaySoundEpicFail": "Ton: Epischer Fehlschlag",
@@ -395,5 +395,10 @@
     "DICESONICE.diceLibrary": "Würfel-Bibliothek",
     "DICESONICE.sfxModeToggle": "Wechsle zwischen einfachem und erweitertem Modus",
     "DICESONICE.libraryNoDice": "In diesem Abschnitt gibt es keine benutzerdefinierten Würfel.",
-    "DICESONICE.libraryUserDice": "{name}s Würfel"
+    "DICESONICE.libraryUserDice": "{name}s Würfel",
+    "DICESONICE.sfxModeConfirmTitle": "Wechsle in den Basismodus",
+    "DICESONICE.GMPushConfirm": "Übertragen",
+    "DICESONICE.sfxModeConfirmContent": "Beim Wechsel in den Basismodus wird die aktuelle Formel verworfen. Jetzt wechseln?",
+    "DICESONICE.GMPushDialogHint": "Wähle welche Teile deiner Konfiguration übertragen werden sollen. Jede ausgewählte Kategorie überschreibt die entsprechenden Daten bei allen Spielern, die kein SL sind.",
+    "DICESONICE.GMPushDialogTitle": "Konfiguration an andere Spieler übertragen"
 }
