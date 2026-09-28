@@ -386,7 +386,7 @@
     "DICESONICE.GMPushHint": "Übertrage deine aktuelle Würfelkonfiguration an alle anderen Spieler, einschließlich derer, die ihre Verbindung verloren haben.",
     "DICESONICE.libraryMyDice": "Meine Würfel",
     "DICESONICE.libraryWorldDice": "Welt-Würfel",
-    "DICESONICE.libraryWorldGMOnly": "Nur ein SL kann die Bibliothek der Welt-Würfel ändern.",
+    "DICESONICE.libraryWorldGMOnly": "Nur ein SL kann die Würfelbibliothek der Welt bearbeiten.",
     "DICESONICE.libraryCopyToWorld": "In die Welt-Bibliothek kopieren",
     "DICESONICE.libraryCreateWorldDie": "Erstelle einen Würfel in der Welt-Bibliothek",
     "DICESONICE.sfxHelpText": "Verwende die Schaltfläche, um in den Modus für erweiterte Formeln zu wechseln.",
@@ -447,8 +447,10 @@
     "DICESONICE.CustomDiceTermEditTitle": "Individuellen Würfel bearbeiten",
     "DICESONICE.pendingCardShell": "{name} nimmt den Würfel…",
     "DICESONICE.pendingCardTitleInert": "{name}s interaktiver Wurf",
-    "DICESONICE.pendingCardEscape": "Würfel einfach",
+    "DICESONICE.pendingCardEscape": "Würfeln",
     "DICESONICE.pendingCardSkip": "Überspringe die 3D-Animation und zeige das Ergebnis jetzt an",
     "DICESONICE.DiceRolesColumnCustomizable": "Spieler",
-    "DICESONICE.Ok": "OK"
+    "DICESONICE.Ok": "OK",
+    "DICESONICE.pendingCardSpawn": "Würfel erzeugen",
+    "DICESONICE.pendingCardNeed": "{name} muss folgende Würfel werfen:"
 }
