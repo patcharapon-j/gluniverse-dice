@@ -368,7 +368,7 @@
     "DICESONICE.persistentDiceToolboxClearMine": "Entferne meine Würfel",
     "DICESONICE.persistentDiceToolboxClearAllConfirmTitle": "Entferne alle dauerhaften Würfel",
     "DICESONICE.persistentDiceToolboxClearMineConfirmTitle": "Entferne meine dauerhaften Würfel",
-    "DICESONICE.persistentDiceToolboxClearAll": "Entferne alle Würfel",
+    "DICESONICE.persistentDiceToolboxClearAll": "Entferne alle Würfel",
     "DICESONICE.interactiveThrowsUserDefault": "Welt-Standardeinstellung",
     "DICESONICE.interactiveThrowsUserOff": "Nur auf Anfrage",
     "DICESONICE.interactiveThrowsUserOn": "Wann immer möglich",
@@ -383,5 +383,17 @@
     "DICESONICE.sidebarFooterTriangles": "Dreiecke",
     "DICESONICE.sidebarFooterUserGuide": "Benutzerhandbuch",
     "DICESONICE.GMPushConfig": "Übertrage meine Konfiguration an andere Spieler",
-    "DICESONICE.GMPushHint": "Übertrage deine aktuelle Würfelkonfiguration an alle anderen Spieler, einschließlich derer, die ihre Verbindung verloren haben."
+    "DICESONICE.GMPushHint": "Übertrage deine aktuelle Würfelkonfiguration an alle anderen Spieler, einschließlich derer, die ihre Verbindung verloren haben.",
+    "DICESONICE.libraryMyDice": "Meine Würfel",
+    "DICESONICE.libraryWorldDice": "Welt-Würfel",
+    "DICESONICE.libraryWorldGMOnly": "Nur ein SL kann die Bibliothek der Welt-Würfel ändern.",
+    "DICESONICE.libraryCopyToWorld": "In die Welt-Bibliothek kopieren",
+    "DICESONICE.libraryCreateWorldDie": "Erstelle einen Würfel in der Welt-Bibliothek",
+    "DICESONICE.sfxHelpText": "Verwende die Schaltfläche, um in den Modus für erweiterte Formeln zu wechseln.",
+    "DICESONICE.sfxHelpLink": "- Referenz der Formelsyntax",
+    "DICESONICE.libraryDie": "Benutzerdefinierte Würfel-Bibliothek",
+    "DICESONICE.diceLibrary": "Würfel-Bibliothek",
+    "DICESONICE.sfxModeToggle": "Wechsle zwischen einfachem und erweitertem Modus",
+    "DICESONICE.libraryNoDice": "In diesem Abschnitt gibt es keine benutzerdefinierten Würfel.",
+    "DICESONICE.libraryUserDice": "{name}s Würfel"
 }
