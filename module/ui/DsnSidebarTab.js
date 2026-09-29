@@ -64,7 +64,8 @@ export class DsnSidebarTab extends HandlebarsApplicationMixin(AbstractSidebarTab
 
         let diceContext = null;
         if (persistentDiceEnabled && box) {
-            const standardDice = [...box.dicefactory.systems.get("standard").dice.keys()];
+            const hiddenDieTypes = box.dicefactory.getHiddenDieTypes();
+            const standardDice = [...box.dicefactory.systems.get("standard").dice.keys()].filter(t => !hiddenDieTypes.has(t));
 
             const isExtra = (t) => DsnSidebarTab.EXTRA_DICE_TYPES.includes(t);
             const isCompoundPrimary = (t) => {

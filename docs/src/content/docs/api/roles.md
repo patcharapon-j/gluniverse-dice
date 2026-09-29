@@ -8,8 +8,9 @@ A **role** is what a die means in your game: `hope`, `wild`, `fire`, `acid`... E
 Detection runs in this order and the first match wins:
 
 1. **Explicit role** set by the system: `term.options.dsnRole` on a die term, or a `role` path declared through [`getDSNProperties()`](/foundryvtt-dice-so-nice/api/roll/#declaring-roll-properties-with-getdsnproperties) on the Roll class.
-2. **Modifier token** declared by a role (`detectors.modifiers`). The token is matched exactly against the modifier command: `h` matches `h` and `h2`, not `hp`.
-3. **`term.options.type`** then **`term.options.flavor`** matched against `detectors.types` of every role, then against the built-in damage type ids. `Roll.options.type` and `Roll.options.flavor` are merged down into each contained die term, so a system can set them once at the roll level.
+2. **Denomination** listed in a role's `denominations`, see [Giving a role to a Die class](#giving-a-role-to-a-die-class).
+3. **Modifier token** declared by a role (`detectors.modifiers`). The token is matched exactly against the modifier command: `h` matches `h` and `h2`, not `hp`.
+4. **`term.options.type`** then **`term.options.flavor`** matched against `detectors.types` of every role, then against the built-in damage type ids. `Roll.options.type` and `Roll.options.flavor` are merged down into each contained die term, so a system can set them once at the roll level.
 
 Dice that match nothing are `basic`. A player who turns off the **Apply optional dice role appearances** preference sends every *optional* role back to `basic`, whichever way it was detected: built-in damage types and roles created by the GM are optional, registered roles are not unless they say so.
 
@@ -71,8 +72,28 @@ A role record has the following fields:
 - **customizable** - when `true`, players can pick this role in their dice settings and give it their own look. The GM can flip any role from the Dice Roles table.
 - **optional** - when `true`, the player preference "Apply optional dice role appearances" turns this role off. Defaults to `false`: set it on roles that are a coloring convention laid over the player's dice (damage types) rather than dice of their own. The GM can flip it from the Dice Roles table.
 - **dieTypes** - optional die type whitelist (`["d6", "d12"]`). Only narrows what the player settings show for this role; it does not affect detection or resolution.
+- **denominations** - denominations of Die classes from your system (`["q"]`). Their dice get the role and roll as the regular die of their size, see [Giving a role to a Die class](#giving-a-role-to-a-die-class).
 - **defaults** - the default appearance of the role: `{ global?: {...}, d4?: {...}, d12?: {...} }`. Each slot accepts the same fields as a player appearance (`colorset`, `system`, `texture`, `material`, `font`, `labelColor`, `diceColor`, `outlineColor`, `edgeColor`...). Missing fields are inherited.
 - **detectors** - `{ modifiers?: [...], types?: [...] }`. `modifiers` are roll modifier tokens declared by the system's own dice term class, `types` are matched against the type or flavor of the roll.
+
+## Giving a role to a Die class
+
+If your system rolls regular numbered dice through its own Die class (`1dq6`, `1dq8`...), list its denomination in the role. Every die of that class gets the role and rolls as the regular die of its size: a `1dq8` is a d8 with the look of the role, and players don't see a separate `dq` die type in their settings.
+
+```javascript
+Hooks.once('diceSoNiceReady', (dice3d) => {
+    dice3d.addRole({
+        id: 'my-role1',
+        label: 'My Role',
+        group: 'My Game',
+        customizable: true,
+        denominations: ['q'],
+        dieTypes: ['d4', 'd6', 'd8', 'd10', 'd12']
+    }, { package: 'my-system' });
+});
+```
+
+Don't use it for dice with custom faces like icons or symbols: they would roll as plain numbered dice.
 
 ## Roles and dice systems
 

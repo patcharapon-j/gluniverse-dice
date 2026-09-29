@@ -139,16 +139,25 @@ export class DiceNotation {
 
 		const Die = foundry.dice.terms.Die;
 		const denomination = fvttDie.constructor.DENOMINATION;
+		//a denomination listed by a role rolls as the regular die of its size
+		const plainDie = fvttDie instanceof Die && (denomination === Die.DENOMINATION || !!game.dice3d?.DiceFactory?.getDenominationRole(denomination));
 		if(digitPlace) {
-			if(isCompoundPrimary && !(fvttDie instanceof Die && denomination === Die.DENOMINATION))
+			if(isCompoundPrimary && !plainDie)
 				dsnDie.type = "d" + denomination;
 			else
 				dsnDie.type = digitPlace.type;
 		} else {
-			if(fvttDie instanceof Die && denomination === Die.DENOMINATION)
+			if(plainDie)
 				dsnDie.type = "d" + fvttDie.faces;
-			else
+			else {
 				dsnDie.type = "d" + denomination;
+				//a denomination can roll several sizes (swade 1dw8) but its preset only has the default size
+				if(fvttDie instanceof Die){
+					const preset = game.dice3d?.DiceFactory?.systems.get("standard")?.dice.get(dsnDie.type);
+					if(preset && preset.values.length !== fvttDie.faces)
+						dsnDie.type = "d" + fvttDie.faces;
+				}
+			}
 		}
 
 		dsnDie.vectors = [];
@@ -190,6 +199,7 @@ export class DiceNotation {
 		dsnDie.termTotal = fvttDie.total ?? null;
 		dsnDie.termFaces = fvttDie.faces ?? null;
 		dsnDie.termModifiers = fvttDie.modifiers ? [...fvttDie.modifiers] : [];
+		dsnDie.termDenomination = denomination;
 		//decided once here so the role travels with the die through sockets and queued commands
 		dsnDie.role = game.dice3d?.DiceFactory?.detectRole(dsnDie) ?? "basic";
 		if(this.userConfig && !this.userConfig.enableFlavorColorset) {

@@ -663,6 +663,14 @@ export class DiceFactory {
 		return this.roleRegistry.detectRole(dsnDie);
 	}
 
+	getDenominationRole(denomination){
+		return this.roleRegistry.getDenominationRole(denomination);
+	}
+
+	getHiddenDieTypes(){
+		return this.roleRegistry.getHiddenDieTypes();
+	}
+
 	//See dice3d.addSystem for public API
 	addSystem(system, mode="default"){
 		const source = system;

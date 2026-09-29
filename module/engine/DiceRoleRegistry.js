@@ -8,6 +8,7 @@ export class DiceRoleRegistry {
 		this._builtinRoles = null;
 		this._registeredRoles = new Map();
 		this._mergedRoles = null;
+		this._denominationRoles = null;
 	}
 
 	_buildBuiltinRoles(){
@@ -21,6 +22,7 @@ export class DiceRoleRegistry {
 			customizable: true,
 			optional: false,
 			dieTypes: null,
+			denominations: [],
 			defaults: {},
 			detectors: {modifiers: [], types: []}
 		});
@@ -35,6 +37,7 @@ export class DiceRoleRegistry {
 				customizable: false,
 				optional: true,
 				dieTypes: null,
+				denominations: [],
 				defaults: {global: {colorset: id}},
 				detectors: {modifiers: [], types: [id]}
 			});
@@ -62,6 +65,7 @@ export class DiceRoleRegistry {
 		if(reg.optional !== undefined) target.optional = reg.optional;
 		if(reg.dieTypes !== undefined) target.dieTypes = reg.dieTypes ? [...reg.dieTypes] : null;
 		if(reg.package) target.package = reg.package;
+		target.denominations = [...new Set([...target.denominations, ...reg.denominations])];
 		target.detectors.modifiers = [...new Set([...target.detectors.modifiers, ...reg.detectors.modifiers])];
 		target.detectors.types = [...new Set([...target.detectors.types, ...reg.detectors.types])];
 		target.defaults = foundry.utils.mergeObject(target.defaults ?? {}, this._cloneRole(reg.defaults), {inplace: false});
@@ -84,6 +88,7 @@ export class DiceRoleRegistry {
 					customizable: false,
 					optional: false,
 					dieTypes: null,
+					denominations: [],
 					defaults: {},
 					detectors: {modifiers: [], types: []}
 				};
@@ -124,6 +129,7 @@ export class DiceRoleRegistry {
 					customizable: !!override.customizable,
 					optional: override.optional ?? true,
 					dieTypes: null,
+					denominations: [],
 					defaults: {},
 					detectors: this._normalizeDetectors(override.detectors),
 					deleted: !!override.deleted
@@ -135,6 +141,7 @@ export class DiceRoleRegistry {
 
 	invalidateRoles(){
 		this._mergedRoles = null;
+		this._denominationRoles = null;
 	}
 
 	get roles(){
@@ -183,12 +190,17 @@ export class DiceRoleRegistry {
 			return;
 		}
 		const id = role.id;
-		const entry = this._registeredRoles.get(id) ?? {id, package: null, defaults: {}, detectors: {modifiers: [], types: []}};
+		const entry = this._registeredRoles.get(id) ?? {id, package: null, denominations: [], defaults: {}, detectors: {modifiers: [], types: []}};
 		if(role.label !== undefined) entry.label = role.label;
 		if(role.group !== undefined) entry.group = role.group;
 		if(role.customizable !== undefined) entry.customizable = !!role.customizable;
 		if(role.optional !== undefined) entry.optional = !!role.optional;
 		if(role.dieTypes !== undefined) entry.dieTypes = Array.isArray(role.dieTypes) ? [...role.dieTypes] : null;
+		if(Array.isArray(role.denominations)){
+			//a denomination already listed by another role is ignored
+			const taken = new Set([...this._registeredRoles.values()].filter(other => other.id !== id).flatMap(other => other.denominations));
+			entry.denominations = [...new Set([...entry.denominations, ...role.denominations.filter(d => !taken.has(d))])];
+		}
 		if(role.detectors){
 			const incoming = this._normalizeDetectors(role.detectors);
 			for(const token of incoming.modifiers){
@@ -207,6 +219,27 @@ export class DiceRoleRegistry {
 		if(packageId) entry.package = packageId;
 		this._registeredRoles.set(id, entry);
 		this.invalidateRoles();
+	}
+
+	//role of each listed denomination, deleted roles are left out
+	get denominationRoles(){
+		if(!this._denominationRoles){
+			this._denominationRoles = new Map();
+			for(const role of this.roles.values()){
+				if(role.deleted) continue;
+				for(const denom of role.denominations ?? []) this._denominationRoles.set(denom, role.id);
+			}
+		}
+		return this._denominationRoles;
+	}
+
+	getDenominationRole(denomination){
+		return this.denominationRoles.get(denomination);
+	}
+
+	//these die types are never rolled, their dice use the regular die of their size
+	getHiddenDieTypes(){
+		return new Set([...this.denominationRoles.keys()].map(denom => "d" + denom));
 	}
 
 	resolveRoleSlot(roleContext, roleId, dieType){
@@ -253,6 +286,8 @@ export class DiceRoleRegistry {
 			if(typeof options.dsnRole === "string" && options.dsnRole !== "") return options.dsnRole;
 			//dsnDamageType / dsnDamageTypeManaged are obsolete, use dsnRole / dsnRoleManaged
 			if(typeof options.dsnDamageType === "string" && options.dsnDamageType !== "") return options.dsnDamageType;
+			const denominationRole = this.getDenominationRole(dsnDie?.termDenomination);
+			if(denominationRole) return denominationRole;
 			const managed = !!(options.dsnRoleManaged || options.dsnDamageTypeManaged);
 			const roles = [...this.roles.values()].filter(role => !role.deleted);
 			for(const token of dsnDie?.termModifiers ?? []){

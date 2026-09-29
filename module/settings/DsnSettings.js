@@ -116,8 +116,8 @@ export class DsnSettings {
         let maxRollOrder = message.isRoll ? 0 : -1;
         const inlineRolls = [];
         temp.querySelectorAll(".inline-roll.inline-result:not(.inline-dsn-hidden)").forEach(el => {
-            //the Roll class registered in CONFIG in case the system overwrites it (eg: HeXXen)
-            const roll = CONFIG.Dice.rolls[0].fromJSON(unescape(el.dataset.roll));
+            //the core fromJSON rebuilds the saved Roll class (eg: HeXXen), even a core Roll the system removed from CONFIG.Dice.rolls
+            const roll = foundry.dice.Roll.fromJSON(unescape(el.dataset.roll));
             if (sequenceInlineRolls) {
                 maxRollOrder++;
                 roll.dice.forEach(term => {
