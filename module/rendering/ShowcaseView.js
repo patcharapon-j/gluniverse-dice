@@ -51,6 +51,8 @@ export class ShowcaseView {
 		const extraDiceTypes = ["d3", "d5", "d7", "d14", "d16", "d24", "d30", "d1000", "d10000"];
 		if (!this.showExtraDice)
 			selectordice = selectordice.filter((die) => !extraDiceTypes.includes(die));
+		const hiddenDieTypes = this.dicefactory.getHiddenDieTypes();
+		selectordice = selectordice.filter((die) => !hiddenDieTypes.has(die));
 		if (Array.isArray(config.dieTypes) && config.dieTypes.length)
 			selectordice = selectordice.filter((die) => config.dieTypes.includes(die));
 		const roleNotation = DsnSettings._roleNotation(config.role);

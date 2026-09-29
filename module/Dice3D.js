@@ -94,6 +94,8 @@ export class Dice3D {
      * @param {Boolean} [role.customizable] - whether players can customize this role in their dice settings
      * @param {Boolean} [role.optional] - whether players can turn this role off with their "Apply optional dice role appearances" preference
      * @param {Array<String>|null} [role.dieTypes] - optional die type whitelist shown in the player settings
+     * @param {Array<String>} [role.denominations] - denominations of Die classes from your package (e.g. "w").
+     *   Their dice get the role and roll as the regular die of their size
      * @param {Object} [role.defaults] - partial role scope `{ global?: {...}, d4?: {...}, ... }`
      * @param {Object} [role.detectors] - `{ modifiers?: [String], types?: [String] }`. A modifier token must be
      *   declared by a dice term class (Foundry's Die or one in CONFIG.Dice.terms)

@@ -289,9 +289,10 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
             Object.entries(COMPOUND_DICE).filter(([k]) => parseInt(k) > 100).map(([, places]) => places[0].type)
         );
 
+        const hiddenDieTypes = this.diceFactory.getHiddenDieTypes();
         const diceTypes = this.showcaseView
             ? this.showcaseView.diceList.map(el => el.userData)
-            : [...this.diceFactory.systems.get("standard").dice.keys()];
+            : [...this.diceFactory.systems.get("standard").dice.keys()].filter(t => !hiddenDieTypes.has(t));
 
         diceTypes.forEach((diceType) => {
             this.navOrder[diceType] = i++;

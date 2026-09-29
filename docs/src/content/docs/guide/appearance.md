@@ -57,4 +57,4 @@ You can also configure a unique dice appearance for individual characters. See [
 
 ## Disabling 3D Dice
 
-If a player does not want 3D dice animations, they can disable them from the Appearance tab. This only affects that player. Other players continue to see their own 3D dice normally.
+If a player does not want 3D dice animations, they can set **Dice visibility** to *Hide all* in the [Preferences](/foundryvtt-dice-so-nice/guide/preferences/#visibility) tab or in the Dice So Nice! sidebar tab. This only affects that player. Other players continue to see their own 3D dice normally.

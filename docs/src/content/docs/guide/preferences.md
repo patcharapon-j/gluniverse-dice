@@ -9,7 +9,10 @@ The Preferences tab controls how dice behave during and after a roll.
 
 ## Visibility
 
-- **Only show my dice** - When enabled, you won't see other players' 3D dice rolls.
+- **Dice visibility** - Which 3D dice you see. Also available from the Dice So Nice! sidebar tab.
+  - **Show all players' dice** - You see every 3D roll and every persistent die.
+  - **Show only mine** - You only see your own rolls and your own persistent dice.
+  - **Hide all** - Disables 3D dice on your client. Switching to or from this option asks you to reload Foundry.
 - **Automatically Hide** - When enabled, dice disappear automatically after the result is displayed.
 - **Millisecs Before Hiding** - Time in milliseconds before dice auto-hide (default: 2000ms). Only visible when Automatically Hide is enabled.
 - **Hide FX** - The visual effect used when dice disappear (fade out, etc.).
@@ -38,6 +41,21 @@ The Preferences tab controls how dice behave during and after a roll.
 
 - **Throwing Force** - The intensity of the roll: weak, medium, or strong. Affects how far dice travel and how much they bounce.
 
+## Persistent Dice
+
+- **Persistent dice spawn location** - Where your new [persistent dice](/foundryvtt-dice-so-nice/guide/persistent-dice/) appear on the tabletop: center, top-left, top-right, bottom-left or bottom-right.
+
+## Interactive Throws
+
+These settings are greyed out when the GM has not made [interactive throws](/foundryvtt-dice-so-nice/guide/interactive-throws/) available in the world.
+
+- **Interactive throws** - When your rolls wait for you to throw the dice on the tabletop:
+  - **World default** - Follows the GM's world setting.
+  - **Never** - Your rolls always play the normal 3D animation.
+  - **Only when requested** - Your rolls stay normal unless the game system asks for a throw.
+  - **Whenever possible** - Every eligible roll waits for your throw.
+- **Auto-spawn missing dice** - When one of your rolls waits for a throw, the dice you are missing on the tabletop are spawned automatically.
+
 ## Dice Roles
 
 - **Apply optional dice role appearances** - When enabled, dice tagged with a role your game marks as optional (damage types, by default) take that role's appearance. Disable to see your own dice instead. Roles marked as essential by your game system or the GM (a system's special dice, for example) keep their appearance either way.
@@ -62,6 +80,6 @@ Each row of the table is a role and shows:
 For a die in a role, fields are resolved in this order: the player's own appearance for that role (only for roles players may customize), the world appearance set here, the defaults of the package that registered the role, then the player's basic global settings. A roll that sets its own appearance through the API still wins over all of these.
 :::
 
-## Immersive Darkness
+## Inactive Tab
 
-- **Enable Immersive Darkness mode** - When enabled, the scene's darkness level affects the dice lighting, making dice dimmer in dark scenes for added immersion.
+- **Skip animations when tab is inactive** - By default, rolls made while Foundry is in a background browser tab are played when you come back. Enable this to skip them instead.

@@ -38,6 +38,7 @@ export default defineConfig({
 						{ label: 'Dice Editor', slug: 'guide/dice-editor' },
 						{ label: 'Custom Dice Terms', slug: 'guide/custom-dice-terms' },
 						{ label: 'Persistent Dice', slug: 'guide/persistent-dice' },
+						{ label: 'Interactive Throws', slug: 'guide/interactive-throws' },
 						{ label: 'Rollable Area', slug: 'guide/rollable-area' },
 						{ label: 'Macros', slug: 'guide/macros' },
 					],
