@@ -69,7 +69,7 @@ The `data` parameter has the following attributes:
 - (Optional) **emissiveMaps** is an array of emissive textures that should follow the exact same order as labels
 - (Optional) **emissive** is the color of the light (hexa code) emited by the dice. Default: `0x000000` (no light)
 - (Optional) **atlas** a TexturePacker JSON spritesheet containing labels/bumps/emissiveMaps. Can be shared across multiple types for a single spritesheet per dice set.
-- (Optional) **backgrounds** an array of background image paths (one per face), drawn behind the label as a background layer.
+- (Optional) **backgrounds** an object with `labels`, and optionally `bumpMaps` and `emissiveMaps`: arrays of background textures (one per face, same order as labels), drawn behind the label as a background layer.
 - (Optional) **labelScale** scales the label image size (default: 1). Values > 1 make labels larger, < 1 smaller.
 - (Optional) **scaleModifier** multiplier for the 3D mesh scale (default: 1). Useful for slightly larger or smaller dice.
 ### Examples
@@ -101,14 +101,16 @@ dice3d.addDicePreset(
 dice3d.addDicePreset({
     type: 'd6',
     labels: ['1', '2', '3', '4', '5', '6'],
-    backgrounds: [
-        'modules/my-module/img/bg-1.webp',
-        'modules/my-module/img/bg-2.webp',
-        'modules/my-module/img/bg-3.webp',
-        'modules/my-module/img/bg-4.webp',
-        'modules/my-module/img/bg-5.webp',
-        'modules/my-module/img/bg-6.webp'
-    ],
+    backgrounds: {
+        labels: [
+            'modules/my-module/img/bg-1.webp',
+            'modules/my-module/img/bg-2.webp',
+            'modules/my-module/img/bg-3.webp',
+            'modules/my-module/img/bg-4.webp',
+            'modules/my-module/img/bg-5.webp',
+            'modules/my-module/img/bg-6.webp'
+        ]
+    },
     labelScale: 0.8,
     scaleModifier: 1.1,
     system: 'my-system'
