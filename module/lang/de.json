@@ -375,7 +375,7 @@
     "DICESONICE.persistentDiceHelpTitle": "Wie man mit den Würfeln interagiert",
     "DICESONICE.persistentDiceHelpDelete": "Drücke die Entf- oder Rück-Taste, um die ausgewählten Würfel zu entfernen",
     "DICESONICE.persistentDiceHelpDrag": "Klicke auf einen Würfel und ziehe ihn, um seine Position auf der Spielfläche zu ändern",
-    "DICESONICE.persistentDiceHelpSelect": "Strg+Klick, um Würfel auszuwählen, erneut klicken, um die Auswahl aufzuheben.",
+    "DICESONICE.persistentDiceHelpSelect": "Strg+Klick, um Würfel auszuwählen, erneut klicken, um die Auswahl aufzuheben",
     "DICESONICE.GMPushSettings": "Präferenzen & Leistung",
     "DICESONICE.GMPushAppearance": "Aussehen der Würfel (Farben, Materialien, Systeme)",
     "DICESONICE.GMPushWarning": "Dies überschreibt die ausgewählten Einstellungen für alle Spieler außer dem SL, einschließlich der, die ihre Verbindung verloren haben. Dieser Vorgang kann nicht rückgängig gemacht werden.",
