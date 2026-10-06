@@ -164,6 +164,13 @@ export class AnimationQueue {
             }
 
             let remainingAnimations = batches.length;
+            const batchDone = () => {
+                remainingAnimations--;
+                if (remainingAnimations === 0) {
+                    items.forEach(item => item.resolve(true));
+                    this.canvasVisibility.hide();
+                }
+            };
 
             this._currentAnimation = this._currentAnimation.then(async () => {
                 for (let ci = 0; ci < batches.length; ci++) {
@@ -171,14 +178,20 @@ export class AnimationQueue {
                     const persistentData = ci === 0 ? mergedPersistentData : null;
                     this.queue.push(() => new Promise(async (resolve) => {
                         this.canvasVisibility.show();
-                        await this.box.startUnifiedBatch(batches[ci], persistentData, () => {
-                            remainingAnimations--;
-                            if (remainingAnimations === 0) {
-                                items.forEach(item => item.resolve(true));
-                                this.canvasVisibility.hide();
-                            }
+                        try {
+                            //a window resize may occur and will rebuild the box between two batches, wait for the new one
+                            await this.box.ready;
+                            await this.box.startUnifiedBatch(batches[ci], persistentData, () => {
+                                batchDone();
+                                resolve();
+                            });
+                        } catch (err) {
+                            //in case of an unexpected broken batch, we make sure tu unstuck the queue
+                            console.error("[Dice So Nice] animation batch failed", err);
+                            items.forEach(item => item.resolve(false));
+                            batchDone();
                             resolve();
-                        });
+                        }
                     }));
                 }
 

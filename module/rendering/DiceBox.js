@@ -492,6 +492,12 @@ export class DiceBox {
 					this.throwEngine.callback(this.throwEngine.throws);
 					if (!this.diceScene.animatedDiceDetected && !(this.allowInteractivity && (this.throwEngine.deadDiceList.length + this.throwEngine.diceList.length) > 0) && !DiceSFXManager.renderQueue.length && this.persistentDiceList.length === 0 && this.fadingDice.length === 0)
 						Utils.removeTicker(this.animateThrow);
+				}).catch(err => {
+					//in case of an unexpected failing sfx or worker call, we make sure to unstuck the queue
+					console.error("[Dice So Nice] throw completion failed", err);
+					if (!this.throwEngine.rolling) return;
+					this.throwEngine.rolling = false;
+					this.throwEngine.callback(this.throwEngine.throws);
 				});
 			}
 			this.throwEngine.running = false;
