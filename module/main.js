@@ -216,7 +216,7 @@ Hooks.once('init', () => {
             "2": "DICESONICE.ghostDiceForRollAuthor",
             "3": "DICESONICE.ghostDiceForPlayerRollsOnly"
         }),
-        default: false,
+        default: "0",
         config: true
     });
 

@@ -71,6 +71,9 @@ Mutating `interception.willTrigger3DRoll` in this hook is deprecated since v6.0.
 :::
 ## diceSoNiceRollStart
 Called when a 3D roll starts from the hook of the Chat message or when showForRoll is called directly from the API.
+
+A roll started directly from the API is never followed by `diceSoNiceRollComplete`. To know when it ends, wait for the promise returned by [`showForRoll`](/foundryvtt-dice-so-nice/api/roll/#using-the-fvtt-roll-class).
+
 * `messageId`: ID of the message that triggered the roll, or `null` if the API was called
 * `context`: The data needed to show the roll. Any change made to this object will be used in the roll animation.
   * **roll:** An instance of Roll class to show 3D dice animation
