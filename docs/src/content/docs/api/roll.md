@@ -15,8 +15,36 @@ Customized Systems and Modules, however, may implement differently the way the r
 
 In this case, 'Dice so Nice' exposes APIs to trigger the animation and have a notification when finished.
 
+## Animating a roll without a chat message
+When a roll never becomes a chat message (a reroll inside an existing chat message, a saving throw stored in the flags of a message...), use `game.dice3d.animateRoll`. It works like `roll.toMessage(messageData, { messageMode })`, but instead of creating a message, it sends the roll to every connected client. Each client then applies the same rules as for a chat roll (secret rolls, ghost dice, hidden NPC rolls, the dice appearance, etc.).
+```javascript
+/**
+ * Animate the 3D dice of a roll without a chat message, on every connected client.
+ *
+ * @param {Roll} roll - An evaluated Roll.
+ * @param {ChatMessage|Object} messageData - A chat message or plain data.
+ *        Only author, speaker, whisper and blind are read.
+ * @param {Object} options - { messageMode }: a chat message mode
+ *        ("public", "gm", "blind", "self"...).
+ * @returns {Promise<boolean>} true if the dice were shown on this client.
+ */
+game.dice3d.animateRoll(roll, messageData, { messageMode });
+```
+* `author` is the current user by default. Pass a `speaker` so the NPC and character owner settings apply.
+* Without `messageMode`, a chat message or data with its own `whisper` or `blind` keeps them. Other data takes the current chat mode of the user, similar to `toMessage`. A `messageMode` is applied on top of them, like core's `applyMode`.
+* The promise resolves when the animation ends on this client. `false` only means this client did not show the dice: other clients may still show them.
+
+```javascript
+// a reroll made from a chat message, shown to the users who can see that message
+const message = game.messages.get(messageId);
+const roll = await new Roll("1d20 + 5").evaluate();
+await game.dice3d.animateRoll(roll, message);
+```
+
+`animateRoll` fires `diceSoNiceRollStart` with a `null` message ID on each client that shows the dice. It never fires `diceSoNiceRollComplete`: wait for the promise instead.
+
 ## Using the FVTT Roll class
-If the Roll class is still used, activating the animation could be done using the `game.dice3d.showForRoll` method:
+If you need more control, use the low-level `game.dice3d.showForRoll` method: you decide who sees what, and every client plays the same animation.
 ```javascript
 /**
  * Show the 3D Dice animation for the Roll made by the User.
@@ -29,8 +57,8 @@ If the Roll class is still used, activating the animation could be done using th
  *        null for everyone (default: null).
  * @param {Boolean} blind - Blind for current user
  *        (default: false).
- * @param {String} chatMessageID - Message ID to reveal
- *        when the roll ends (default: null).
+ * @param {String} chatMessageID - Chat message this roll
+ *        belongs to (default: null).
  * @param {Object} speaker - ChatSpeakerData object. Needed
  *        to hide NPC rolls when GM enables that setting.
  * @param {Object} options - { ghost: false, secret: false }
@@ -130,7 +158,8 @@ const data = {
                 },
                 {
                     resultLabel: 50,
-                    d100Result: 59,
+                    compositeResult: 59,
+                    compositeType: 'd100',
                     result: 5,
                     type: 'd100',
                     vectors: [],
@@ -138,7 +167,8 @@ const data = {
                 },
                 {
                     resultLabel: 9,
-                    d100Result: 59,
+                    compositeResult: 59,
+                    compositeType: 'd100',
                     result: 9,
                     type: 'd10',
                     vectors: [],
@@ -207,7 +237,7 @@ This only affects how rolls added via message updates are hidden and revealed. T
 
 ## Showing a roll result inside another message
 
-Some systems display the result of a roll in a message other than the one carrying the Roll. A summary card listing each participant's saving throw, or a request card ticking off who has rolled, are typical examples. The roll message stays hidden until the dice land, but the other message does not, so the result leaks before the animation ends.
+Some systems display the result of a roll in a message other than the one carrying the Roll. A summary message listing each participant's saving throw, or a request message ticking off who has rolled, are typical examples. The roll message stays hidden until the dice land, but the other message does not, so the result leaks before the animation ends.
 
 Dice So Nice! handles this with a naming convention: wrap the nested result in an element with a `data-message-id` attribute set to the ID of the roll message.
 

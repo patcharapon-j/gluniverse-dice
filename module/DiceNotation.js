@@ -154,7 +154,7 @@ export class DiceNotation {
 				//a denomination can roll several sizes (swade 1dw8) but its preset only has the default size
 				if(fvttDie instanceof Die){
 					const preset = game.dice3d?.DiceFactory?.systems.get("standard")?.dice.get(dsnDie.type);
-					if(preset && preset.values.length !== fvttDie.faces)
+					if(!preset || preset.values.length !== fvttDie.faces)
 						dsnDie.type = "d" + fvttDie.faces;
 				}
 			}

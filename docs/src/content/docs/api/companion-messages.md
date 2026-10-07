@@ -3,7 +3,7 @@ title: Companion Messages
 description: Link non-roll chat messages to a roll so they stay hidden during the 3D animation and reveal together.
 ---
 
-Some game systems create multiple chat messages for a single logical roll. For example, WFRP4e posts a test card (containing the Roll) and a separate handler card (with buttons and outcome text). Without companion linking, the handler card appears immediately and spoils the result while the dice are still rolling.
+Some game systems create multiple chat messages for a single logical roll. For example, WFRP4e posts a test chat message (containing the Roll) and a separate handler chat message (with buttons and outcome text). Without companion linking, the handler chat message appears immediately and spoils the result while the dice are still rolling.
 
 Companion linking solves this. You set a flag on the non-roll message to link it to the primary roll message. Dice So Nice! hides the companion during the animation and reveals it when the dice finish.
 

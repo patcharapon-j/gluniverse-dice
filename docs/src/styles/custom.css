@@ -1,3 +1,13 @@
 :root {
 	--sl-content-width: 50rem;
 }
+
+/* the ways in on the home page, one color each (the user guide keeps the accent) */
+.sl-link-button.primary[data-way="developer"] {
+	background: var(--sl-color-purple-high);
+	border-color: var(--sl-color-purple-high);
+}
+.sl-link-button.primary[data-way="troubleshooting"] {
+	background: var(--sl-color-red-high);
+	border-color: var(--sl-color-red-high);
+}

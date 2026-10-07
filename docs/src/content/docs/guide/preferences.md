@@ -82,4 +82,4 @@ For a die in a role, fields are resolved in this order: the player's own appeara
 
 ## Inactive Tab
 
-- **Skip animations when tab is inactive** - By default, rolls made while Foundry is in a background browser tab are played when you come back. Enable this to skip them instead.
+- **Skip animations when tab is inactive** - By default, when you come back to Foundry from another browser tab, the rolls made in the last 10 seconds are played. Enable this to skip them instead.

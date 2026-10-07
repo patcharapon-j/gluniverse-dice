@@ -55,7 +55,7 @@ shader.uniforms.time = game.dice3d.uniforms.time;
 ```
 
 ## Custom Program Cache Key
-Should your shader modification in onBeforeShaderCompile need a custom cache logic, registerProcessMaterialCallback is a good place to modify the [material.customProgramCacheKey](https://threejs.org/docs/#api/en/materials/Material.customProgramCacheKey) function.
+Should your shader modification in `registerBeforeShaderCompileCallback` need a custom cache logic, `registerProcessMaterialCallback` is a good place to modify the [material.customProgramCacheKey](https://threejs.org/docs/#api/en/materials/Material.customProgramCacheKey) function.
 By default, Dice So Nice will use the uncompiled fragmentShader and vertexShader strings as the key.
 
 ## Animations

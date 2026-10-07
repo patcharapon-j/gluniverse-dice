@@ -116,6 +116,20 @@ Role appearances can also reference a die from the [Dice Library](/foundryvtt-di
 
 Basic dice don't follow this list: they use the player's own settings. Defaults registered for `basic` are only the look a player starts with.
 
+## Reading roles
+
+`getRoles` lists the roles known to this client, with the changes the GM made in the Dice Roles table. `getRole` returns one role by its id, or `undefined`.
+
+```javascript
+// the roles players can customize
+const roles = game.dice3d.getRoles({ customizable: true });
+
+// one role
+const hope = game.dice3d.getRole('hope');
+```
+
+Roles the GM deleted from the table are left out of `getRoles`, pass `includeDeleted: true` to get them too.
+
 ## Built-in roles
 
 The following damage types are built-in roles in the "Damage Types" group: `fire`, `acid`, `cold`, `radiant`, `poison`, `thunder`, `lightning`, `air`, `water`, `earth`, `force`, `psychic`, `necrotic`, `ice`. Each is detected through its id and defaults to the matching colorset.

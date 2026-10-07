@@ -10,13 +10,15 @@ Once enabled, Dice So Nice! intercepts new chat messages and checks `chatMessage
 
 ## Step 2: Pick the right integration path
 
+Not sure which one is yours? The [Start here](/foundryvtt-dice-so-nice/api/start/) page asks a few questions and takes you to the quick guide for your case.
+
 Most systems and modules work with one of the following approaches:
 
 - **Single chat message with Roll objects.** This is the standard path and requires no special integration. If your roll produces a chat message with a `rolls` array, Dice So Nice! detects and animates it automatically. Go to Step 3.
 
-- **Multiple chat messages for one logical roll.** Some systems create several messages for a single action (e.g. a roll card and a separate result card). In that case, put the Roll on the primary message and use [Companion Messages](/foundryvtt-dice-so-nice/api/companion-messages/) to link the others. Companions stay hidden during the animation and are revealed when the dice land. Go to Step 3 for the primary message, then see the Companion Messages page for the linking flag.
+- **Multiple chat messages for one logical roll.** Some systems create several messages for a single action (e.g. a roll message and a separate result message). In that case, put the Roll on the primary message and use [Companion Messages](/foundryvtt-dice-so-nice/api/companion-messages/) to link the others. Companions stay hidden during the animation and are revealed when the dice land. Go to Step 3 for the primary message, then see the Companion Messages page for the linking flag.
 
-- **A result shown inside another message.** If a card that is not the roll message displays the outcome of a roll, wrap that part in an element with a `data-message-id` attribute set to the roll message's ID. It stays hidden until the dice land. See [Showing a roll result inside another message](/foundryvtt-dice-so-nice/api/roll/#showing-a-roll-result-inside-another-message).
+- **A result shown inside another message.** If a chat message that is not the roll message displays the outcome of a roll, wrap that part in an element with a `data-message-id` attribute set to the roll message's ID. It stays hidden until the dice land. See [Showing a roll result inside another message](/foundryvtt-dice-so-nice/api/roll/#showing-a-roll-result-inside-another-message).
 
 - **No Roll class or no chat message at all.** If your system uses a custom random strategy or needs to trigger an animation without posting to chat, use the [Roll API](/foundryvtt-dice-so-nice/api/roll/) directly.
 
@@ -117,5 +119,5 @@ These flags can be set on a `ChatMessage` at creation time via the `flags` prope
 |------|------|-------------|
 | `dice-so-nice.skip` | `boolean` | Suppress the 3D animation entirely for this message. See [Roll API](/foundryvtt-dice-so-nice/api/roll/#skip-animation-for-a-specific-message-recommended). |
 | `dice-so-nice.linkedTo` | `string` | Link a non-roll message to a primary roll message so it stays hidden during animation. See [Companion Messages](/foundryvtt-dice-so-nice/api/companion-messages/). |
-| `dice-so-nice.persistent` | `boolean` | Mark the message's dice as persistent (interactive dice that stay on the canvas). |
+| `dice-so-nice.persistent` | `boolean` | Set by Dice So Nice! on the message of a die thrown on the tabletop. That message is not animated. |
 | `dice-so-nice.interactive` | `boolean` | `true` asks for an interactive throw, `false` opts this message out of it. See [Interactive Throws](/foundryvtt-dice-so-nice/api/interactive-throws/#request-flags). |

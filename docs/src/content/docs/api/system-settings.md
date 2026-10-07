@@ -7,7 +7,7 @@ The `DiceSystem` class provides a robust framework for managing various types of
 
 ## Adding Settings
 
-To add a setting to a `DiceSystem`, you can use one of the provided methods such as `addSettingBoolean`, `addSettingString`, `addSettingColor`, `addSettingFile`, and `addSettingSelect`. Each method requires an argument object that specifies the properties of the setting.
+To add a setting to a `DiceSystem`, you can use one of the provided methods such as `addSettingBoolean`, `addSettingString`, `addSettingColor`, `addSettingFile`, `addSettingSelect`, and `addSettingRange`. Each method requires an argument object that specifies the properties of the setting.
 
 ### Boolean Setting
 
@@ -77,6 +77,21 @@ myDSNSystem.addSettingSelect({
 });
 ```
 
+### Range Setting
+
+A range setting allows you to store a number, picked with a slider.
+
+```javascript
+myDSNSystem.addSettingRange({
+    id: 'glowIntensity',
+    name: 'Glow Intensity',
+    defaultValue: 50,
+    min: 0,
+    max: 100,
+    step: 5
+});
+```
+
 ## Formatting Settings
 
 The `DiceSystem` class also supports special formatting settings, which can be used to add visual elements or custom HTML content to the settings dialog.
@@ -99,7 +114,7 @@ myDSNSystem.addSettingHTML({ name: '<strong>Custom HTML Content</strong>' });
 
 ## Retrieving and Using Settings
 
-You can access these settings in the `onProcessMaterial` appearance parameter or in the `onBeforeShaderCompile` settings parameter. To learn more, see the [Custom shaders](/foundryvtt-dice-so-nice/api/shaders/) documentation.
+You can read these settings in `appearance.systemSettings`, in the callbacks of `registerProcessMaterialCallback` and `registerBeforeShaderCompileCallback`. To learn more, see the [Custom shaders](/foundryvtt-dice-so-nice/api/shaders/) documentation.
 
 ## Full demo
 ![image](../../../assets/wiki/06db602d_image.webp)

@@ -1,0 +1,179 @@
+---
+//a question page: one card per question of a graph in src/data/guides/, all rendered here
+//the url hash picks the card to show. an answer is a #node link to the next question, or the page it leads to
+import { GuideMap } from '../lib/guide-map.mjs';
+import { GuideMapSite } from '../lib/guide-map-site.mjs';
+
+const { graph } = Astro.props;
+const map = await GuideMapSite.load(graph);
+
+//the nodes from the start to this one, each node has one parent
+const pathTo = (id) => {
+	const path = [];
+	for (let current = id; current; current = map.parent.get(current)) path.unshift(current);
+	return path;
+};
+
+//the released version, read from module.json at build (astro.config.mjs)
+const fill = (text) => text.replaceAll('{version}', import.meta.env.DSN_VERSION).replaceAll('{foundry}', import.meta.env.DSN_FOUNDRY);
+
+//`code` in a help text
+const inline = (text) => fill(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/`([^`]+)`/g, '<code>$1</code>');
+
+//where an answer leads: the card of the next question, or the page itself
+const target = (id) => map.nodes.get(id).type === 'question' ? `#${id}` : map.view.get(id).url;
+
+const cards = map.order.filter(id => map.nodes.get(id).type === 'question').map(id => ({ node: map.nodes.get(id), path: pathTo(id) }));
+---
+
+<dsn-guide-panel class="not-content" data-root={GuideMap.ROOT}>
+	<p class="gp-note" hidden>That link points to a part of the guide that doesn't exist anymore, so here is the start.</p>
+	{cards.map(({ node, path }) => (
+		<section class="gp-card" data-node={node.id} hidden={node.id !== GuideMap.ROOT}>
+			{path.length > 1 && (
+				<nav aria-label="Your answers">
+					<ol class="gp-trail">
+						{path.map((id, index) => index < path.length - 1
+							? <li><a href={`#${id}`}>{map.nodes.get(id).label}</a></li>
+							: <li aria-current="step">{map.nodes.get(id).label}</li>)}
+					</ol>
+				</nav>
+			)}
+			<h2 class="gp-heading" tabindex="-1">{fill(node.question)}</h2>
+			{node.help && <p class="gp-help" set:html={inline(node.help)} />}
+			<ul class="gp-answers">
+				{node.answers.map(answer => (
+					<li>
+						<a class="gp-answer" href={target(answer.to)}>
+							<strong>{answer.label}</strong>
+							{answer.hint && <span set:html={inline(answer.hint)} />}
+						</a>
+					</li>
+				))}
+			</ul>
+		</section>
+	))}
+</dsn-guide-panel>
+
+<script is:inline>
+	//inline so a shared link shows its card on the first paint
+	if (!customElements.get('dsn-guide-panel')) customElements.define('dsn-guide-panel', class extends HTMLElement {
+		connectedCallback() {
+			this.cards = new Map([...this.querySelectorAll('.gp-card')].map(card => [card.dataset.node, card]));
+			this.note = this.querySelector('.gp-note');
+			window.addEventListener('hashchange', () => this.show(true));
+			this.show(false);
+		}
+
+		show(moved) {
+			let id = location.hash.slice(1);
+			try {
+				id = decodeURIComponent(id);
+			} catch (err) {}
+			const card = this.cards.get(id);
+			//a real anchor of the page, like the skip link, keeps the current card
+			if (!card && id && document.getElementById(id)) return;
+			const shown = card ?? this.cards.get(this.dataset.root);
+			this.note.hidden = !id || !!card;
+			for (const other of this.cards.values()) other.hidden = other !== shown;
+			if (moved) shown.querySelector('.gp-heading').focus();
+		}
+	});
+</script>
+
+<style>
+	dsn-guide-panel {
+		display: block;
+		margin-top: 1.5rem;
+	}
+	.gp-card {
+		display: grid;
+		gap: 0.75rem;
+		padding: 1.25rem;
+		border: 1px solid var(--sl-color-hairline);
+		border-inline-start: 4px solid var(--sl-color-accent);
+		border-radius: 0.5rem;
+		background: var(--sl-color-gray-6);
+	}
+	.gp-card[hidden] {
+		display: none;
+	}
+	.gp-heading {
+		margin: 0;
+		font-size: var(--sl-text-h4);
+		line-height: 1.3;
+		color: var(--sl-color-white);
+		outline: none;
+		scroll-margin-top: calc(var(--sl-nav-height) + 1.5rem);
+	}
+	.gp-help {
+		margin: 0;
+		color: var(--sl-color-gray-2);
+	}
+	.gp-help :global(code),
+	.gp-answer :global(code) {
+		font-family: var(--sl-font-mono);
+		font-size: 0.875em;
+		padding: 0.1em 0.3em;
+		border-radius: 0.25rem;
+		background: var(--sl-color-bg-inline-code);
+	}
+	.gp-answers,
+	.gp-trail {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+	.gp-answers {
+		display: grid;
+		gap: 0.5rem;
+	}
+	.gp-answer {
+		display: grid;
+		gap: 0.15rem;
+		min-height: 2.75rem;
+		padding: 0.6rem 0.85rem;
+		color: var(--sl-color-white);
+		text-decoration: none;
+		background: var(--sl-color-bg);
+		border: 1px solid var(--sl-color-gray-5);
+		border-radius: 0.5rem;
+	}
+	.gp-answer:hover,
+	.gp-answer:focus-visible {
+		border-color: var(--sl-color-text-accent);
+	}
+	.gp-answer span {
+		font-size: var(--sl-text-sm);
+		color: var(--sl-color-gray-3);
+	}
+	.gp-trail {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.4rem;
+		font-size: var(--sl-text-sm);
+		color: var(--sl-color-gray-3);
+	}
+	.gp-trail a {
+		color: var(--sl-color-text-accent);
+	}
+	.gp-trail li:not(:last-child)::after {
+		content: "›";
+		margin-inline-start: 0.4rem;
+	}
+	.gp-trail [aria-current] {
+		color: var(--sl-color-white);
+	}
+	.gp-note {
+		margin: 0 0 0.75rem;
+		padding: 0.5rem 0.75rem;
+		border-radius: 0.5rem;
+		background: var(--sl-color-orange-low);
+		color: var(--sl-color-white);
+		font-size: var(--sl-text-sm);
+	}
+	.gp-note[hidden] {
+		display: none;
+	}
+</style>

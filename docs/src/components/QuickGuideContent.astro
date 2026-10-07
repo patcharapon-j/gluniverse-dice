@@ -1,0 +1,54 @@
+---
+//page content, plus "You may also need" and a link back to the question page at the end of the guides
+import Default from '@astrojs/starlight/components/MarkdownContent.astro';
+import { GuideMap } from '../lib/guide-map.mjs';
+import { GuideMapSite } from '../lib/guide-map-site.mjs';
+
+const { id } = Astro.locals.starlightRoute;
+const graph = GuideMapSite.graphOf(id);
+let node = null;
+let related = [];
+let parent = null;
+if (graph) {
+	const map = await GuideMapSite.load(graph);
+	node = GuideMap.nodeForPage(map, id);
+	related = (node?.related ?? []).map(relatedId => map.view.get(relatedId));
+	//back to the question that led here
+	parent = node ? map.parent.get(node.id) : null;
+}
+---
+
+<Default>
+	<slot />
+	{node && (
+		<aside class="dsn-quick-footer" aria-label="Where to go next">
+			{related.length > 0 && (
+				<>
+					<p class="dsn-quick-footer-title">You may also need</p>
+					<ul>
+						{related.map(item => (
+							<li><a href={item.url}>{item.title}</a>{item.description && <span>{item.description}</span>}</li>
+						))}
+					</ul>
+				</>
+			)}
+			<p><a href={GuideMapSite.nodeUrl(graph, parent)}>{GuideMap.GRAPHS[graph].back}</a></p>
+		</aside>
+	)}
+</Default>
+
+<style>
+	.dsn-quick-footer {
+		margin-top: 3rem;
+		padding-top: 1rem;
+		border-top: 1px solid var(--sl-color-hairline);
+	}
+	.dsn-quick-footer-title {
+		font-weight: 600;
+		color: var(--sl-color-white);
+	}
+	.dsn-quick-footer span {
+		display: block;
+		color: var(--sl-color-gray-3);
+	}
+</style>

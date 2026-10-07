@@ -1,0 +1,176 @@
+# The questions of the Troubleshooting page, /troubleshooting/
+# Same format as developer.yaml, see its header. The pages under troubleshooting/ each need a node.
+#
+# In a question or a help text, {version} and {foundry} become the released version of Dice So Nice!
+# and the Foundry version it needs, read from module/module.json when the docs are built.
+#
+# Never rename a question id: people share links like /troubleshooting/#player.
+
+start:
+  type: question
+  label: Start
+  question: Who are you?
+  answers:
+    - label: I'm a player
+      hint: or a GM
+      to: player
+    - label: I'm a developer
+      to: developer
+
+# players and GMs
+
+player:
+  type: question
+  label: Player or GM
+  question: Do you have the latest version?
+  help: "The latest version of Dice So Nice! is {version}, for Foundry v{foundry}. On Foundry v13, it is 5.3.4. Many problems are already fixed there."
+  answers:
+    - label: Yes, I have it
+      to: player-symptoms
+    - label: No, or I'm not sure
+      to: player-update
+
+player-update:
+  type: guide
+  label: Update
+  page: troubleshooting/update
+
+player-symptoms:
+  type: question
+  label: Latest version
+  question: What do you see?
+  answers:
+    - label: No dice, or not all of them
+      to: no-dice
+    - label: The result shows before the dice land
+      to: too-early
+    - label: Players see my secret rolls
+      to: secret-rolls
+    - label: The dice don't look like mine
+      to: wrong-look
+    - label: Every die is a d6
+      hint: seen with dnd5e on Foundry v13
+      to: all-d6
+    - label: The dice are slow or choppy
+      to: slow
+    - label: Something else
+      to: player-still-stuck
+
+no-dice:
+  type: guide
+  label: No dice
+  page: troubleshooting/user/no-dice
+  related: [player-still-stuck]
+
+too-early:
+  type: guide
+  label: Shown too early
+  page: troubleshooting/user/too-early
+  related: [player-still-stuck]
+
+secret-rolls:
+  type: guide
+  label: Secret rolls
+  page: troubleshooting/user/secret-rolls
+  related: [player-still-stuck]
+
+wrong-look:
+  type: guide
+  label: Wrong look
+  page: troubleshooting/user/wrong-look
+  related: [player-still-stuck]
+
+all-d6:
+  type: guide
+  label: Every die is a d6
+  page: troubleshooting/update
+  anchor: on-foundry-v13
+
+slow:
+  type: link
+  label: Slow dice
+  page: guide/performance
+
+player-still-stuck:
+  type: guide
+  label: Still stuck
+  page: troubleshooting/still-stuck
+
+# developers of a system or a module
+
+developer:
+  type: question
+  label: Developer
+  question: Do you have the latest version?
+  help: "The latest version of Dice So Nice! is {version}, for Foundry v{foundry}. On Foundry v13, it is 5.3.4. Many problems are already fixed there."
+  answers:
+    - label: Yes, I have it
+      to: dev-symptoms
+    - label: No, or I'm not sure
+      to: dev-update
+
+dev-update:
+  type: guide
+  label: Update
+  page: troubleshooting/update
+
+dev-symptoms:
+  type: question
+  label: Latest version
+  question: What do you see?
+  answers:
+    - label: No dice at all
+      to: dev-no-dice
+    - label: The dice show twice
+      to: dev-twice
+    - label: The message or the result shows before the dice land
+      to: dev-too-early
+    - label: Players see the dice of a secret roll
+      to: dev-secret-rolls
+    - label: The dice don't have the look I expect
+      to: dev-wrong-look
+    - label: The die shows the wrong number
+      to: dev-wrong-number
+    - label: Something else
+      to: dev-still-stuck
+
+dev-no-dice:
+  type: guide
+  label: No dice
+  page: troubleshooting/dev/no-dice
+  related: [dev-still-stuck]
+
+dev-twice:
+  type: guide
+  label: Dice twice
+  page: troubleshooting/dev/dice-show-twice
+  related: [dev-still-stuck]
+
+dev-too-early:
+  type: guide
+  label: Shown too early
+  page: troubleshooting/dev/result-shows-early
+  related: [dev-still-stuck]
+
+dev-secret-rolls:
+  type: guide
+  label: Secret rolls
+  page: troubleshooting/dev/secret-rolls
+  related: [dev-still-stuck]
+
+dev-wrong-look:
+  type: guide
+  label: Wrong look
+  page: troubleshooting/dev/wrong-look
+  related: [dev-still-stuck]
+
+dev-wrong-number:
+  type: guide
+  label: Wrong number
+  page: troubleshooting/dev/wrong-number
+  related: [dev-still-stuck]
+
+dev-still-stuck:
+  type: guide
+  label: Still stuck
+  page: troubleshooting/still-stuck

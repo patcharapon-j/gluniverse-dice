@@ -66,8 +66,10 @@ The `data` parameter has the following attributes:
 - (Optional) **fontScale** is the scale of the font size (default: 1). This setting overwrite the colorset fontScale setting
 - (Optional) **bumpMaps** is an array of bumpMap textures that should follow the exact same order as labels
 - (Optional) **values** is an object with the min and max value on the die
+- (Optional) **valueMap** maps each result to the face that shows it (`{ result: face }`, faces counted from 1 in label order), for dice whose values aren't a simple range
 - (Optional) **emissiveMaps** is an array of emissive textures that should follow the exact same order as labels
 - (Optional) **emissive** is the color of the light (hexa code) emited by the dice. Default: `0x000000` (no light)
+- (Optional) **emissiveIntensity** is the strength of that light. Default: `1`
 - (Optional) **atlas** a TexturePacker JSON spritesheet containing labels/bumps/emissiveMaps. Can be shared across multiple types for a single spritesheet per dice set.
 - (Optional) **backgrounds** an object with `labels`, and optionally `bumpMaps` and `emissiveMaps`: arrays of background textures (one per face, same order as labels), drawn behind the label as a background layer.
 - (Optional) **labelScale** scales the label image size (default: 1). Values > 1 make labels larger, < 1 smaller.

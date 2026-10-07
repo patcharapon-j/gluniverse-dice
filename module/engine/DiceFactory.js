@@ -89,7 +89,7 @@ export class DiceFactory {
 			if(term.prototype instanceof foundry.dice.terms.Die && term.DENOMINATION === foundry.dice.terms.Die.DENOMINATION) continue;
 			if(term._dsnCustomTerm) continue;
 			let objTerm = new term({});
-			if([2, 3, 4, 6, 8, 10, 12, 14, 16, 20, 24, 30].includes(objTerm.faces)){
+			if([2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16, 20, 24, 30].includes(objTerm.faces)){
 				this.internalAddDicePreset(objTerm);
 			}
 		}
@@ -674,7 +674,11 @@ export class DiceFactory {
 	//See dice3d.addSystem for public API
 	addSystem(system, mode="default"){
 		const source = system;
-		if(system.constructor.name === 'DiceSystem'){ //note: do not use instanceof, it breaks on The Forge
+		//a DiceSystem or a subclass of it. note: do not use instanceof, it breaks on The Forge
+		let isDiceSystem = false;
+		for(let proto = Object.getPrototypeOf(system); proto && !isDiceSystem; proto = Object.getPrototypeOf(proto))
+			isDiceSystem = proto.constructor?.name === 'DiceSystem';
+		if(isDiceSystem){
 			this.systems.set(system.id, system);
 			mode = system.mode;
 		} else {
