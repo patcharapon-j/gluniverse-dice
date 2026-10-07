@@ -3,13 +3,13 @@ title: Interactive Throws
 description: Request or opt out of interactive dice throws per roll, and integrate with their completion timing.
 ---
 
-Interactive throws let a player reveal a roll by picking up the 3D dice on the tabletop and throwing them. Foundry still decides the result when the roll is evaluated. The throw only shows that result: Dice So Nice! corrects the physics animation so each thrown die lands on the number Foundry already picked, the same way it does for a normal 3D roll.
+Interactive throws let a player roll by picking up the 3D dice on the tabletop and throwing them. Foundry still decides the result when the roll is evaluated. The throw only shows that result: Dice So Nice! corrects the physics animation so each thrown die lands on the number Foundry already picked, the same way it does for a normal 3D roll.
 
 This page explains how to ask for, or refuse, an interactive throw on a given roll, and what happens to your automation and to completion timing while a throw is pending.
 
 ## How a roll becomes interactive
 
-When an eligible roll message is created, the roller's client marks it as pending. Every client then holds the message instead of animating it, and Dice So Nice! posts a separate chat card, visible to everyone, that shows the progress of the throw. The roll has one slot per die, and the roller fills the slots by throwing dice on the tabletop.
+When an eligible roll message is created, the roller's client marks it as pending. Every client then holds the message instead of animating it, and Dice So Nice! posts a separate chat message, visible to everyone, that shows the progress of the throw. The roll has one slot per die, and the roller fills the slots by throwing dice on the tabletop.
 
 The pending throw ends when every die has been thrown. It also ends early when the roller clicks *"Just roll it"*, when a GM force-resolves it, when the roller or a GM skips the animation, or when the roller reloads or disconnects.
 
@@ -55,9 +55,9 @@ Dice So Nice! reads the flag once, when the message is created. A flag added or 
 
 ## Automation is not delayed
 
-The roll is fully evaluated before the pending throw opens. Anything your system or module does with the evaluated roll (apply damage, update a tracker, post a follow-up card) runs right away. Dice So Nice! only holds back what it controls itself: the chat message, the initiative value in the combat tracker, and Foundry's core dice sound. If your follow-up output must appear after the throw, wait for the completion API described below.
+The roll is fully evaluated before the pending throw opens. Anything your system or module does with the evaluated roll (apply damage, update a tracker, post a follow-up message) runs right away. Dice So Nice! only holds back what it controls itself: the chat message, the initiative value in the combat tracker, and Foundry's core dice sound. If your follow-up output must appear after the throw, wait for the completion API described below.
 
-Dice So Nice! does not register a Foundry dice fulfillment resolver. The throw does not produce the result. It only reveals the result Foundry already produced.
+Dice So Nice! does not register a Foundry dice fulfillment resolver. The throw does not produce the result. It only shows the result Foundry already produced.
 
 ## Completion timing
 
@@ -67,12 +67,12 @@ Everything that signals the end of the animation waits until the roller's last t
 - `game.dice3d.waitFor3DAnimationByMessageID(messageId)`,
 - the `diceSoNiceRollComplete` hook.
 
-There is no timeout. A pending throw stays open as long as the table wants, but it can always be ended: the roller can escape at any time, a GM can force-resolve at any time, and if the roller reloads or disconnects, the throw is abandoned and the result is revealed.
+There is no timeout. A pending throw stays open as long as the table wants, but it can always be ended: the roller can escape at any time, a GM can force-resolve at any time, and if the roller reloads or disconnects, the throw is abandoned and the result shows right away.
 
 ```javascript
 Hooks.on('createChatMessage', async (message) => {
     if (!message.isRoll) return;
-    //resolves when the last die lands (or immediately for a normal roll)
+    //resolves when the last die lands
     await game.dice3d.waitFor3DAnimationByMessageID(message.id);
     //safe to reveal follow-up content here
 });

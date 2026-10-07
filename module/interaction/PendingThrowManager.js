@@ -1,6 +1,7 @@
 import { DiceNotation, COMPOUND_DICE } from '../DiceNotation.js';
 import { DsnSettings } from '../settings/DsnSettings.js';
 import { InitiativeMask } from '../ui/InitiativeMask.js';
+import { RollRules } from '../throw/RollRules.js';
 
 //holds all the pending interactive throw state on this client: the registry, the slot model, the final reveal
 export class PendingThrowManager {
@@ -54,14 +55,10 @@ export class PendingThrowManager {
             if (!(game.tables.get(rollTableId)?.displayRoll ?? true)) return false;
         }
         if (message.getFlag("core", "initiativeRoll") && game.settings.get("dice-so-nice", "disabledForInitiative")) return false;
-        if (game.settings.get("dice-so-nice", "hideNpcRolls")) {
-            const actor = ChatMessage.getSpeakerActor(message.speaker);
-            if (actor && !actor.hasPlayerOwner) return false;
-        }
+        if (RollRules.isHiddenNpc(message.speaker)) return false;
 
         //messages DSN splits per actor (group initiative) are not eligible
-        const ownerSetting = game.settings.get("dice-so-nice", "forceCharacterOwnerAppearance");
-        const shouldResolveOwner = ownerSetting === "2" || (ownerSetting === "1" && message.getFlag("core", "initiativeRoll"));
+        const shouldResolveOwner = RollRules.shouldResolveOwner(message.getFlag("core", "initiativeRoll"));
         const actorIdSet = new Set(message.rolls.filter(r => r.data?.actorId).map(r => r.data.actorId));
         if (actorIdSet.size > 1 && shouldResolveOwner) return false;
 

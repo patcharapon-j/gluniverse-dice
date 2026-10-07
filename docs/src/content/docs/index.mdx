@@ -11,9 +11,15 @@ hero:
       link: /foundryvtt-dice-so-nice/guide/getting-started/
       icon: right-arrow
     - text: Developer Guide
-      link: /foundryvtt-dice-so-nice/api/integration/
+      link: /foundryvtt-dice-so-nice/api/start/
       icon: open-book
-      variant: minimal
+      attrs:
+        data-way: developer
+    - text: Troubleshooting
+      link: /foundryvtt-dice-so-nice/troubleshooting/
+      icon: information
+      attrs:
+        data-way: troubleshooting
 ---
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
@@ -31,6 +37,6 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 		Trigger confetti, particles, sounds, and more when specific results are rolled.
 	</Card>
 	<Card title="Extensible API" icon="puzzle">
-		Systems and modules can register custom dice types, 3D models, shaders, and effects.
+		Systems and modules can register custom dice types, 3D models, shaders, and effects. [Find your way in the API](/foundryvtt-dice-so-nice/api/start/).
 	</Card>
 </CardGrid>

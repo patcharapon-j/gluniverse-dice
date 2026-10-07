@@ -23,7 +23,7 @@ Hooks.once('diceSoNiceInit', (dice3d) => {
 ## diceSoNiceMessagePreProcess
 
 
-Called when DsN detects a roll message and decides whether to animate it. Use this hook to force or suppress the 3D animation.
+Called for every new chat message, and for every update that adds rolls, when DsN decides whether to animate it. Use this hook to force or suppress the 3D animation.
 
 * `messageId`: ID of the message detected by Dice So Nice.
 * `interception`: Mutable object `{ willTrigger3DRoll: boolean }`. Flip the boolean to force or suppress the 3D animation.
@@ -72,13 +72,15 @@ Mutating `interception.willTrigger3DRoll` in this hook is deprecated since v6.0.
 ## diceSoNiceRollStart
 Called when a 3D roll starts from the hook of the Chat message or when showForRoll is called directly from the API.
 
-A roll started directly from the API is never followed by `diceSoNiceRollComplete`. To know when it ends, wait for the promise returned by [`showForRoll`](/foundryvtt-dice-so-nice/api/roll/#using-the-fvtt-roll-class).
+A roll started directly from the API is never followed by `diceSoNiceRollComplete`. To know when it ends, wait for the promise returned by [`showForRoll`](/foundryvtt-dice-so-nice/api/roll/#using-the-fvtt-roll-class) or [`animateRoll`](/foundryvtt-dice-so-nice/api/roll/#animating-a-roll-without-a-chat-message).
+
+With `animateRoll`, the hook fires once on each client that shows the dice, and `context.roll` is the whole roll. For a chat roll, it fires once per group of dice thrown together, and `context.roll` only holds the dice of that group.
 
 * `messageId`: ID of the message that triggered the roll, or `null` if the API was called
 * `context`: The data needed to show the roll. Any change made to this object will be used in the roll animation.
   * **roll:** An instance of Roll class to show 3D dice animation
   * **user:** The user who made the roll (game.user by default).
-  * **users:** List of users or userId who can see the roll, leave it empty if everyone can see.
+  * **users:** List of users or userId who can see the roll, leave it empty if everyone can see. Only used by `showForRoll` with `synchronize`.
   * **blind:** If the roll is blind for the current user
 ```javascript
 Hooks.on('diceSoNiceRollStart', (messageId, context) => {

@@ -87,3 +87,7 @@ Dice So Nice! registers two keybindings that can be customized in Foundry's **Co
 
 - **Dismiss visible dice** - Instantly clear any non-persistent 3D dice currently on screen.
 - **Delete selected persistent dice** - Remove persistent dice you have selected. Non-GM players can only delete their own dice.
+
+## Chat Command
+
+With the [Chat Commander](https://foundryvtt.com/packages/_chatcommands) module, type `/dice3d 2d6` (or `/d3d`, `/dsn`) to throw dice for everyone without posting a message in the chat.

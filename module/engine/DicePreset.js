@@ -338,6 +338,7 @@ export class DicePreset {
 
 					this.model = gltf;
 					this.modelLoaded = true;
+					//added in 4.6.4 but why? "some things that should not have been forgotten were lost"
 					Hooks.callAll("diceSoNiceModelLoaded", this);
 					resolve(gltf);
 				});

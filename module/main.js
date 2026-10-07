@@ -7,6 +7,7 @@ import { CustomDiceTermConfig } from './ui/CustomDiceTermConfig.js';
 import { DsnSidebarTab } from './ui/DsnSidebarTab.js';
 import { InitiativeMask } from './ui/InitiativeMask.js';
 import { CompanionLink } from './CompanionLink.js';
+import { RollRules } from './throw/RollRules.js';
 import { Utils } from './Utils.js';
 import { CustomDiceTerms } from './engine/CustomDiceTerms.js';
 import { DiceLibrary } from './engine/DiceLibrary.js';
@@ -463,13 +464,7 @@ const shouldInterceptMessage = (chatMessage, options = {dsnCountAddedRoll: 0, ds
 
     const hasInlineRoll = DsnSettings.hasInlineRoll(chatMessage);
 
-    const hide3dDiceOnSecretRolls = game.settings.get("dice-so-nice", "hide3dDiceOnSecretRolls");
-    const showGhostDice = game.settings.get("dice-so-nice", "showGhostDice");
-    const shouldShowGhostDice = showGhostDice === "1" ||
-        (showGhostDice === "2" && game.user.id === chatMessage.author.id && hide3dDiceOnSecretRolls) ||
-        (showGhostDice === "3" && !chatMessage.author.isGM && hide3dDiceOnSecretRolls);
-    
-    const isContentVisible = chatMessage.isContentVisible;
+    const visibility = RollRules.visibility(chatMessage);
     const shouldAnimateRollTable = game.settings.get("dice-so-nice", "animateRollTable");
     const hasRollTableFlag = chatMessage.getFlag("core", "RollTable");
     
@@ -479,8 +474,8 @@ const shouldInterceptMessage = (chatMessage, options = {dsnCountAddedRoll: 0, ds
 
     //Is a roll
     let willTrigger3DRoll = (chatMessage.isRoll || hasInlineRoll) &&
-    //If the content is  visible and ghost dice should  be shown
-    (isContentVisible || shouldShowGhostDice || !hide3dDiceOnSecretRolls) &&
+    //If the content is visible or ghost dice should be shown
+    visibility.animate &&
     //If dsn is correctly enabled and the message hook is not disabled
     game.dice3d && !game.dice3d.messageHookDisabled &&
     //If it has a roll table, then check if the roll table should be animated and the roll table is displayed
@@ -563,7 +558,7 @@ Hooks.on('createChatMessage', (chatMessage) => {
     const rolls = DsnSettings.rollsFromMessage(chatMessage);
 
     //Because Better Roll 5e sends an empty roll object sometime
-    if (!rolls.length || !rolls[0].dice.length)
+    if (!rolls.some(roll => roll.dice.length > 0))
         return;
 
     const isInitiativeRoll = chatMessage.getFlag("core", "initiativeRoll");

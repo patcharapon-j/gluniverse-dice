@@ -15,6 +15,7 @@ import { PendingThrowManager } from './interaction/PendingThrowManager.js';
 import { PersistentDice } from './interaction/PersistentDice.js';
 import { AnimationQueue } from './throw/AnimationQueue.js';
 import { ThrowPipeline } from './throw/ThrowPipeline.js';
+import { RollRules } from './throw/RollRules.js';
 import { LEGACY_TO_METERS } from './engine/SceneConstants.js';
 /**
  * Main class to handle 3D Dice animations.
@@ -561,8 +562,12 @@ export class Dice3D {
         game.socket.on('module.dice-so-nice', (request) => {
             switch (request.type) {
                 case "show":
-                    if (!request.users || request.users.includes(game.user.id))
+                    //"only my dice" is a choice of this client, the caller can't know it
+                    if ((!request.users || request.users.includes(game.user.id)) && !RollRules.isHiddenUser(game.users.get(request.user)))
                         this.pipeline.show(request.data, game.users.get(request.user), false, null, false, request.speaker);
+                    break;
+                case "animateRoll":
+                    this.pipeline.showAnimateRoll(request);
                     break;
                 case "update":
                     if (request.role) {
@@ -775,6 +780,20 @@ export class Dice3D {
     }
 
     /**
+     * Animate the 3D dice of a roll without a chat message, on every connected client.
+     * Works like roll.toMessage: each client shows real dice, ghost dice or nothing, with the same rules as a chat roll.
+     *
+     * @param {Roll} roll an evaluated Roll, or an object whose dice are Foundry dice terms
+     * @param {ChatMessage|Object} messageData only author, speaker, whisper and blind are read (default: the current user, no speaker)
+     * @param {Object} options
+     * @param {string} options.messageMode a chat message mode like "public", "gm", "blind" or "self" (default: the whisper and blind of messageData, else the current chat mode)
+     * @returns {Promise<boolean>} resolved when the animation ends on this client, true if it showed the dice, false if not.
+     */
+    animateRoll(roll, messageData = {}, { messageMode } = {}) {
+        return this.pipeline.animateRoll(roll, messageData, messageMode);
+    }
+
+    /**
      * Show the 3D Dice animation based on data configuration made by the User.
      *
      * @param data data containing the dice info.
@@ -826,7 +845,9 @@ export class Dice3D {
      * @param {ChatMessage.ID} targetMessageId 
      * @returns Promise<boolean>
      */
-    waitFor3DAnimationByMessageID(targetMessageId) {
+    async waitFor3DAnimationByMessageID(targetMessageId) {
+        //let the other createChatMessage hooks run first, ours sets _dice3danimating
+        await null;
         function buildHook(resolve) {
             Hooks.once('diceSoNiceRollComplete', (messageId) => {
                 if (targetMessageId === messageId)

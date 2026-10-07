@@ -78,6 +78,7 @@ pages:
     - cd docs && npm ci
   script:
     - npx astro build
+    - npm run check
     - mv public ../public
   artifacts:
     paths:

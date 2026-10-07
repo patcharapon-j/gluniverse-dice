@@ -1,0 +1,404 @@
+# The Start here page of the developer docs, /api/start/
+#
+# Each entry is a node, listed by its id:
+# - question: a question and its answers. Each answer leads to another node with `to`.
+# - guide: a quick guide page under api/quick/ (`page` is its slug, `anchor` an optional section).
+# - link: any other page of the docs, like the user guide (`page`, and optionally `anchor`).
+#
+# Only questions are cards: an answer leading to a guide or a link opens its page directly.
+# `label` names the node, a question shows it in the trail on top of its card. The answers
+# show the `label` of each answer instead, written as a choice. `related` lists the nodes
+# shown as "You may also need" at the bottom of a quick guide.
+#
+# Each node has one parent: only one answer can lead to it. When a quick guide fits two places,
+# give it two nodes with the same `page`. Its "Back to Start here" link goes to the question of
+# the first one met from `start`, in the order of the answers.
+#
+# A guide can be at most 4 answers away from `start`. The build stops with a message naming
+# the node when something is wrong.
+#
+# Never rename a question id: people share links like /api/start/#no-chat.
+
+start:
+  type: question
+  label: Start
+  question: What are you working on?
+  help: "Pick the closest one."
+  answers:
+    - label: I want my rolls to show 3D dice
+      hint: a game system, a module or a macro
+      to: rolls
+    - label: I want to change how the dice look
+      hint: colors, faces, 3D models, effects
+      to: looks
+    - label: I want my code to react to Dice So Nice!
+      hint: hooks, events, timing
+      to: react
+    - label: I have a problem with the dice
+      hint: dice missing, shown twice, shown too early...
+      to: troubleshooting
+    - label: I'm new here and want to know how it works
+      to: how-it-works
+    - label: I want the list of flags and options
+      to: cheat-sheet
+
+rolls:
+  type: question
+  label: Show dice for my rolls
+  question: Does the roll end up in a chat message?
+  help: "That's what `roll.toMessage()` and `ChatMessage.create({ rolls })` do."
+  answers:
+    - label: Yes, it's posted as a chat message
+      to: chat
+    - label: No, there's no chat message for it
+      hint: a reroll in a chat message, a save stored in flags...
+      to: no-chat
+    - label: I'm writing a macro
+      to: macros
+    - label: Not sure
+      to: not-sure-rolls
+
+chat:
+  type: question
+  label: In a chat message
+  question: Anything special about these rolls?
+  answers:
+    - label: No, they are regular rolls
+      to: chat-rolls
+    - label: I split one roll across several chat messages
+      to: several-messages
+    - label: I also show the result in another chat message
+      to: result-in-message
+    - label: I want some dice to roll after others
+      to: roll-order
+    - label: I put the rolls of several characters in one message
+      to: several-actors
+    - label: I want a new type of die
+      hint: a new DiceTerm, like `/r 2dx`
+      to: own-die
+    - label: I don't want some rolls or dice to be animated
+      to: skip
+    - label: I want players to throw the dice by hand
+      to: interactive
+
+no-chat:
+  type: question
+  label: No chat message
+  question: What do you have to show?
+  answers:
+    - label: I have an evaluated Foundry Roll
+      to: have-roll
+    - label: I only have results from my own random system
+      to: no-roll-class
+
+have-roll:
+  type: question
+  label: I have a Roll
+  question: Who should see the dice?
+  answers:
+    - label: The people who can see a chat message I have
+      to: animate-roll-message
+    - label: A chat mode, like public, GM only, blind or self
+      to: animate-roll-mode
+    - label: I want to pick the users myself
+      to: show-for-roll
+
+# show dice for my rolls: guides
+
+chat-rolls:
+  type: guide
+  label: Chat rolls just work
+  page: api/quick/rolls/chat-rolls
+  related: [several-messages, result-in-message, own-die, after-roll]
+
+several-messages:
+  type: guide
+  label: Several messages, one roll
+  page: api/quick/rolls/several-messages
+  related: [result-in-message, after-roll]
+
+result-in-message:
+  type: guide
+  label: A result inside another chat message
+  page: api/quick/rolls/result-in-another-message
+  related: [several-messages]
+
+roll-order:
+  type: guide
+  label: Roll order
+  page: api/quick/rolls/roll-order
+  related: [several-actors]
+
+several-actors:
+  type: guide
+  label: Rolls of several characters
+  page: api/quick/rolls/rolls-for-several-actors
+  related: [roll-order]
+
+own-die:
+  type: guide
+  label: My own kind of die
+  page: api/quick/looks/custom-die
+  related: [faces, roles, custom-dice-terms-ui]
+
+skip:
+  type: guide
+  label: Don't animate this
+  page: api/quick/rolls/skip-animation
+  related: [before-roll]
+
+interactive:
+  type: guide
+  label: Interactive throws
+  page: api/quick/rolls/interactive-throws
+  related: [after-roll, skip]
+
+animate-roll-message:
+  type: guide
+  label: animateRoll with a chat message
+  page: api/quick/rolls/animate-roll
+  related: [show-for-roll, after-roll]
+
+animate-roll-mode:
+  type: guide
+  label: animateRoll with a chat mode
+  page: api/quick/rolls/animate-roll
+  anchor: with-a-chat-mode
+  related: [animate-roll-message]
+
+show-for-roll:
+  type: guide
+  label: showForRoll
+  page: api/quick/rolls/show-for-roll
+  related: [animate-roll-message]
+
+no-roll-class:
+  type: guide
+  label: No Roll class
+  page: api/quick/rolls/no-roll-class
+  related: [animate-roll-message]
+
+macros:
+  type: guide
+  label: Macros
+  page: api/quick/rolls/macros
+  related: [after-roll, skip]
+
+not-sure-rolls:
+  type: guide
+  label: How it works
+  page: api/quick/how-it-works
+  related: [chat-rolls, animate-roll-message]
+
+# root guides
+
+how-it-works:
+  type: guide
+  label: How Dice So Nice works
+  page: api/quick/how-it-works
+  related: [chat-rolls, animate-roll-message, cheat-sheet]
+
+cheat-sheet:
+  type: guide
+  label: Flags and options
+  page: api/quick/flags-and-options
+  related: [skip, per-roll, roles]
+
+# make dice look my way
+
+looks:
+  type: question
+  label: Make dice look my way
+  question: Will you write code for it?
+  help: "GMs and players can make their own dice in the game, without any code."
+  answers:
+    - label: No, I'd rather use the tools in the game
+      to: no-code
+    - label: Yes, in a module or a game system
+      to: looks-code
+
+no-code:
+  type: question
+  label: Without code
+  question: What do you want to do?
+  answers:
+    - label: I want a die with my own colors, faces and textures
+      to: dice-editor
+    - label: I want to keep my dice and roll them by name
+      to: dice-library
+    - label: I want a new type of die with my own face values
+      to: custom-dice-terms-ui
+    - label: I want to change how my own dice look
+      to: appearance-ui
+
+dice-editor:
+  type: link
+  label: Dice Editor
+  page: guide/dice-editor
+
+dice-library:
+  type: link
+  label: Dice Library
+  page: guide/dice-library
+
+custom-dice-terms-ui:
+  type: link
+  label: Custom Dice Terms
+  page: guide/custom-dice-terms
+
+appearance-ui:
+  type: link
+  label: Appearance settings
+  page: guide/appearance
+
+looks-code:
+  type: question
+  label: With code
+  question: What do you want to do?
+  answers:
+    - label: I want a theme players can pick
+      to: theme
+    - label: I want my own text, images or icons on the faces
+      to: faces
+    - label: I want a new type of die
+      hint: a new DiceTerm, like `/r 2dx`
+      to: custom-die
+    - label: I want dice that mean something, like hope, fear or fire
+      to: roles
+    - label: I want one roll or one die to look different
+      to: per-roll
+    - label: I want my own 3D models
+      to: models
+    - label: I want a dice set players can pick, and the default for new players
+      to: dice-set
+    - label: I want effects when a result comes up
+      to: sfx
+    - label: I want shaders and animated materials
+      to: shaders
+
+theme:
+  type: guide
+  label: A theme
+  page: api/quick/looks/theme
+  related: [faces, dice-set]
+
+faces:
+  type: guide
+  label: Dice faces
+  page: api/quick/looks/dice-faces
+  related: [theme, models, dice-set]
+
+custom-die:
+  type: guide
+  label: A new kind of die
+  page: api/quick/looks/custom-die
+  related: [faces, roles, custom-dice-terms-ui]
+
+roles:
+  type: guide
+  label: Dice roles
+  page: api/quick/looks/dice-roles
+  related: [per-roll, dice-set]
+
+per-roll:
+  type: guide
+  label: One roll, one look
+  page: api/quick/looks/per-roll-appearance
+  related: [roles, several-actors]
+
+models:
+  type: guide
+  label: 3D models
+  page: api/quick/looks/3d-models
+  related: [faces, dice-events, shaders]
+
+dice-set:
+  type: guide
+  label: A dice set
+  page: api/quick/looks/dice-set
+  related: [faces, theme, roles, sfx]
+
+sfx:
+  type: guide
+  label: Special effects
+  page: api/quick/looks/special-effects
+  related: [die-position, dice-set]
+
+shaders:
+  type: guide
+  label: Shaders
+  page: api/quick/looks/shaders
+  related: [models, dice-set]
+
+# react to dice so nice
+
+react:
+  type: question
+  label: React to Dice So Nice
+  question: What do you want your code to do?
+  answers:
+    - label: I want to wait until Dice So Nice! is ready
+      to: ready
+    - label: I want to change, hide or cancel a roll before it plays
+      to: before-roll
+    - label: I want to run code once the dice have landed
+      to: after-roll
+    - label: I want to react when a die spawns, lands or is clicked
+      to: dice-events
+    - label: I want to follow an interactive throw
+      to: interactive-hooks
+    - label: I want to get the position of a die on screen
+      to: die-position
+    - label: I want to read what Dice So Nice! has loaded
+      to: helpers
+
+ready:
+  type: guide
+  label: Ready hooks
+  page: api/quick/react/ready
+  related: [dice-set, roles]
+
+before-roll:
+  type: guide
+  label: Before a roll plays
+  page: api/quick/react/before-a-roll
+  related: [skip, after-roll]
+
+after-roll:
+  type: guide
+  label: After the dice land
+  page: api/quick/react/after-the-dice-land
+  related: [interactive-hooks, before-roll]
+
+dice-events:
+  type: guide
+  label: Dice events
+  page: api/quick/react/dice-events
+  related: [models, sfx]
+
+interactive-hooks:
+  type: guide
+  label: Interactive throw hooks
+  page: api/quick/rolls/interactive-throws
+  anchor: hooks
+  related: [after-roll]
+
+die-position:
+  type: guide
+  label: Die position
+  page: api/quick/react/die-position
+  related: [sfx, dice-events]
+
+helpers:
+  type: guide
+  label: What is loaded
+  page: api/quick/react/helpers
+  related: [dice-set]
+
+# something looks wrong: the troubleshooting guide has its own questions
+
+troubleshooting:
+  type: link
+  label: Troubleshooting
+  page: troubleshooting
+  anchor: developer

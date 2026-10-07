@@ -109,7 +109,7 @@
     "DICESONICE.useHighDPI": "UHD resolution support (4K, Retina…)",
     "DICESONICE.showOthersSFX": "Show other players' special effects",
     "DICESONICE.animateRollTable": "Enable 3D dice on Roll Tables",
-    "DICESONICE.animateRollTableHint": "Show a 3D dice when rolling on a Roll Table. Need 'Animate roll tables' to 'off' in the core settings and 'Display Formula to Chat' to 'off' in the Roll Table.",
+    "DICESONICE.animateRollTableHint": "Show a 3D dice when rolling on a Roll Table. Need 'Animate roll tables' to 'off' in the core settings and 'Display Formula to Chat' to 'on' in the Roll Table.",
     "DICESONICE.hideNpcRolls": "Disable 3D dice on NPC rolls",
     "DICESONICE.hideNpcRollsHint": "Don't show 3D dice for any roll coming from an NPC.",
     "DICESONICE.animateInlineRoll": "Enable 3D dice on Inline Rolls",

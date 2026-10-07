@@ -3,9 +3,12 @@ import { DiceNotation } from '../DiceNotation.js';
 import { InitiativeMask } from '../ui/InitiativeMask.js';
 import { CompanionLink } from '../CompanionLink.js';
 import { HideRules } from '../HideRules.js';
+import { RollRules } from './RollRules.js';
 
 //the roll pipeline: chat message to throws, queued animation, then the reveal of the message
 export class ThrowPipeline {
+
+    static LEGACY_MESSAGE_MODES = { publicroll: "public", gmroll: "gm", blindroll: "blind", selfroll: "self" };
 
     constructor({ queue, pendingThrows }) {
         this.queue = queue;
@@ -254,12 +257,18 @@ export class ThrowPipeline {
             window.ui.sidebar.popouts.chat.scrollBottom();
     }
 
-    //group dice terms from a set of rolls into ordered rollOrder buckets, one Roll per bucket
-    _buildRollList(rollsToProcess) {
+    //one Roll from a list of dice terms, joined with "+"
+    _rollFromDice(dice) {
         const plus = new foundry.dice.terms.OperatorTerm({ operator: "+" });
         if (!plus._evaluated)
             plus.evaluate();
+        const termList = dice.flatMap((die, i) => i < dice.length - 1 ? [die, plus] : [die]);
+        //We use the Roll class registered in the CONFIG constant in case the system overwrites it (eg: HeXXen)
+        return CONFIG.Dice.rolls[0].fromTerms(termList);
+    }
 
+    //group dice terms from a set of rolls into ordered rollOrder buckets, one Roll per bucket
+    _buildRollList(rollsToProcess) {
         let orderedDiceList = [[]];
         rollsToProcess.forEach(roll => {
             roll.dice.forEach(diceTerm => {
@@ -292,15 +301,11 @@ export class ThrowPipeline {
 
         let rollList = [];
         orderedDiceList.forEach(dice => {
-            //add a "plus" between each term
             if (Array.isArray(dice) && dice.length) {
                 //strip dependency rolls from each die so the per-bucket Roll's flat .dice
                 //list contains only this bucket's dice - otherwise a (1d4)d6 d6 in bucket 1
                 //would re-render the d4 alongside it via Roll.dice's recursive walk
-                const cleanDice = dice.map(this._stripDependencyRolls);
-                let termList = [...cleanDice].map((e, i) => i < cleanDice.length - 1 ? [e, plus] : [e]).reduce((a, b) => a.concat(b));
-                //We use the Roll class registered in the CONFIG constant in case the system overwrites it (eg: HeXXen)
-                rollList.push(CONFIG.Dice.rolls[0].fromTerms(termList));
+                rollList.push(this._rollFromDice(dice.map(this._stripDependencyRolls)));
             }
         });
         return rollList;
@@ -314,6 +319,19 @@ export class ThrowPipeline {
      * @param {Array<Roll>} rolls
      */
     renderRolls(chatMessage, rolls) {
+        const animId = chatMessage._dice3dCurrentAnimId;
+        const showMessage = () => this._revealMessage(chatMessage, animId);
+
+        if (game.view == "stream" && !(game.modules.get("0streamutils")?.active || game.modules.get("obs-utils")?.active)) {
+            setTimeout(showMessage, 2500, chatMessage);
+        } else {
+            const resolveOwner = RollRules.shouldResolveOwner(chatMessage.getFlag("core", "initiativeRoll"));
+            this.animateRolls(rolls, { author: chatMessage.author, speaker: chatMessage.speaker, messageId: chatMessage.id, resolveOwner }).then(() => showMessage());
+        }
+    }
+
+    //queue the dice of some rolls in rollOrder buckets, resolves with the result of each bucket
+    animateRolls(rolls, { author, speaker = null, messageId = null, resolveOwner = false, ...options }) {
         //sequence dependent dice like (1d4)d6 so the inner roll resolves before the outer one spawns
         this._assignDependentRollOrder(rolls);
 
@@ -323,100 +341,124 @@ export class ThrowPipeline {
             this._stampAppearance(roll);
         }
 
-        const animId = chatMessage._dice3dCurrentAnimId;
-        const showMessage = () => this._revealMessage(chatMessage, animId);
+        // When multiple actors contributed rolls and owner resolution is active,
+        // group by actorId so each group gets the correct owner appearance.
+        // Otherwise treat all rolls as a single group.
+        const actorIdSet = new Set(rolls.filter(r => r.data?.actorId).map(r => r.data.actorId));
+        const shouldSplitByActor = actorIdSet.size > 1 && resolveOwner;
 
-        if (game.view == "stream" && !(game.modules.get("0streamutils")?.active || game.modules.get("obs-utils")?.active)) {
-            setTimeout(showMessage, 2500, chatMessage);
+        const groups = new Map();
+        if (shouldSplitByActor) {
+            rolls.forEach(roll => {
+                const aid = roll.data?.actorId || "";
+                if (!groups.has(aid)) groups.set(aid, []);
+                groups.get(aid).push(roll);
+            });
         } else {
-            //1- We create a list of all 3D rolls, ordered ASC
-            //2- We create a Roll object with the correct formula and results
-            //3- We queue the showForRoll calls and then show the message
-
-            const resolveOwnerForActor = (actor) => {
-                if (!actor?.hasPlayerOwner) return null;
-                let ownerUser = game.users.find(user => !user.isGM && user.character?.id == actor.id);
-                if (!ownerUser) {
-                    const ownership = { ...actor.ownership };
-                    if (ownership.default != CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER) {
-                        delete ownership.default;
-                        const playerOwners = Object.keys(ownership).filter(key => game.users.get(key) && !game.users.get(key).isGM);
-                        if (playerOwners.length == 1) {
-                            ownerUser = game.users.get(playerOwners[0]);
-                        }
-                    }
-                }
-                return ownerUser || null;
-            };
-
-            //chain rollList entries sequentially (for rollOrder), then call done
-            const showRollList = (rollList, author, speaker, done, rollTotal) => {
-                const recurse = (index) => {
-                    this.showForRoll(rollList[index], author, false, null, false, chatMessage.id, speaker, { originalRollTotal: rollTotal }).then(() => {
-                        if (rollList[index + 1] != null)
-                            recurse(index + 1);
-                        else
-                            done();
-                    });
-                };
-                if (rollList.length > 0) recurse(0);
-                else done();
-            };
-
-            const ownerAppearanceSetting = game.settings.get("dice-so-nice", "forceCharacterOwnerAppearance");
-            const shouldResolveOwner = ownerAppearanceSetting === "2"
-                || (ownerAppearanceSetting === "1" && chatMessage.getFlag("core", "initiativeRoll"));
-
-            // When multiple actors contributed rolls and owner resolution is active,
-            // group by actorId so each group gets the correct owner appearance.
-            // Otherwise treat all rolls as a single group.
-            const actorIdSet = new Set(rolls.filter(r => r.data?.actorId).map(r => r.data.actorId));
-            const shouldSplitByActor = actorIdSet.size > 1 && shouldResolveOwner;
-
-            const groups = new Map();
-            if (shouldSplitByActor) {
-                rolls.forEach(roll => {
-                    const aid = roll.data?.actorId || "";
-                    if (!groups.has(aid)) groups.set(aid, []);
-                    groups.get(aid).push(roll);
-                });
-            } else {
-                groups.set(null, rolls);
-            }
-
-            const promises = [];
-            for (const [actorId, groupRolls] of groups) {
-                const rollList = this._buildRollList(groupRolls);
-                if (rollList.length === 0) continue;
-
-                let author = chatMessage.author;
-                let speaker = chatMessage.speaker;
-
-                if (shouldResolveOwner) {
-                    let resolvedActorId = actorId || rollList[0].dice?.[0]?.options?.dsnActorId;
-                    let actor;
-                    if (resolvedActorId) {
-                        actor = game.actors.get(resolvedActorId);
-                    }
-                    if (!actor && chatMessage.speaker) {
-                        actor = ChatMessage.getSpeakerActor(chatMessage.speaker);
-                    }
-                    const ownerUser = resolveOwnerForActor(actor);
-                    if (ownerUser) {
-                        author = ownerUser;
-                        if (resolvedActorId) speaker = { actor: resolvedActorId };
-                    }
-                }
-
-                const groupRollTotal = groupRolls.reduce((sum, r) => sum + (r.total ?? 0), 0);
-                promises.push(new Promise(resolve => showRollList(rollList, author, speaker, resolve, groupRollTotal)));
-            }
-
-            if (promises.length > 0)
-                Promise.all(promises).then(() => showMessage());
-            else
-                showMessage();
+            groups.set(null, rolls);
         }
+
+        const promises = [];
+        for (const [actorId, groupRolls] of groups) {
+            const rollList = this._buildRollList(groupRolls);
+            if (rollList.length === 0) continue;
+
+            const owner = RollRules.diceOwner(author, speaker, actorId || rollList[0].dice?.[0]?.options?.dsnActorId, resolveOwner);
+            const groupRollTotal = groupRolls.reduce((sum, r) => sum + (r.total ?? 0), 0);
+            promises.push(this._showRollList(rollList, owner.user, owner.speaker, messageId, { ...options, originalRollTotal: groupRollTotal }));
+        }
+        return Promise.all(promises).then(results => results.flat());
+    }
+
+    //one bucket after the other, for rollOrder
+    async _showRollList(rollList, user, speaker, messageId, options) {
+        const results = [];
+        for (const roll of rollList)
+            results.push(await this.showForRoll(roll, user, false, null, false, messageId, speaker, options));
+        return results;
+    }
+
+    //the documented entry point, see Dice3D.animateRoll
+    //everything before the emit is synchronous, so the caller can change its roll right after the call
+    animateRoll(roll, messageData, messageMode) {
+        let data = null;
+        try {
+            data = this._animateRollData(roll, messageData ?? {}, messageMode);
+        } catch (err) { }
+        if (!data) return Promise.resolve(false);
+
+        game.socket.emit("module.dice-so-nice", { type: "animateRoll", user: game.user.id, ...data });
+
+        let local;
+        try {
+            local = this.showAnimateRoll({ ...data, roll: foundry.utils.deepClone(data.roll) });
+        } catch (err) {
+            console.error("[Dice So Nice] animateRoll failed:", err);
+            local = false;
+        }
+        if (!local) return Promise.resolve(false);
+        return local.then(results => results.some(result => result !== false), () => false);
+    }
+
+    //the roll and the four message fields that animateRoll sends to every client
+    _animateRollData(roll, messageData, messageMode) {
+        if (!(roll instanceof foundry.dice.Roll)) {
+            const dice = roll?.dice;
+            if (!dice?.length || !dice.every(die => die instanceof foundry.dice.terms.DiceTerm)) return null;
+            roll = this._rollFromDice(dice);
+        }
+        if (!roll._evaluated) return null;
+        //we write into the rolls we animate, so we work on a json copy, like the rolls of a chat message
+        const rollData = JSON.parse(JSON.stringify(roll));
+
+        const source = messageData instanceof foundry.abstract.Document ? messageData.toObject() : messageData;
+        const chatData = { author: source.author?.id ?? source.author ?? game.user.id, rolls: [rollData] };
+        if (source.speaker) chatData.speaker = source.speaker;
+        if (source.whisper) chatData.whisper = source.whisper.map(user => user?.id ?? user);
+        if ("blind" in source) chatData.blind = source.blind;
+        const message = new ChatMessage.implementation(chatData);
+
+        //like roll.toMessage, but a message or data with its own whisper or blind keeps them when no mode is given
+        if (messageMode)
+            message.applyMode(ThrowPipeline.LEGACY_MESSAGE_MODES[messageMode] ?? messageMode);
+        else if (!("whisper" in source) && !("blind" in source))
+            message.applyMode(game.settings.get("core", "messageMode"));
+
+        const { author, speaker, whisper, blind } = message.toObject();
+        return { roll: rollData, author, speaker, whisper, blind };
+    }
+
+    //what this client shows for a roll sent by animateRoll, with the same rules as a chat roll
+    //returns false when it shows nothing, else a promise with the result of each bucket
+    showAnimateRoll({ roll: rollData, author, speaker, whisper, blind }) {
+        let roll, message;
+        try {
+            roll = foundry.dice.Roll.fromData(rollData);
+            message = new ChatMessage.implementation({ author, speaker, whisper, blind });
+        } catch (err) {
+            console.error("[Dice So Nice] animateRoll: unable to rebuild the roll", err);
+            return false;
+        }
+
+        const visibility = RollRules.visibility(message);
+        if (!visibility.animate || RollRules.isHiddenNpc(speaker)) return false;
+
+        const owner = RollRules.diceOwner(message.author, speaker, roll.dice[0]?.options?.dsnActorId, RollRules.shouldResolveOwner());
+        if (RollRules.isHiddenUser(owner.user)) return false;
+
+        if (visibility.ghost) roll.ghost = true;
+        if (visibility.secret) roll.secret = true;
+        const context = { roll, user: owner.user, users: null, blind: false };
+        Hooks.callAll("diceSoNiceRollStart", null, context);
+        if (context.blind) return false;
+
+        return this.animateRolls([context.dsnRoll || context.roll], {
+            author: context.user,
+            speaker: owner.speaker,
+            ghost: !!context.roll.ghost,
+            secret: !!context.roll.secret,
+            skipRollStartHook: true
+        });
     }
 
     //the documented entry point, see Dice3D.showForRoll
@@ -440,24 +482,16 @@ export class ThrowPipeline {
         this._stampRole(context.roll);
         this._stampAppearance(context.roll);
 
-        if (speaker) {
-            let actor = ChatMessage.getSpeakerActor(speaker);
-            const isNpc = actor ? !actor.hasPlayerOwner : false;
-            if (isNpc && game.settings.get("dice-so-nice", "hideNpcRolls")) {
-                return Promise.resolve(false);
-            }
-        }
-
-        if (DsnSettings.CONFIG().visibility === "mine" && user !== game.user) {
+        if (RollRules.isHiddenNpc(speaker) || RollRules.isHiddenUser(user)) {
             return Promise.resolve(false);
         }
 
         let chatMessage = game.messages.get(messageID);
         if (chatMessage) {
-            const hide3dDiceOnSecretRolls = game.settings.get("dice-so-nice", "hide3dDiceOnSecretRolls");
-            if (chatMessage.whisper.length > 0 && hide3dDiceOnSecretRolls)
+            const { ghost, secret } = RollRules.visibility(chatMessage);
+            if (secret)
                 context.roll.secret = true;
-            if (!chatMessage.isContentVisible && hide3dDiceOnSecretRolls)
+            if (ghost)
                 context.roll.ghost = true;
         }
 

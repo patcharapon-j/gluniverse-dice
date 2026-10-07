@@ -122,7 +122,14 @@ You need a couple of things to create a new type of special effect. First is to 
 
 For this, you need to import it from the `api.js` file in the `dice-so-nice` module folder.
 
-Then, you need to override at least the `init` and `play` methods.
+Then, you need to override at least the `init` and `play` methods:
+
+- `static async init()` runs once, before the effect plays for the first time. Load your assets here.
+- `async play()` runs for each die that triggers the effect. Return `false` if it shows nothing in the end.
+- `render()` is optional. When you add it, it runs every frame until you set `this.destroyed = true`. Dice So Nice! waits for it before hiding the dice, so set it when your effect ends.
+- With `this.enableGC = true`, your `destroy()` method is called when the board is cleared. It is for effects without `render()` that still need cleaning.
+- `this.volume` is the volume for your sounds. It is already `0` when the sound is muted for this effect or this secret roll.
+
 Please check our [Special Effects classes](https://gitlab.com/riccisi/foundryvtt-dice-so-nice/-/tree/master/module/sfx?ref_type=heads) to see what is currently possible.
 
 It is also possible to import the ThreeJS library to directly interact with the 3D engine and create whatever you can imagine.
