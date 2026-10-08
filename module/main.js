@@ -381,6 +381,11 @@ Hooks.once('init', () => {
         }
     }
 
+    CONFIG.fontDefinitions.FoundryVTT = {
+        editor: false,
+        fonts: [{ urls: ["modules/dice-so-nice/fonts/foundryvtt.woff2"] }]
+    };
+
     //delete key removes selected persistent dice
     if (game.settings.get("dice-so-nice", "persistentDice")) {
         game.keybindings.register("dice-so-nice", "deleteSelectedPersistent", {
