@@ -1388,6 +1388,7 @@ export class DiceFactory {
 				if(mat.userData.hasMaterialNormalMap) {
 					mat.normalScale = new Vector2(nScale, nScale);
 					mat.userData.detailNormalMap = sobelNormalMap;
+					mat.customProgramCacheKey = () => "dsnDetailNormal";
 				} else {
 					mat.normalMap = sobelNormalMap;
 					mat.normalScale = new Vector2(nScale, nScale);

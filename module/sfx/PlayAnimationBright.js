@@ -34,10 +34,15 @@ export class PlayAnimationBright extends DiceSFX {
         this.timer = new Timer();
         this.baseColor = this.glowingMesh.material.emissive.clone();
         this.baseMaterial = this.glowingMesh.material;
+        //clone() copies userData through JSON: textures become plain objects and their canvas gets png encoded
+        const userData = this.baseMaterial.userData;
+        this.baseMaterial.userData = {};
         this.glowingMesh.material = this.baseMaterial.clone();
-        //swap to full emissive map so bright SFX lights all labels (read from original, clone destroys CanvasTexture refs)
-        if (this.baseMaterial.userData.emissiveMapFull) {
-            this.glowingMesh.material.emissiveMap = this.baseMaterial.userData.emissiveMapFull;
+        this.baseMaterial.userData = userData;
+        this.glowingMesh.material.userData = {...userData};
+        //swap to full emissive map so bright SFX lights all labels
+        if (userData.emissiveMapFull) {
+            this.glowingMesh.material.emissiveMap = userData.emissiveMapFull;
         }
         this.glowingMesh.material.onBeforeCompile = ShaderUtils.applyDiceSoNiceShader;
         //prevent a shader recompile

@@ -31,7 +31,12 @@ export class PlayAnimationDark extends DiceSFX {
         this.timer = new Timer();
         this.baseColor = this.glowingMesh.material.color.clone();
         this.baseMaterial = this.glowingMesh.material;
+        //clone() copies userData through JSON: textures become plain objects and their canvas gets png encoded
+        const userData = this.baseMaterial.userData;
+        this.baseMaterial.userData = {};
         this.glowingMesh.material = this.baseMaterial.clone();
+        this.baseMaterial.userData = userData;
+        this.glowingMesh.material.userData = {...userData};
         this.glowingMesh.material.onBeforeCompile = ShaderUtils.applyDiceSoNiceShader;
         //prevent a shader recompile
         this.glowingMesh.material.customProgramCacheKey = this.baseMaterial.customProgramCacheKey;
