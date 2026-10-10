@@ -1120,6 +1120,16 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         return roleScopes;
     }
 
+    //other users can't find a library die that has no owner, so set the owner
+    static _pinLibraryRefs(scope, ownerId) {
+        for (const key in scope) {
+            if (!scope.hasOwnProperty(key)) continue;
+            if (scope[key]?.libraryDieId && !scope[key].libraryDieOwner)
+                scope[key].libraryDieOwner = ownerId;
+        }
+        return scope;
+    }
+
     async actionExportToJSON() {
 
         //save current settings first
@@ -1212,16 +1222,11 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         //collect the GM's effective values once, package defaults included - offline users get written the same payload
         const payload = {};
         if (parts.appearance) {
-            const appearance = DsnSettings.APPEARANCE(game.user);
-            //strip cross-user library die refs - they point at the GM's library and won't resolve for other users
-            for (const scope in appearance) {
-                if (!appearance.hasOwnProperty(scope)) continue;
-                if (appearance[scope]?.libraryDieOwner) {
-                    delete appearance[scope].libraryDieId;
-                    delete appearance[scope].libraryDieOwner;
-                }
-            }
-            payload.appearance = appearance;
+            //library dice stay in their owner's library, players reference them from there
+            payload.appearance = DiceConfig._pinLibraryRefs(DsnSettings.APPEARANCE(game.user), game.user.id);
+            const roleAppearance = DsnSettings.ROLE_APPEARANCE(game.user);
+            for (const role of Object.values(roleAppearance)) DiceConfig._pinLibraryRefs(role, game.user.id);
+            payload.roleAppearance = roleAppearance;
         }
         if (parts.sfxList) {
             payload.sfxList = DsnSettings.SFX_LIST(game.user);
