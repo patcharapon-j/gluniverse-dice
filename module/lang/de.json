@@ -454,5 +454,16 @@
     "DICESONICE.pendingCardSpawn": "Würfel erzeugen",
     "DICESONICE.pendingCardNeed": "{name} muss folgende Würfel werfen:",
     "DICESONICE.protectPersistentHint": "Verhindert, dass andere Spieler deine dauerhaften Würfel nehmen oder werfen. Der SL kann sie immer nehmen.",
-    "DICESONICE.interactiveThrowsUnavailable": "Interaktive Würfe sind in dieser Welt nicht verfügbar. Sie bedürfen der Genehmigung durch den SL und erfordern Würfelinteraktionen, persistente Würfel sowie Chat-Nachrichten, die nicht unmittelbar angezeigt werden."
+    "DICESONICE.interactiveThrowsUnavailable": "Interaktive Würfe sind in dieser Welt nicht verfügbar. Sie bedürfen der Genehmigung durch den SL und erfordern Würfelinteraktionen, persistente Würfel sowie Chat-Nachrichten, die nicht unmittelbar angezeigt werden.",
+    "DICESONICE.editorFontScale": "Schriftgröße",
+    "DICESONICE.editorMixed": "Gemischt",
+    "DICESONICE.editorCopyId": "Würfel-ID kopieren",
+    "DICESONICE.editorSaved": "Benutzerdefinierter Würfel gespeichert!",
+    "DICESONICE.glyphPicker.cat.science_fiction": "Sci-Fi",
+    "DICESONICE.glyphPicker.cat.fruits_vegetables": "Obst & Gemüse",
+    "DICESONICE.glyphPicker.cat.camping": "Camping",
+    "DICESONICE.glyphPicker.cat.clothing_fashion": "Kleidung",
+    "DICESONICE.glyphPicker.cat.medical_health": "Medizinisch",
+    "DICESONICE.CustomDiceTermDenominationPlaceholder": "z.B. w",
+    "DICESONICE.CustomDiceTermDeleted": "{denomination} wurde gelöscht."
 }
