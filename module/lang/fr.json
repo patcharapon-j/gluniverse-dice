@@ -82,7 +82,7 @@
     "DICESONICE.useHighDPI": "Résolution Ultra-HD (4K, Retina…)",
     "DICESONICE.showOthersSFX": "Jouer les effets spéciaux des autres joueurs",
     "DICESONICE.animateRollTable": "Activer les dés 3D pour les 'Tables aléatoires'",
-    "DICESONICE.animateRollTableHint": "Afficher une animation 3D lors d'un lancé sur une table aléatoire. 'Animation des tables aléatoires' doit être 'off' ainsi que 'Afficher la Formule dans le Chat'.",
+    "DICESONICE.animateRollTableHint": "Afficher une animation 3D lors d'un lancé sur une table aléatoire. 'Animation des tables aléatoires' doit être 'on' ainsi que 'Afficher la Formule dans le Chat'.",
     "DICESONICE.hideNpcRolls": "Désactiver la 3D pour les jets de PNJ",
     "DICESONICE.hideNpcRollsHint": "Ne pas afficher les dés 3D lorsqu'un PNJ lance des dés.",
     "DICESONICE.animateInlineRoll": "Activer la 3D pour les jets 'Inline'",
