@@ -539,7 +539,7 @@ export class DiceEditor extends HandlebarsApplicationMixin(ApplicationV2) {
 
     _onFilePicker() {
         const el = this.element;
-        const fp = new foundry.applications.apps.FilePicker({
+        const fp = new foundry.applications.apps.FilePicker.implementation({
             type: "image",
             callback: async (path) => {
                 await DiceLibrary.loadImage(path);
@@ -568,7 +568,7 @@ export class DiceEditor extends HandlebarsApplicationMixin(ApplicationV2) {
 
     _onBaseTexturePicker() {
         const el = this.element;
-        const fp = new foundry.applications.apps.FilePicker({
+        const fp = new foundry.applications.apps.FilePicker.implementation({
             type: "image",
             callback: async (path) => {
                 const loaded = await DiceLibrary.loadImage(path);
@@ -621,7 +621,7 @@ export class DiceEditor extends HandlebarsApplicationMixin(ApplicationV2) {
 
     _onFaceTexturePicker() {
         const el = this.element;
-        const fp = new foundry.applications.apps.FilePicker({
+        const fp = new foundry.applications.apps.FilePicker.implementation({
             type: "image",
             callback: async (path) => {
                 const loaded = await DiceLibrary.loadImage(path);

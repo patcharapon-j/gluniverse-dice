@@ -1061,7 +1061,7 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         el.addEventListener("click", (event) => {
             const btn = event.target.closest("button.file-picker");
             if (!btn) return;
-            const filePicker = foundry.applications.apps.FilePicker.fromButton(btn);
+            const filePicker = foundry.applications.apps.FilePicker.implementation.fromButton(btn);
             filePicker.render(true);
         });
     }
