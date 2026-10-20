@@ -2038,9 +2038,9 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         delete formData.appearance;
         let settings = foundry.utils.mergeObject(DsnSettings.CONFIG(), formData, { insertKeys: false, insertValues: false, applyOperators: true });
 
-        //preserve settings that have no field in this form
-        settings.rollingArea = currentSettings.rollingArea;
-        settings.protectPersistent = currentSettings.protectPersistent;
+        //disabled inputs are not submitted and some settings have no field here: keep the saved value
+        for (const key of Object.keys(settings))
+            if (!(key in formData)) settings[key] = currentSettings[key];
 
         await game.user.setFlag('dice-so-nice', 'settings', settings);
         await game.user.setFlag("dice-so-nice", "appearance", appearance);
