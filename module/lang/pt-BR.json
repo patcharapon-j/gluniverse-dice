@@ -82,7 +82,7 @@
     "DICESONICE.useHighDPI": "Suporte à Resolução UDH (4k, Retina…)",
     "DICESONICE.showOthersSFX": "Mostrar Efeitos de Outros Jogadores",
     "DICESONICE.animateRollTable": "Habilitar Dados em Tabelas de Rolagem",
-    "DICESONICE.animateRollTableHint": "Exibe um dado 3D ao rolar em uma Tabela de Rolagem. É necessário desativar a opção \"Tabelas de Rolagem Animadas\" nas configurações do Foundry e desativar a opção \"Exibir Fórmula de Rolagem no Chat\" na Tabela de Rolagem.",
+    "DICESONICE.animateRollTableHint": "Exibe dados 3D ao rolar em uma Tabela de Rolagem. Requer que \"Tabelas de Rolagem Animadas\" esteja desativado nas configurações do Foundry e que \"Exibir Fórmula de Rolagem no Chat\" esteja ativado na Tabela de Rolagem.",
     "DICESONICE.hideNpcRolls": "Desabilitar Dados em Rolagens de PNJs",
     "DICESONICE.hideNpcRollsHint": "Não mostre dados 3D para nenhuma jogada vinda de um PNJ.",
     "DICESONICE.animateInlineRoll": "Habilitar Dados em Rolagens Inline",
