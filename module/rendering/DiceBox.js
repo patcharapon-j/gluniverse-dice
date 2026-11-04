@@ -231,7 +231,7 @@ export class DiceBox {
 		this.soundManager.update({
 			muteSoundSecretRolls: config.muteSoundSecretRolls,
 			sounds: config.sounds,
-			volume: config.volume,
+			volume: config.soundsVolume,
 			soundsSurface: config.soundsSurface
 		});
 

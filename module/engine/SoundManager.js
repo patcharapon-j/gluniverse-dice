@@ -11,10 +11,10 @@ export class SoundManager {
     }
 
     update(config) {
-        this.sounds = config.sounds || this.sounds;
-        this.volume = config.volume || this.volume;
-        this.soundsSurface = config.soundsSurface || this.soundsSurface;
-        this.muteSoundSecretRolls = config.muteSoundSecretRolls || this.muteSoundSecretRolls;
+        this.sounds = config.sounds ?? this.sounds;
+        this.volume = config.volume ?? this.volume;
+        this.soundsSurface = config.soundsSurface ?? this.soundsSurface;
+        this.muteSoundSecretRolls = config.muteSoundSecretRolls ?? this.muteSoundSecretRolls;
 
         if (!this.preloaded) {
             this.preloaded = true;
