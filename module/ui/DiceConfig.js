@@ -1283,8 +1283,11 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
         this.onApply();
     }
 
-    changeTab(tab, group, { force=false } = {}) {
-        super.changeTab(tab, group, { force });
+    changeTab(tab, group, options = {}) {
+        const wasDeferred = options._deferred;
+        super.changeTab(tab, group, options);
+        //since 14.370, foundry queues the change while a render is running and calls back again once done
+        if (options._deferred && !wasDeferred) return;
         if (group == "dsn-dice") {
             if (this.lastActiveAppearanceTab != "global") {
                 let appearanceArray = [];
