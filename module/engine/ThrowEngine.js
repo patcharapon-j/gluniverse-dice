@@ -1,5 +1,6 @@
 import { DiceShapeLibrary } from './DiceShapeLibrary.js';
 import { noteSimulation } from '../glu/fx/DiceFx.js'; //GLUniverse Dice: M4
+import { applyHandThrow } from '../glu/hand/HandOfDice.js'; //GLUniverse Dice: M5
 import { DiceSFXManager } from '../sfx/DiceSFXManager.js';
 import { DiceSystem } from '../DiceSystem.js';
 import { LEGACY_TO_METERS } from './SceneConstants.js';
@@ -409,6 +410,7 @@ export class ThrowEngine {
 				}
 				let boost = ((Math.random() + 3) * throwingForceModifier) * dist;
 				this.getVectors(notation, vector, boost, dist);
+				applyHandThrow(this, notation); //GLUniverse Dice: M5 a throw from the hand
 				countNewDice += notation.dice.length;
 			}
 

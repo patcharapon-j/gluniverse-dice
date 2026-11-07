@@ -1,4 +1,5 @@
 import "./glu/index.js"; //GLUniverse Dice: must stay the first import (FORK.md)
+import { holdInHand, interceptHeld } from './glu/hand/HandOfDice.js'; //GLUniverse Dice: M5
 import { Dice3D } from './Dice3D.js';
 import { DsnSettings } from './settings/DsnSettings.js';
 import { DiceConfig } from './ui/DiceConfig.js';
@@ -524,6 +525,7 @@ const shouldInterceptMessage = (chatMessage, options = {dsnCountAddedRoll: 0, ds
  */
 Hooks.on('preCreateChatMessage', (message) => {
     if (!game.dice3d?.pendingThrows?.shouldStampInteractive(message)) return;
+    if (holdInHand(message)) return; //GLUniverse Dice: M5 the roll waits in the roller's hand
     message.updateSource({ "flags.dice-so-nice.interactiveThrow": { state: "pending" } });
 });
 
@@ -582,6 +584,7 @@ Hooks.on('createChatMessage', (chatMessage) => {
     if (isInitiativeRoll && !game.settings.get("dice-so-nice", "immediatelyDisplayChatMessages"))
         InitiativeMask.flag(chatMessage);
 
+    if (interceptHeld(chatMessage, rolls)) return; //GLUniverse Dice: M5 held in a hand
     //interactive throw: the flag sends every client to the pending flow instead of the animation
     if (game.dice3d.pendingThrows?.shouldOpenPending(chatMessage)) {
         game.dice3d.pendingThrows.openPending(chatMessage, rolls);

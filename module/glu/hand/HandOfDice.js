@@ -1,0 +1,621 @@
+// GLUniverse Dice: grab and roll (ROADMAP M5).
+//
+// A roll that Dice So Nice would hold for an interactive throw (its rule: the GM world setting,
+// the user's own setting, the `dice-so-nice.interactive` flag) is held in the roller's hand
+// instead, when the roller's client setting `grabAndRoll` is on:
+//
+// - The roller's client shows the dice floating above the table next to where the pointer was
+//   when the roll was made (bottom centre with no recent pointer), turning slowly. They are
+//   visual only: no physics body, nothing sent to the other clients, no chat card.
+// - Every other client holds the message without showing anything.
+// - The roller throws the hand: a click throws it towards the open table, a flick throws it the
+//   way it was flicked, a shake throws it hard in the shaken direction. A slow release puts the
+//   hand down where it is. Escape throws it.
+// - The throw (start pose, velocity and spin of each die, in board units) goes to every client
+//   by socket, and each one plays the message through DSN's normal pipeline
+//   (ThrowPipeline.renderRolls) with those start vectors. Foundry's result is unchanged and
+//   swapDiceFace forces it, as for any roll. Completion (diceSoNiceRollComplete, the chat
+//   message, waitFor3DAnimationByMessageID) waits for that animation.
+// - If the roller disconnects, or the hand is held for HOLD_LIMIT_MS, the roll plays normally.
+//
+// Hooks: main.js preCreateChatMessage (holdInHand) and createChatMessage (interceptHeld),
+// ThrowEngine.startUnifiedBatch (applyHandThrow).
+import { Group, Plane, Quaternion, Vector2, Vector3 } from 'three';
+import { MODULE_ID } from '../LegacyIdentity.js';
+import { DiceNotation } from '../../DiceNotation.js';
+import { DsnSettings } from '../../settings/DsnSettings.js';
+import { TARGET_D6_EDGE_METERS } from '../../engine/SceneConstants.js';
+
+export const HAND_SETTING = "grabAndRoll";
+const FLAG = "hand";
+const SOCKET_TYPE = "gluHandThrow";
+//one id per page load: the same user logged in twice holds the hand in one session only
+const SESSION = Math.random().toString(36).slice(2, 12);
+
+//a pointer older than this is not "where the player is": use the default spot
+const POINTER_FRESH_MS = 20000;
+//the hand floats a little above the pointer, so the button just clicked stays clickable
+const HAND_ABOVE_POINTER_PX = 80;
+const DEFAULT_SPOT_Y = 0.78;
+//sizes in die sizes (DiceFactory.baseScale: DSN scales the dice to the board)
+const HAND_SPACING = 1.75;
+const HOVER_HEIGHT = 1.6;
+const GRAB_HEIGHT = 2.4;
+const BOB = 0.12;
+//a release this quick and this still is a click
+const CLICK_MS = 350;
+const CLICK_PX = 8;
+//a drag whose last sample is older than this had stopped before the release
+const FLICK_STALE_MS = 90;
+//board widths per second
+const FLICK_MIN = 0.7;
+const THROW_MIN = 1.3;
+const THROW_CLICK = 1.9;
+const THROW_MAX = 4.0;
+const LOFT = 0.55;
+//direction reversals while held that make a shake
+const SHAKE_REVERSALS = 3;
+const SHAKE_STROKE_MS = 300;
+const HOLD_LIMIT_MS = 10 * 60 * 1000;
+
+const _plane = new Plane(new Vector3(0, 1, 0), 0);
+const _hit = new Vector3();
+const _q = new Quaternion();
+const _axis = new Vector3();
+
+let lastPointer = null;
+//messageId -> { message, rolls, authorId, mine, timer }
+const held = new Map();
+//messageId -> throw payload, consumed by applyHandThrow
+const throws = new Map();
+//throw payloads that arrived before their message did
+const early = new Map();
+//the open hand on this client (one at a time; later rolls wait their turn)
+let hand = null;
+const queue = [];
+let grab = null;
+let loopId = 0;
+
+export function registerHandSetting() {
+    game.settings.register(MODULE_ID, HAND_SETTING, {
+        name: "GLUDICE.Settings.GrabAndRoll.Name",
+        hint: "GLUDICE.Settings.GrabAndRoll.Hint",
+        scope: "client",
+        config: true,
+        type: Boolean,
+        default: true
+    });
+    Hooks.once("ready", () => {
+        game.socket.on(`module.${MODULE_ID}`, (request) => {
+            if (request?.type === SOCKET_TYPE) onRemoteThrow(request);
+        });
+    });
+    Hooks.on("userConnected", (user, connected) => {
+        if (connected) return;
+        for (const [id, entry] of [...held]) if (!entry.mine && entry.authorId === user.id) release(id, null);
+    });
+    Hooks.on("deleteChatMessage", (message) => {
+        const entry = held.get(message.id);
+        if (!entry) return;
+        held.delete(message.id);
+        clearTimeout(entry.timer);
+        const i = queue.indexOf(message.id);
+        if (i !== -1) queue.splice(i, 1);
+        if (hand?.messageId === message.id) closeHand();
+    });
+}
+
+// Pointer tracking and the hand's own input. Registered when this file loads, before Dice So
+// Nice adds its window listeners, so a press on the hand never reaches DSN or the Foundry canvas.
+function installInput() {
+    const note = (event) => {
+        lastPointer = { x: event.clientX, y: event.clientY, time: performance.now() };
+    };
+    window.addEventListener("pointermove", note, { capture: true, passive: true });
+    window.addEventListener("pointerdown", note, { capture: true, passive: true });
+    window.addEventListener("pointerdown", onPointerDown, true);
+    window.addEventListener("pointermove", onPointerMove, true);
+    window.addEventListener("pointerup", onPointerUp, true);
+    window.addEventListener("pointercancel", onPointerUp, true);
+    window.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && hand?.ready && !hand.thrown) throwHand(clickThrow());
+    }, true);
+}
+if (typeof window !== "undefined") installInput();
+
+export function handEnabled() {
+    try {
+        return game.settings.get(MODULE_ID, HAND_SETTING) !== false;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * preCreateChatMessage, on the roller's client, once DSN has decided the roll is interactive:
+ * hold it in the hand instead of DSN's pending throw. True when the hand takes it.
+ */
+export function holdInHand(message) {
+    if (!handEnabled() || !game.dice3d?.box) return false;
+    message.updateSource({ [`flags.${MODULE_ID}.${FLAG}`]: { state: "held", session: SESSION } });
+    return true;
+}
+
+/**
+ * createChatMessage, on every client, where DSN would animate or open its pending throw:
+ * true when the message is held in a hand, so DSN leaves it hidden and waits.
+ */
+export function interceptHeld(message, rolls) {
+    const flag = message.flags?.[MODULE_ID]?.[FLAG];
+    if (flag?.state !== "held") return false;
+    if (held.has(message.id)) return true;
+    const entry = { message, rolls, authorId: message.author?.id ?? null, mine: flag.session === SESSION };
+    entry.timer = setTimeout(() => release(message.id, null), HOLD_LIMIT_MS);
+    held.set(message.id, entry);
+    const sent = early.get(message.id);
+    if (sent) {
+        early.delete(message.id);
+        release(message.id, sent);
+    } else if (entry.mine) {
+        queue.push(message.id);
+        if (!hand) openNext();
+    }
+    return true;
+}
+
+// ---------------------------------------------------------------------------------------------
+// The hand on screen
+
+function board() {
+    return game.dice3d?.box ?? null;
+}
+
+function dieSize() {
+    return game.dice3d?.DiceFactory?.baseScale || TARGET_D6_EDGE_METERS;
+}
+
+// The board's rectangle on screen, as Dice3D's mouseNDC maps the pointer. The board can be
+// hidden (display: none) when a roll comes in, so fall back to its inline size.
+function boardRect() {
+    const el = document.getElementById("dice-box-canvas");
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    if (r.width && r.height) return { left: r.left, top: r.top, width: r.width, height: r.height };
+    const width = parseFloat(el.style.width), height = parseFloat(el.style.height);
+    if (!width || !height) return null;
+    return { left: parseFloat(el.style.left) || 0, top: parseFloat(el.style.top) || 0, width, height };
+}
+
+function ndcOf(rect, clientX, clientY) {
+    return new Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+}
+
+// The point at height y under a screen position, in world meters.
+function pointAt(box, clientX, clientY, y) {
+    const rect = boardRect();
+    const scene = box?.diceScene;
+    if (!rect || !scene?.camera || !scene.raycaster) return null;
+    scene.raycaster.setFromCamera(ndcOf(rect, clientX, clientY), scene.camera);
+    _plane.constant = -y;
+    const hit = scene.raycaster.ray.intersectPlane(_plane, _hit);
+    return hit ? { x: hit.x, z: hit.z } : null;
+}
+
+// Keep a point inside the board's walls, as PersistentDice._computeSpawnBounds places them
+// (the sidebar's margin comes off the right).
+function clampToWalls(display, p, margin) {
+    const cW = display.containerWidth ?? display.innerWidth / 2;
+    const cH = display.containerHeight ?? display.innerHeight / 2;
+    const right = display.containerMargin?.right || 0;
+    const minX = -cW * 0.97 + margin, maxX = (cW - 2 * right) * 0.97 - margin;
+    const minZ = -cH * 0.97 + margin, maxZ = cH * 0.97 - margin;
+    return {
+        x: minX < maxX ? Math.max(minX, Math.min(maxX, p.x)) : (minX + maxX) / 2,
+        z: minZ < maxZ ? Math.max(minZ, Math.min(maxZ, p.z)) : 0
+    };
+}
+
+function clampToBoard(box, p, margin) {
+    return clampToWalls(box.diceScene.display, p, margin);
+}
+
+// Hex rings around the centre: 0 is the centre, then 6 around it, then 12, ...
+function ringOffset(index) {
+    if (index === 0) return { x: 0, z: 0 };
+    let ring = 1;
+    let first = 1;
+    while (index >= first + 6 * ring) {
+        first += 6 * ring;
+        ring++;
+    }
+    const k = index - first;
+    const side = Math.floor(k / ring);
+    const f = (k % ring) / ring;
+    const corner = (s) => ({ x: Math.cos(s * Math.PI / 3) * ring, z: Math.sin(s * Math.PI / 3) * ring });
+    const a = corner(side), b = corner(side + 1);
+    return { x: a.x + (b.x - a.x) * f, z: a.z + (b.z - a.z) * f };
+}
+
+// The dice a message will throw, in the order DSN's notation lists them, with the appearance
+// the throw will use (term colorsets, roles and the speaker's actor included).
+function handDice(entry) {
+    const pipeline = game.dice3d.pipeline;
+    const factory = game.dice3d.DiceFactory;
+    const message = entry.message;
+    const user = message.author ?? game.user;
+    const actor = ChatMessage.getSpeakerActor(message.speaker);
+    const config = DsnSettings.ALL_CONFIG(user, actor);
+    const custom = DsnSettings.ALL_CUSTOMIZATION(user, factory, actor);
+    //work on copies: DSN stamps and flattens the rolls it animates
+    const rolls = entry.rolls.map(r => foundry.dice.Roll.fromData(JSON.parse(JSON.stringify(r))));
+    for (const roll of rolls) {
+        pipeline._stampRole(roll);
+        pipeline._stampAppearance(roll);
+    }
+    const out = [];
+    for (const roll of pipeline._buildRollList(rolls)) {
+        const notation = new DiceNotation(roll, config, user);
+        for (const t of notation.throws) {
+            for (const die of t.dice) {
+                const appearance = factory.getAppearanceForDice(custom.appearance, die.type, die, custom.roleContext);
+                out.push({ type: die.type, appearance, diceLibrary: custom.diceLibrary });
+            }
+        }
+    }
+    return out;
+}
+
+async function openNext() {
+    while (queue.length && !hand) {
+        const messageId = queue.shift();
+        const entry = held.get(messageId);
+        if (!entry) continue;
+        try {
+            await openHand(messageId, entry);
+        } catch (err) {
+            console.error(`${MODULE_ID} | the hand could not open, rolling normally`, err);
+            if (hand?.messageId === messageId) closeHand();
+            release(messageId, null);
+        }
+    }
+}
+
+async function openHand(messageId, entry) {
+    const box = board();
+    if (!box?.throwEngine || !box.scene) throw new Error("no dice board");
+    const size = dieSize();
+    const dice = handDice(entry);
+    if (!dice.length) throw new Error("no dice to hold");
+    const h = { messageId, group: new Group(), dice: [], size, t: 0, thrown: false, ready: false };
+    hand = h;
+    h.group.name = "gluniverse-dice-hand";
+
+    const fresh = lastPointer && performance.now() - lastPointer.time < POINTER_FRESH_MS;
+    const rect = boardRect();
+    const sx = fresh ? lastPointer.x : rect ? rect.left + rect.width / 2 : 0;
+    const sy = fresh ? lastPointer.y - HAND_ABOVE_POINTER_PX : rect ? rect.top + rect.height * DEFAULT_SPOT_Y : 0;
+    //the hand may reach past the walls while it floats; the throw starts each die inside them
+    const at = pointAt(box, sx, sy, size * HOVER_HEIGHT) ?? { x: 0, z: 0 };
+    const centre = clampToBoard(box, at, size);
+    //centre the cluster on its middle, not on its first die
+    const offsets = dice.map((_, i) => ringOffset(i));
+    const mid = offsets.reduce((m, o) => ({ x: m.x + o.x / offsets.length, z: m.z + o.z / offsets.length }), { x: 0, z: 0 });
+    h.group.position.set(centre.x, size * HOVER_HEIGHT, centre.z);
+    h.target = new Vector3().copy(h.group.position);
+
+    for (let i = 0; i < dice.length; i++) {
+        const d = dice[i];
+        const made = await box.throwEngine.createDiceMesh(d.type, d.appearance, d.diceLibrary);
+        if (hand !== h) return; //closed while loading
+        if (!made) continue;
+        const holder = new Group();
+        const off = offsets[i];
+        holder.position.set((off.x - mid.x) * size * HAND_SPACING, 0, (off.z - mid.z) * size * HAND_SPACING);
+        if (made.dicemesh.userData?.modelScale) holder.scale.setScalar(made.dicemesh.userData.modelScale);
+        holder.quaternion.random();
+        holder.add(made.dicemesh);
+        h.group.add(holder);
+        h.dice.push({
+            holder,
+            mesh: made.dicemesh,
+            index: i,
+            spinAxis: new Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize(),
+            spin: 0.5 + Math.random() * 0.4,
+            phase: Math.random() * Math.PI * 2
+        });
+    }
+    if (!h.dice.length) throw new Error("no dice meshes");
+    box.scene.add(h.group);
+    h.ready = true;
+    showBoard();
+    startLoop();
+}
+
+function closeHand() {
+    if (!hand) return;
+    //the meshes come from the factory's caches: remove them, don't dispose
+    hand.group.removeFromParent();
+    hand = null;
+    grab = null;
+    document.documentElement.style.removeProperty("cursor");
+    board()?.renderScene?.();
+    if (queue.length) openNext();
+}
+
+function showBoard() {
+    const dice3d = game.dice3d;
+    if (!dice3d?.canvas) return;
+    if (dice3d.canvas.style.display === "none" || dice3d.canvas.style.opacity === "0") dice3d._beforeShow?.();
+}
+
+function startLoop() {
+    if (loopId) return;
+    let last = performance.now();
+    const step = (now) => {
+        loopId = 0;
+        if (!hand?.ready) return;
+        const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+        last = now;
+        animateHand(dt);
+        if (!hand.thrown) showBoard();
+        board()?.renderScene?.();
+        loopId = requestAnimationFrame(step);
+    };
+    loopId = requestAnimationFrame(step);
+}
+
+function animateHand(dt) {
+    const h = hand;
+    h.t += dt;
+    const size = h.size;
+    const pos = h.group.position;
+    if (grab) {
+        pos.lerp(h.target, 1 - Math.exp(-dt * 22));
+    } else {
+        const k = 1 - Math.exp(-dt * 8);
+        pos.x += (h.target.x - pos.x) * k;
+        pos.z += (h.target.z - pos.z) * k;
+        const y = size * HOVER_HEIGHT + Math.sin(h.t * 1.7) * size * BOB;
+        pos.y += (y - pos.y) * (1 - Math.exp(-dt * 6));
+    }
+    //held, the dice turn faster; a shake makes them tumble
+    const energy = grab ? 2.5 + Math.min(8, grab.reversals * 2.2) : 1;
+    for (const d of h.dice) {
+        _q.setFromAxisAngle(d.spinAxis, d.spin * energy * dt);
+        d.holder.quaternion.premultiply(_q);
+        d.holder.position.y = Math.sin(h.t * 2.1 + d.phase) * size * 0.06;
+    }
+    h.group.rotation.y += dt * (grab ? 0.9 : 0.25);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Input
+
+function hitHand(event) {
+    if (!hand?.ready || hand.thrown) return false;
+    const box = board();
+    const rect = boardRect();
+    if (!box || !rect) return false;
+    box.diceScene.raycaster.setFromCamera(ndcOf(rect, event.clientX, event.clientY), box.diceScene.camera);
+    return box.diceScene.raycaster.intersectObject(hand.group, true).length > 0;
+}
+
+function onPointerDown(event) {
+    if (event.button !== 0 || (event.pointerType && event.pointerType !== "mouse")) return;
+    if (!hitHand(event)) return;
+    event.stopImmediatePropagation();
+    event.preventDefault();
+    try {
+        document.documentElement.setPointerCapture?.(event.pointerId);
+    } catch { /* best effort */ }
+    grab = { x: event.clientX, y: event.clientY, time: performance.now(), samples: [], reversals: 0, lastDir: null };
+    followPointer(event);
+    document.documentElement.style.cursor = "grabbing";
+}
+
+function followPointer(event) {
+    const box = board();
+    const p = pointAt(box, event.clientX, event.clientY, hand.size * GRAB_HEIGHT);
+    if (!p) return;
+    const c = clampToBoard(box, p, hand.size);
+    hand.target.set(c.x, hand.size * GRAB_HEIGHT, c.z);
+    const now = performance.now();
+    const s = grab.samples;
+    const prev = s[s.length - 1];
+    if (!prev || now - prev.t >= 12) {
+        s.push({ x: c.x, z: c.z, t: now });
+        if (s.length > 12) s.shift();
+    }
+    //shake: count sharp reversals of the drag direction, measured over each stroke of at least
+    //a third of a die so the pointer's event rate doesn't matter. A slow stroke (moving the hand
+    //around) is not part of a shake.
+    const from = grab.strokeFrom ?? (grab.strokeFrom = { x: c.x, z: c.z, t: now });
+    const dx = c.x - from.x, dz = c.z - from.z;
+    const len = Math.hypot(dx, dz);
+    if (len < hand.size * 0.33) return;
+    const dir = { x: dx / len, z: dz / len };
+    if (now - from.t > SHAKE_STROKE_MS) grab.reversals = 0;
+    else if (grab.lastDir && dir.x * grab.lastDir.x + dir.z * grab.lastDir.z < -0.4) grab.reversals++;
+    grab.lastDir = dir;
+    grab.strokeFrom = { x: c.x, z: c.z, t: now };
+}
+
+let hoverCheck = 0;
+function onPointerMove(event) {
+    if (grab) {
+        event.stopImmediatePropagation();
+        if (hand) followPointer(event);
+        return;
+    }
+    if (!hand?.ready || hand.thrown) return;
+    const now = performance.now();
+    if (now - hoverCheck < 50) return;
+    hoverCheck = now;
+    if (hitHand(event)) document.documentElement.style.cursor = "grab";
+    else document.documentElement.style.removeProperty("cursor");
+}
+
+function onPointerUp(event) {
+    if (!grab) return;
+    event.stopImmediatePropagation();
+    const g = grab;
+    grab = null;
+    document.documentElement.style.removeProperty("cursor");
+    if (!hand || hand.thrown) return;
+    const now = performance.now();
+    const moved = Math.hypot(event.clientX - g.x, event.clientY - g.y);
+    if (now - g.time < CLICK_MS && moved < CLICK_PX) return throwHand(clickThrow());
+
+    const W = board().diceScene.display.innerWidth;
+    const v = dragVelocity(g.samples, now);
+    const speed = v ? Math.hypot(v.x, v.z) : 0;
+    if (g.reversals >= SHAKE_REVERSALS) {
+        //a shake: throw hard, the way the last stroke went (towards the table when it stopped)
+        const dir = speed > 1e-6 ? { x: v.x / speed, z: v.z / speed } : towardsTable();
+        return throwHand(velocityFrom(dir, W * (THROW_MIN + 0.6 + Math.min(1.2, g.reversals * 0.15)), g.reversals));
+    }
+    if (speed > W * FLICK_MIN) {
+        const throwSpeed = Math.min(W * THROW_MAX, Math.max(W * THROW_MIN, speed * 1.15));
+        return throwHand(velocityFrom({ x: v.x / speed, z: v.z / speed }, throwSpeed, 0));
+    }
+    //a slow release puts the hand down where it is
+    hand.target.y = hand.size * HOVER_HEIGHT;
+}
+
+// World velocity over the last ~80 ms of the drag, or null when the drag had stopped.
+function dragVelocity(samples, now) {
+    const last = samples[samples.length - 1];
+    if (!last || now - last.t > FLICK_STALE_MS) return null;
+    let first = last;
+    for (let i = samples.length - 2; i >= 0 && last.t - samples[i].t <= 80; i--) first = samples[i];
+    const dt = (last.t - first.t) / 1000;
+    if (dt < 0.008) return null;
+    return { x: (last.x - first.x) / dt, z: (last.z - first.z) / dt };
+}
+
+// From the hand towards the board's centre, give or take 30 degrees; anywhere near the centre.
+function towardsTable() {
+    const p = hand.group.position;
+    const W = board().diceScene.display.innerWidth;
+    let angle = Math.hypot(p.x, p.z) > W * 0.12 ? Math.atan2(-p.z, -p.x) : Math.random() * Math.PI * 2;
+    angle += (Math.random() - 0.5) * (Math.PI / 3);
+    return { x: Math.cos(angle), z: Math.sin(angle) };
+}
+
+function clickThrow() {
+    const W = board().diceScene.display.innerWidth;
+    return velocityFrom(towardsTable(), W * THROW_CLICK * (0.9 + Math.random() * 0.2), 0);
+}
+
+function velocityFrom(dir, speed, reversals) {
+    //DSN's throwing force setting scales these throws the way it scales its own
+    const force = { weak: 0.6, strong: 1.5 }[DsnSettings.CONFIG().throwingForce] ?? 1;
+    const W = board().diceScene.display.innerWidth;
+    return { dir, speed: speed * force, loft: W * LOFT, tumble: 1 + Math.min(1.5, reversals * 0.25) };
+}
+
+// ---------------------------------------------------------------------------------------------
+// The throw
+
+function throwHand(v) {
+    const h = hand;
+    if (!h?.ready || h.thrown) return;
+    h.thrown = true;
+    const box = board();
+    const W = box.diceScene.display.innerWidth;
+    h.group.updateMatrixWorld(true);
+    const dice = [];
+    for (const d of h.dice) {
+        const wp = d.mesh.getWorldPosition(new Vector3());
+        const wq = d.mesh.getWorldQuaternion(new Quaternion());
+        //small differences per die, so the dice don't fly in formation
+        const a = (Math.random() - 0.5) * 0.35;
+        const s = 1 + (Math.random() - 0.5) * 0.2;
+        const vx = (v.dir.x * Math.cos(a) - v.dir.z * Math.sin(a)) * v.speed * s;
+        const vz = (v.dir.x * Math.sin(a) + v.dir.z * Math.cos(a)) * v.speed * s;
+        //spin about the axis the die would roll on, plus some wobble
+        const spin = new Vector3(vz, 0, -vx).normalize().multiplyScalar((10 + Math.random() * 8) * v.tumble)
+            .add(new Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(8));
+        dice.push({
+            index: d.index,
+            pos: box.toPositionPct(wp.x, wp.z),
+            y: wp.y / W,
+            vel: { x: vx / W, y: (v.loft * (0.85 + Math.random() * 0.3)) / W, z: vz / W },
+            spin: { x: spin.x, y: spin.y, z: spin.z },
+            q: [wq.x, wq.y, wq.z, wq.w]
+        });
+    }
+    const payload = { type: SOCKET_TYPE, messageId: h.messageId, user: game.user.id, dice };
+    game.socket.emit(`module.${MODULE_ID}`, payload);
+    release(h.messageId, payload);
+}
+
+function onRemoteThrow(request) {
+    if (!request?.messageId) return;
+    if (held.has(request.messageId)) {
+        release(request.messageId, request);
+    } else {
+        early.set(request.messageId, request);
+        //nothing ever came for it (whispered elsewhere, 3D off): forget it
+        setTimeout(() => early.delete(request.messageId), 60000);
+    }
+}
+
+// Play the held message through DSN's pipeline, from the hand when a throw is given.
+function release(messageId, payload) {
+    const entry = held.get(messageId);
+    if (!entry) return;
+    held.delete(messageId);
+    clearTimeout(entry.timer);
+    const queued = queue.indexOf(messageId);
+    if (queued !== -1) queue.splice(queued, 1);
+    const mine = hand?.messageId === messageId;
+    if (payload?.dice?.length) {
+        throws.set(messageId, { dice: payload.dice, next: 0, mine });
+        //a throw that never starts (3D off on this client, skipped) must not linger
+        setTimeout(() => {
+            throws.delete(messageId);
+            if (hand?.messageId === messageId) closeHand();
+        }, 30000);
+    } else if (mine) {
+        closeHand();
+    }
+    try {
+        game.dice3d.pipeline.renderRolls(entry.message, entry.rolls);
+    } catch (err) {
+        console.error(`${MODULE_ID} | held roll failed to play`, err);
+        if (hand?.messageId === messageId) closeHand();
+    }
+}
+
+/**
+ * ThrowEngine.startUnifiedBatch, after DSN made the start vectors of a notation: a throw from a
+ * hand replaces them with the hand's pose and the throw's velocity and spin.
+ */
+export function applyHandThrow(throwEngine, notation) {
+    const data = throws.get(notation?.messageId);
+    if (!data) return;
+    const display = throwEngine.diceScene.display;
+    const W = display.innerWidth;
+    for (const die of notation.dice) {
+        const d = data.dice[data.next++];
+        if (!d || !die.vectors) continue;
+        const size = dieSize();
+        const p = clampToWalls(display, { x: (d.pos.x - 0.5) * display.innerWidth, z: -(d.pos.y - 0.5) * display.innerHeight }, size * 0.7);
+        die.vectors.pos = { x: p.x, y: Math.max(d.y * W, size * 0.8), z: p.z };
+        die.vectors.velocity = { x: d.vel.x * W, y: d.vel.y * W, z: d.vel.z * W };
+        //a coin keeps DSN's own flip
+        if (die.vectors.type === "d2") continue;
+        die.vectors.angle = { ...d.spin };
+        _q.set(d.q[0], d.q[1], d.q[2], d.q[3]).normalize();
+        if (_q.w < 0) _q.set(-_q.x, -_q.y, -_q.z, -_q.w);
+        const angle = 2 * Math.acos(Math.min(1, _q.w));
+        const s = Math.sqrt(Math.max(0, 1 - _q.w * _q.w));
+        if (s > 1e-4) _axis.set(_q.x / s, _q.y / s, _q.z / s);
+        else _axis.set(0, 1, 0);
+        die.vectors.axis = { x: _axis.x, y: _axis.y, z: _axis.z, a: angle / (Math.PI * 2) };
+    }
+    if (data.next >= data.dice.length) throws.delete(notation.messageId);
+    //the thrown dice take over from the hand
+    if (data.mine && hand?.messageId === notation.messageId) closeHand();
+}

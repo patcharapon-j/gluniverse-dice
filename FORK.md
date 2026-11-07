@@ -14,6 +14,7 @@ Changes from Dice So Nice, newest last:
 |---|---|
 | 2026-11-07 | Package renamed to `gluniverse-dice` / "GLUniverse Dice", declared as conflicting with `dice-so-nice`. The `dice-so-nice` identity stays reachable (see [Identity](#identity)). |
 | 2026-11-07 | Optional Rapier physics backend (`module/web-workers/RapierPhysicsWorker.js`), chosen by a world setting. cannon-es stays the default. |
+| 2026-11-07 | Grab and roll (M5): an interactive roll waits in the roller's hand, a local floating cluster at the pointer; click, flick or shake throws it; other clients see nothing until the throw, and DSN's pending card is not used. See [Grab and roll](#grab-and-roll-m5). |
 | 2026-11-07 | Glow and particles (M4): sparks on impacts, the result number lights up (forged: ignites, flashes, cools) and stays lit. Worker contract: `detectedCollides` entries gain a 5th element, the contact position. See [Glow and particles](#glow-and-particles-m4). |
 | 2026-11-07 | Materials (M3): gemstone, inner galaxy and pearlescent materials; "Enhanced materials" client setting for the built-in ones; Nice more Dice 1.4.2 (CC BY 4.0, LyncsCwtsh) bundled. See [Materials](#materials-m3). |
 | 2026-11-07 | Smoothness (M2): interpolated replay and live dice, real frame delta for live stepping, idle frames skipped, shader prewarm at load, cannon's `worldAsleep` fixed, Rapier coin settle and topple. See [Smoothness](#smoothness-m2). |
@@ -56,6 +57,8 @@ works unchanged. To keep rebasing onto upstream cheap:
 | `module/rendering/DiceBox.js` | One import (`glu/Smoothness.js`); in `animateThrow`: a `gluMoved` local, a `smoothFrame` call while a throw replays, the live `playStep` payload from `livePlayStepPayload`, a `noteLiveResult` call in its `.then`, and the render condition wrapped in `shouldRender` | Replay and live interpolation, render every moving frame, skip idle ones. |
 | `module/web-workers/PhysicsWorker.js` | `playStep` takes `frame_dt` and `interpolate` (returns `interpolatedPosition`/`Quaternion`); its `worldAsleep` test skips static bodies; `setBodyPosition(s)` also reset `previousPosition`/`interpolatedPosition` | Contract change shared with the Rapier worker. Without the static-body skip the desk kept cannon awake forever. |
 | `module/engine/ThrowEngine.js` (M4) | One import; `noteSimulation(this, detectedCollides)` after the sound list replaces the raw collisions | Keeps the impact timeline with positions for the particles. |
+| `module/main.js` (M5) | One import; in `preCreateChatMessage`, `if (holdInHand(message)) return;` after DSN's interactive check; in `createChatMessage`, `if (interceptHeld(chatMessage, rolls)) return;` before the pending-throw branch | Holds an interactive roll in the hand instead of DSN's pending throw, on every client. |
+| `module/engine/ThrowEngine.js` (M5) | One more import; `applyHandThrow(this, notation)` after `getVectors` in `startUnifiedBatch` | A throw from the hand starts from the hand's pose with the throw's velocity and spin. |
 | `module/web-workers/PhysicsWorker.js` (M4) | `handleDiceCollision` / `handleTableCollision` append the contact position as the 5th tuple element | Contract change shared with the Rapier worker. |
 | `module/engine/DiceFactory.js` (M3) | One more import; `extendMaterialOptions(this)` at the end of `initializeMaterials`; `decorateMaterial(this, mat, materialData, canvasBump)` right after `mat.onBeforeCompile` is set in `createMaterial` | New material ids and the enhanced variants. Runs before `diceSoNiceOnMaterialReady`, so systems still patch the result. |
 | `module/ui/DiceConfig.js`, `module/ui/DiceEditor.js` | One import each; `...gluMaterialChoices()` appended to the material picker list | Show the new materials. |
@@ -352,6 +355,46 @@ Checked: both workers emit the position (contract test); in the maintainer's Fou
 with the label mask), glows, pulses and fades over ~2.4 s, sparks finish their flight, and the
 extra loop stops. **Not yet verified**: d10/d12 and custom-model faces, persistent dice, cost
 with many dice.
+
+## Grab and roll (M5)
+
+`module/glu/hand/HandOfDice.js`, client setting `gluniverse-dice.grabAndRoll` (default on).
+
+- **Which rolls.** DSN's rule, unchanged: `PendingThrowManager.shouldStampInteractive` (world
+  setting, the user's own setting, the `dice-so-nice.interactive` flag, public rolls only). When
+  it says yes and the roller's hand setting is on, `holdInHand` stamps
+  `flags.gluniverse-dice.hand = { state: "held", session }` instead of DSN's `interactiveThrow`,
+  so DSN's pending throw, its guest dice and its chat card never start. `session` is random per
+  page load: a user logged in twice holds the hand in the session that rolled only.
+- **Holding.** `interceptHeld` runs on every client where DSN would animate the message. The
+  message is already marked `_dice3danimating`, so it stays hidden and every completion signal
+  (`diceSoNiceRollComplete`, `waitFor3DAnimationByMessageID`) waits, exactly as for a normal roll
+  that has not finished.
+- **The hand** exists only on the roller's client: the dice the throw will use (DSN's
+  `DiceNotation` of the rolls, with term colorsets, roles and the speaker's actor), built through
+  `ThrowEngine.createDiceMesh`, in a hex cluster that floats 1.6 die sizes above the table next to
+  the pointer (80 px above it, so the clicked button stays free; bottom centre when the pointer has
+  not moved for 20 s). No physics bodies, no sockets: nobody else sees it. It bobs and each die
+  turns slowly; it has its own frame loop and keeps the board shown.
+- **Input.** Our window capture listeners are added when the file loads, before DSN's, so a press
+  on the hand stops there. Grabbing lifts the hand to 2.4 die sizes and it follows the pointer.
+  On release: a click (under 350 ms, under 8 px) throws towards the board's centre, give or take
+  30 degrees; a flick (faster than 0.7 board widths per second over the last 80 ms) throws the way
+  it went; three quick reversals (strokes under 300 ms) are a shake and throw hard with more
+  tumble; a slow release puts the hand down. Escape throws it. DSN's throwing force setting
+  scales all of these.
+- **The throw.** The roller sends `{ type: "gluHandThrow", messageId, dice }` on the module
+  socket: each die's position (board fraction), height and velocity (in board widths) and its
+  spin and orientation. Every client, the roller included, then calls
+  `ThrowPipeline.renderRolls` for the message, and `applyHandThrow` replaces the start vectors DSN
+  made for that message's dice (clamped inside the walls). Coins keep DSN's flip. The result is
+  Foundry's, forced by `swapDiceFace` as always; each client simulates on its own, as DSN does.
+- **Never stuck.** The roller disconnecting makes the other clients play the roll normally;
+  deleting the message drops it; after 10 minutes any client plays it normally.
+- Verified in a live Foundry with one client: the hand, click, flick, shake, slow release and
+  Escape, results matching the roll, completion, no chat card. **Not yet verified:** a second
+  user watching (the socket path), and how it feels at full frame rate (the test window ran at
+  9 fps).
 
 ## Materials (M3)
 
