@@ -14,6 +14,7 @@ Changes from Dice So Nice, newest last:
 |---|---|
 | 2026-11-07 | Package renamed to `gluniverse-dice` / "GLUniverse Dice", declared as conflicting with `dice-so-nice`. The `dice-so-nice` identity stays reachable (see [Identity](#identity)). |
 | 2026-11-07 | Optional Rapier physics backend (`module/web-workers/RapierPhysicsWorker.js`), chosen by a world setting. cannon-es stays the default. |
+| 2026-11-07 | Daggerheart pass (M8): dice can be tagged and emphasised (`term.options.gluDice`, hook `gluDiceSettle`, `api.presentation`); the result-number glow cools to the die's own colour (client setting `glowHue`); the M4 number mask is a copy of the emissive canvas, so a system's `diceSoNiceOnMaterialReady` art no longer glows as the number. See [Daggerheart pass](#daggerheart-pass-m8). |
 | 2026-11-07 | Grab and roll (M5): an interactive roll waits in the roller's hand, a local floating cluster at the pointer; click, flick or shake throws it; other clients see nothing until the throw, and DSN's pending card is not used. See [Grab and roll](#grab-and-roll-m5). |
 | 2026-11-07 | Glow and particles (M4): sparks on impacts, the result number lights up (forged: ignites, flashes, cools) and stays lit. Worker contract: `detectedCollides` entries gain a 5th element, the contact position. See [Glow and particles](#glow-and-particles-m4). |
 | 2026-11-07 | Materials (M3): gemstone, inner galaxy and pearlescent materials; "Enhanced materials" client setting for the built-in ones; Nice more Dice 1.4.2 (CC BY 4.0, LyncsCwtsh) bundled. See [Materials](#materials-m3). |
@@ -64,12 +65,14 @@ works unchanged. To keep rebasing onto upstream cheap:
 | `module/engine/DiceFactory.js` (M3) | One more import; `extendMaterialOptions(this)` at the end of `initializeMaterials`; `decorateMaterial(this, mat, materialData, canvasBump)` right after `mat.onBeforeCompile` is set in `createMaterial` | New material ids and the enhanced variants. Runs before `diceSoNiceOnMaterialReady`, so systems still patch the result. |
 | `module/ui/DiceConfig.js`, `module/ui/DiceEditor.js` | One import each; `...gluMaterialChoices()` appended to the material picker list | Show the new materials. |
 | `module/Dice3D.js` | One import; `prewarmBoard(this)` after `persistent.restoreAll()` at the end of the load chain | Shader prewarm once fonts, presets and the dice library are loaded. |
+| `docs/astro.config.mjs` (M8) | One sidebar entry, "Tags and Emphasis" (`api/dice-presentation`), under Dice Systems | The page for the M8 API. |
 | `module/Dice3D.js` (M5) | One more import; in `_afterShow`'s hide timer, `if (burnAwayDice(this)) return;` first, and the delay wrapped in `hideDelayMs(…)` | The dice burn away instead of DSN's fade, after the world linger time. |
 
 Files that are entirely ours: `FORK.md`, `ROADMAP.md`, `CREDITS.md`, `CLAUDE.md`, `module/glu/*`,
 `module/textures/glu/*` (bundled third-party assets, CREDITS.md),
 `module/lang/glu-en.json`, `module/web-workers/RapierPhysicsWorker.js`,
-`module/web-workers/rapier/*`, `tools/*`, `tests/*`, `docs/fork/*`, `docs/mocks/*`.
+`module/web-workers/rapier/*`, `tools/*`, `tests/*`, `docs/fork/*`, `docs/mocks/*`,
+`docs/src/content/docs/api/dice-presentation.md`.
 `docs/mocks/` holds design mocks. They are not part of the module: the build copies only
 `module/` into `dist/`, and the release zip is made from `dist/`.
 
@@ -430,6 +433,54 @@ prefers-reduced-motion). Each impact of the replayed collision timeline (strengt
 adds strength squared to a sideways camera tremor, table hits more than dice on dice, capped at
 0.045 die sizes and settling in about a quarter of a second. A camera move by anything else
 becomes the new rest position.
+
+## Daggerheart pass (M8)
+
+`module/glu/fx/DicePresentation.js`, `module/glu/fx/GlowHue.js`; two small changes in
+`module/glu/fx/DiceFx.js` and one in `module/glu/materials/GluMaterials.js`. Docs:
+[Tags and Emphasis](./docs/src/content/docs/api/dice-presentation.md). Generic, not
+Daggerheart-specific: any system can use it, and nothing here imports or names the system.
+
+- **Tags on the term.** `term.options.gluDice = { tag, glow, emphasis }`. Foundry serialises
+  `options` with the roll and DSN's `DiceNotation` copies it onto each die (`mesh.options`), so
+  every client gets it with no socket. Plain JSON, so it also survives the worker message.
+  Without this fork it is an unread property: the system needs no feature check.
+- **The settle moment.** DiceFx's settle branch (the frame the replay reaches its last frame) now
+  calls `settlePresentation(engine.diceList)` first: one entry per die (tag, glow, emphasis,
+  result, type, colorset colours, options, mesh), then `Hooks.callAll("gluDiceSettle", dice,
+  { emphasiseHighest })`, so a system can decide there instead; then a plan per die (tint, gain,
+  rank). It runs whether the glow setting is on or not. A throwing handler is caught and logged.
+- **Emphasis** is the glow's strength: `true` ("lead") ×1.45, `false` ("quiet") ×0.5, unset ×1, a
+  new `uGain` uniform on the overlay. DiceBurn's flare scales `uIntensity`, so it multiplies
+  through. `emphasiseHighest(dice, tags)` marks the highest of the tagged dice (ties: all).
+  `presentationOrder(plan)` is lead, plain, quiet: the input M6 will lay dice out from.
+- **Glow hue.** The halo now cools to a `uTint` uniform instead of white; the core keeps a white
+  heart (35% tint) so the number stays readable, and the hot phase (warm rim, flash) is unchanged.
+  The bloom pass gets a 60% tint. `resolveGlowTint`: the per-die `glow` override wins; otherwise,
+  with the client setting `gluniverse-dice.glowHue` = `die` (default), the colorset background,
+  then the edge colour; the hue is kept and the HSL lightness lifted into 0.6 to 0.8 (an additive
+  glow in a dark colour does not show). Colours with a chroma (max minus min channel) under 0.12
+  have no hue to keep and glow white: white, grey, black and pastel-white dice look exactly as in
+  M4. `glowHue` = `white` is M4's glow unchanged. `glow: false` turns one die's glow off.
+- **The number mask is a copy (fix).** M4 made the mask a `CanvasTexture` of DSN's emissive
+  canvas, which is also `mat.emissiveMap.image`. Daggerheart's material hook draws its cut's
+  glow art into that canvas, after `decorateMaterial` but before the first upload, so the settle
+  glow lit the cut as well as the number. `decorateMaterial` now snapshots the canvas
+  (`snapshotCanvas`, falls back to the shared canvas if no copy can be made). One more canvas of
+  the atlas size per material (1024² for a d12).
+- **Checked against the system's hook** (`tests/systemMaterials.test.mjs`, which repeats what
+  `gluniverse-daggerheart` `src/module/dice/dsn.ts` `applyGlow` does): `frosted` and `velvet`
+  keep upstream's `onBeforeCompile` (we add no wrapper to them); the system's wrapper chains it
+  and its `totalEmissiveRadiance` line lands before `<emissivemap_fragment>`, which every material
+  type DSN uses for them includes; galaxy/pearlescent keep their effect under a system wrapper;
+  enhanced materials keep the two ids, their maps and `usesTransmissionMask`. The system's
+  black `emissive` still keeps DSN's bloom compositor off for those dice.
+
+Tests: `tests/glowHue.test.mjs`, `tests/dicePresentation.test.mjs`,
+`tests/systemMaterials.test.mjs` (`tests/foundryStubs.mjs` gives them `Hooks`). **Only a running
+Foundry can confirm**: the tinted glow and the emphasis on real dice (the overlay shader was not
+compiled outside Foundry this time), the Hope/Fear cut no longer glowing at settle, the setting in
+the config dialog, and a duality roll seen from a second client.
 
 ## Materials (M3)
 

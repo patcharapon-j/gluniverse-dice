@@ -10,6 +10,7 @@ import { registerFxSettings } from "./fx/DiceFx.js";
 import { registerHandSetting } from "./hand/HandOfDice.js";
 import { registerBurnSettings } from "./fx/DiceBurn.js";
 import { registerShakeSetting } from "./fx/ImpactShake.js";
+import { registerPresentationSettings, exposePresentationApi } from "./fx/DicePresentation.js";
 
 Hooks.once("init", () => {
     registerPhysicsEngineSetting();
@@ -20,6 +21,8 @@ Hooks.once("init", () => {
     registerHandSetting();
     registerBurnSettings();
     registerShakeSetting();
+    registerPresentationSettings();
+    exposePresentationApi();
 });
 
 //bundled Nice more Dice (CC BY 4.0, LyncsCwtsh); skipped when that module is itself active

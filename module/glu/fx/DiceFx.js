@@ -15,6 +15,7 @@ import {
 } from 'three';
 import { MODULE_ID } from '../LegacyIdentity.js';
 import { addShake, applyShake } from './ImpactShake.js';
+import { settlePresentation } from './DicePresentation.js'; //M8: glow hue and emphasis
 
 export const PARTICLES_SETTING = "impactParticles";
 export const GLOW_SETTING = "settleGlow";
@@ -213,6 +214,8 @@ uniform vec2 uCenter;       // the face's centre in the label atlas
 uniform vec2 uScale;        // 1 / the face's extent in the atlas
 uniform float uBloom;       // DSN's globalBloom: 1 while its bloom pass renders
 uniform sampler2D uMask;
+uniform vec3 uTint;         // M8: the colour the glow cools to (white, or the die's hue)
+uniform float uGain;        // M8: emphasis (lead die brighter, the one that lost quieter)
 varying vec2 vUv;
 float gluLabel(vec2 uv) {
     //DSN's emissive canvas: black face, numbers in grey (#999)
@@ -237,17 +240,19 @@ void main() {
 
     float coreA = core * (lit * 1.15 + front * 2.4);
     float haloA = spill * 1.25 * uSpread * (lit + front * 0.8);
-    //white-hot core, forge-orange rim and halo while hot, all cooling to white
+    //white-hot core, forge-orange rim and halo while hot, all cooling to uTint (M8; white by default)
     vec3 warm = vec3(1.0, 0.52, 0.18);
-    vec3 col = (coreA * mix(vec3(1.0), vec3(1.0, 0.8, 0.55), uHeat * 0.8)
-              + haloA * mix(vec3(1.0), warm, min(1.0, uHeat * 1.3))
-              + core * front * 1.6 * warm * uHeat) * uIntensity;
-    float a = (coreA + haloA) * uIntensity;
+    //the halo cools to the tint; the core keeps a white heart so the number stays readable
+    vec3 coreCool = mix(vec3(1.0), uTint, 0.35);
+    vec3 col = (coreA * mix(coreCool, vec3(1.0, 0.8, 0.55), uHeat * 0.8)
+              + haloA * mix(uTint, warm, min(1.0, uHeat * 1.3))
+              + core * front * 1.6 * warm * uHeat) * uIntensity * uGain;
+    float a = (coreA + haloA) * uIntensity * uGain;
     //DSN's bloom amplifies whatever reaches its pass: feed it a dim core, so the halo stays soft
     //and the number readable
-    float bloomA = (core * (lit * 0.3 + front * 0.6) + spill * 0.15 * uSpread * lit) * uIntensity;
+    float bloomA = (core * (lit * 0.3 + front * 0.6) + spill * 0.15 * uSpread * lit) * uIntensity * uGain;
     float inBloom = step(0.5, uBloom);
-    col = mix(col, vec3(bloomA), inBloom);
+    col = mix(col, bloomA * mix(vec3(1.0), uTint, 0.6), inBloom);
     a = mix(a, bloomA, inBloom);
     if (a < 0.003) discard;
     #include <logdepthbuf_fragment>
@@ -294,7 +299,8 @@ function upFaceGeometry(mesh) {
     return g;
 }
 
-function addGlow(box, mesh) {
+function addGlow(box, mesh, look = null) {
+    if (look && !look.tint) return;
     if (!mesh?.isMesh || mesh.shape === 'd4' || mesh.notation?.type === 'd4') return;
     const mat = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
     //without the number mask there is no way to tell the number from the face: no glow
@@ -323,7 +329,9 @@ function addGlow(box, mesh) {
             uCenter: { value: centre },
             uScale: { value: scale },
             uBloom: game.dice3d?.uniforms?.globalBloom ?? { value: 0 },
-            uMask: { value: mask }
+            uMask: { value: mask },
+            uTint: { value: new Color(...(look?.tint ?? [1, 1, 1])) },
+            uGain: { value: look?.gain ?? 1 }
         },
         transparent: true,
         depthWrite: false,
@@ -452,7 +460,8 @@ export function tickFx(box) {
         th.iter = Math.max(th.iter, until);
         if (!th.settled && engine.iterationsNeeded > 0 && engine.iteration >= engine.iterationsNeeded) {
             th.settled = true;
-            if (setting(GLOW_SETTING)) for (const mesh of engine.diceList ?? []) addGlow(box, mesh);
+            const looks = settlePresentation(engine.diceList ?? []);
+            if (setting(GLOW_SETTING)) for (const mesh of engine.diceList ?? []) addGlow(box, mesh, looks.get(mesh));
         }
     }
     const alive = advance(box);

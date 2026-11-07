@@ -98,6 +98,7 @@ export default defineConfig({
 								{ label: 'System Settings', slug: 'api/system-settings' },
 								{ label: 'Custom Shaders', slug: 'api/shaders' },
 								{ label: 'Special Effects', slug: 'api/sfx' },
+								{ label: 'Tags and Emphasis', slug: 'api/dice-presentation', badge: { text: 'GLUniverse', variant: 'note' } },
 							],
 						},
 						{
