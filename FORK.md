@@ -405,28 +405,39 @@ with many dice.
   user watching (the socket path), and how it feels at full frame rate (the test window ran at
   9 fps).
 - **Weight.** The hand follows the pointer on a damped spring (stiff while held, soft while
-  floating), leans into its motion (up to 0.42 rad) and turns to face it. Grabbed, the dice pull
-  together from 1.4 to 1.06 die diameters apart, and each one sloshes against the hand's
-  acceleration with its own gain, so they jostle like dice in a cupped hand. Lean and slosh are
-  off with prefers-reduced-motion.
+  floating), leans into its motion (up to 0.42 rad) and turns to face it. The dice sit in a pile
+  that touches, like dice gathered into a ball: each one is pulled to the hand's centre and pushed
+  off its neighbours (contact radius 0.8 of its bounding sphere), held tighter while grabbed, and
+  the pile feels the hand's acceleration, so the dice lag, bunch and jostle. At the release the
+  dice part to their full bounding spheres (so the physics never starts with two dice inside each
+  other) and the flying dice ease from the pile into that within a few frames. The local flight
+  uses the active engine's gravity. Lean and inertia are off with prefers-reduced-motion.
 
 ### Burn away
 
 `module/glu/fx/DiceBurn.js`. World setting `gluniverse-dice.diceLinger` (seconds, 0 to 60,
 default 5; 0 keeps each player's DSN "time before hiding"); client setting `burnAway` (default
-on; off gives DSN's own hide). Instead of DSN's fade, each die dissolves top of screen to bottom
-behind a torn white front (domain-warped noise, no particles, no flame): a hot white core, a
-lavender-to-white halo through the selective bloom, the surface just ahead bleached. Dice start
-0.28 s apart and take 1.75 s. The shadow dissolves with the die (a `customDepthMaterial` carrying
-the same front), and the glowing result number goes out last. Dice leave the throw engine's lists
-and the physics world when the burn starts; when all are gone the board is cleared and hidden as
-DSN does. Shaders are compiled with `compileAsync` before the swap, so it never hitches. Without
-a patched shader the die falls back to an opacity fade; reduced motion shortens it to 0.6x.
+on; off gives DSN's own hide). Instead of DSN's fade, each die burns away in blotches: holes open
+at a few spots, spread and merge (domain-warped noise, two thirds of the timing), loosely from the
+top of the screen down (the other third), behind a torn white-hot edge with a lavender halo through
+the selective bloom, the surface just ahead bleached. No particles, no flame. Dice start up to
+0.3 s apart and take 1.9 s. The same front, in world space, drives the die, its shadow (a
+`customDepthMaterial`) and its glowing result number (DiceFx's overlay, patched in place), so all
+three go together and the number's strokes flare as the edge crosses them. Dice leave the throw
+engine's lists and the physics world when the burn starts; when all are gone the board is cleared
+and hidden as DSN does.
+
+Smoothness: the burn programs (die, shadow, number) are compiled with `compileAsync`, then one
+frame is rendered with the front parked out of reach while nothing moves, so any program left
+compiles there and not on the first moving frame; the clock starts on the next frame and runs on
+`requestAnimationFrame` timestamps. Fallbacks: an unpatched die fades, an unpatched number fades,
+an unpatched shadow goes partway through. Reduced motion shortens the burn to 0.6x.
 
 ### Impact shake
 
-`module/glu/fx/ImpactShake.js`, client setting `impactShake` (default on, off with
-prefers-reduced-motion). Each impact of the replayed collision timeline (strength 0.35 or more)
+`module/glu/fx/ImpactShake.js`, client setting `impactShake` (**default off**: the dice board is
+an overlay on a map that stays still, so a camera shake reads as the dice layer jittering; always
+off with prefers-reduced-motion). Each impact of the replayed collision timeline (strength 0.35 or more)
 adds strength squared to a sideways camera tremor, table hits more than dice on dice, capped at
 0.045 die sizes and settling in about a quarter of a second. A camera move by anything else
 becomes the new rest position.
@@ -497,6 +508,13 @@ Mapping and deliberate differences:
   0.5, dice 0.6. Bench, 100 trials, 1920x1080: sliding share of desk travel 66% → 25%, d6 face
   chi² 114 → 8.7 (fair below 11.07), mixed dice cocked >15° 3.4% → 3.0%; 2d20 cocked 0% → 3%;
   throws 0.5 s longer (still shorter than cannon). `npm run bench` reports the sliding share.
+- **Gravity, twice the legacy value** (`rapier/gravity.js`, ~5 m/s²), for weight: dice land
+  sooner, bounce lower and friction stops them twice as fast. Bench, 40 trials: settle 2d20
+  2.45 → 1.62 s median (p95 3.48 → 2.42), 10 mixed 2.88 → 2.02, 10d6 → 1.73; cocked dice not
+  more. The d6 face spread widens (chi² about 20 to 30, face 6 most common); that is cosmetic, as
+  DSN's `swapDiceFace` shows Foundry's result whatever face lands up. The file is separate so the
+  main thread (the hand's flight) reads the same number without loading the engine. A rolling
+  resistance (`rollDrag`, off) was tried: no faster settle, more cocked dice.
 - **Grab** is a spherical impulse joint to a kinematic anchor (cannon: `PointToPointConstraint`
   to a mass-0 body). The anchor moves through `setNextKinematicTranslation`, so a held die is
   pulled rather than teleported.

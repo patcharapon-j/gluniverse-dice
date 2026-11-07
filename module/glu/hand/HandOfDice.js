@@ -25,6 +25,8 @@ import { MODULE_ID } from '../LegacyIdentity.js';
 import { DiceNotation } from '../../DiceNotation.js';
 import { DsnSettings } from '../../settings/DsnSettings.js';
 import { LEGACY_TO_METERS, TARGET_D6_EDGE_METERS } from '../../engine/SceneConstants.js';
+import { activePhysicsEngine, PHYSICS_ENGINES } from '../PhysicsEngine.js';
+import { RAPIER_GRAVITY } from '../../web-workers/rapier/gravity.js';
 
 export const HAND_SETTING = "grabAndRoll";
 const FLAG = "hand";
@@ -38,12 +40,18 @@ const POINTER_FRESH_MS = 20000;
 const HAND_ABOVE_POINTER_PX = 80;
 const DEFAULT_SPOT_Y = 0.78;
 //sizes in die sizes (DiceFactory.baseScale: DSN scales the dice to the board)
-const HAND_SPACING = 1.75;
-//centre to centre, in diameters of the largest die of the hand (its bounding sphere): loose
-//while the hand floats, pulled together while it is held (still clear of each other, so the
-//throw never starts with two dice inside one another)
-const LOOSE = 1.4;
-const CUPPED = 1.06;
+//The dice sit in a pile, touching, like dice gathered into a ball in a hand: each one is pulled
+//to the hand's centre and pushed off its neighbours. A die's contact radius is this share of
+//its bounding sphere (between a d6's inradius and its corners; a d20 is nearly round). Held,
+//the pull is stronger and the pile squeezes tight; floating, it breathes a little looser.
+const CONTACT = 0.8;
+const PULL_HELD = 900, PULL_FLOAT = 120;
+const GAP_HELD = 1.0, GAP_FLOAT = 1.06;
+//how much of the hand's acceleration the dice feel (inertia: they lag, bunch and jostle)
+const INERTIA = 0.9;
+//at the release the dice part to their bounding spheres, so the physics never starts with two
+//dice inside each other; the flying dice ease from the pile into that over this time constant
+const PART_TAU = 0.035;
 const HOVER_HEIGHT = 1.6;
 const GRAB_HEIGHT = 2.4;
 const BOB = 0.12;
@@ -65,7 +73,9 @@ const HOLD_LIMIT_MS = 10 * 60 * 1000;
 //after the release the hand flies on as the simulation will (both workers: gravity
 //-9.8 * 800 legacy units/s^2, damping 0.1), until the replay takes over; it never flies longer
 //than this, nor into the desk or a wall, where the two would part
-const GRAVITY = -9.8 * 800 * LEGACY_TO_METERS;
+//the flight before the simulation takes over falls as the engine in use does
+const CANNON_GRAVITY = -9.8 * 800 * LEGACY_TO_METERS;
+const gravity = () => activePhysicsEngine === PHYSICS_ENGINES.RAPIER ? RAPIER_GRAVITY : CANNON_GRAVITY;
 const DAMPING = -Math.log(0.9);
 const FLIGHT_MAX = 0.6;
 
@@ -329,7 +339,6 @@ async function openHand(messageId, entry) {
         if (!made) continue;
         const holder = new Group();
         const off = offsets[i];
-        holder.position.set((off.x - mid.x) * size * HAND_SPACING, 0, (off.z - mid.z) * size * HAND_SPACING);
         if (made.dicemesh.userData?.modelScale) holder.scale.setScalar(made.dicemesh.userData.modelScale);
         const geo = made.dicemesh.geometry;
         if (geo && !geo.boundingSphere) geo.computeBoundingSphere();
@@ -343,15 +352,20 @@ async function openHand(messageId, entry) {
             index: i,
             off: { x: off.x - mid.x, z: off.z - mid.z },
             radius,
+            vel: new Vector3(),
             spinAxis: new Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize(),
             spin: 0.5 + Math.random() * 0.4,
             phase: Math.random() * Math.PI * 2
         });
     }
     if (!h.dice.length) throw new Error("no dice meshes");
-    h.diameter = 2 * Math.max(...h.dice.map(d => d.radius));
-    h.spacing = h.diameter * LOOSE;
-    for (const d of h.dice) d.holder.position.set(d.off.x * h.spacing, 0, d.off.z * h.spacing);
+    //start as a loose hex cluster with a little height, then let the pile settle into a ball
+    const step = 2 * CONTACT * Math.max(...h.dice.map(d => d.radius));
+    for (const d of h.dice) {
+        d.contact = d.radius * CONTACT;
+        d.holder.position.set(d.off.x * step * 1.05, (Math.random() - 0.5) * step * 0.5, d.off.z * step * 1.05);
+    }
+    for (let i = 0; i < 40; i++) settlePile(h, 1 / 120, false, null);
     box.scene.add(h.group);
     h.ready = true;
     showBoard();
@@ -398,8 +412,6 @@ function startLoop() {
 const SPRING_HELD = { k: 260, zeta: 0.72 };
 const SPRING_FLOAT = { k: 42, zeta: 1 };
 const LEAN_MAX = 0.42;
-const SLOSH = 0.0011;
-const SLOSH_MAX = 0.06;
 const _acc = new Vector3();
 const _goal = new Vector3();
 const _v = new Vector3();
@@ -445,28 +457,56 @@ function animateHand(dt) {
     _yaw.setFromAxisAngle(UP_AXIS, h.yaw);
     h.group.quaternion.copy(h.leanQ).multiply(_yaw);
 
-    //held, the dice are pulled together and turn faster; a shake makes them tumble
+    //held, the dice turn faster; a shake makes them tumble
     const energy = grab ? 2.5 + Math.min(8, grab.reversals * 2.2) : 1;
-    const spacing = h.diameter * (grab ? CUPPED : LOOSE);
-    h.spacing += (spacing - h.spacing) * (1 - Math.exp(-dt * (grab ? 16 : 4)));
-    //slosh, in the hand's own frame: against the acceleration, capped so cupped dice never touch
-    _inv.copy(h.group.quaternion).invert();
-    _v.copy(_acc).multiplyScalar(h.calm ? 0 : -SLOSH * size).applyQuaternion(_inv);
-    const cap = SLOSH_MAX * h.diameter;
-    if (_v.length() > cap) _v.setLength(cap);
     for (const d of h.dice) {
         _q.setFromAxisAngle(d.spinAxis, d.spin * energy * dt);
         d.holder.quaternion.premultiply(_q);
-        d.slosh ??= new Vector3();
-        d.sloshGain ??= 0.7 + Math.random() * 0.6;
-        d.slosh.lerp(_v.clone().multiplyScalar(d.sloshGain), 1 - Math.exp(-dt * 14));
-        d.holder.position.set(
-            d.off.x * h.spacing + d.slosh.x,
-            Math.sin(h.t * 2.1 + d.phase) * size * (grab ? 0.02 : 0.06) + d.slosh.y * 0.5,
-            d.off.z * h.spacing + d.slosh.z
-        );
+    }
+    //the pile feels the hand's acceleration in the hand's own frame
+    _inv.copy(h.group.quaternion).invert();
+    _v.copy(_acc).multiplyScalar(h.calm ? 0 : -INERTIA).applyQuaternion(_inv);
+    const steps2 = Math.max(1, Math.ceil(dt / 0.008));
+    for (let i = 0; i < steps2; i++) settlePile(h, dt / steps2, !!grab, _v);
+}
+
+// One step of the pile, in the hand's frame: a pull to the centre (plus the hand's inertia),
+// damped, then each pair that overlaps pushed apart along the line between them.
+function settlePile(h, dt, held, inertia) {
+    const pull = held ? PULL_HELD : PULL_FLOAT;
+    const gap = held ? GAP_HELD : GAP_FLOAT;
+    const damping = 2 * Math.sqrt(pull) * 0.9;
+    const t = h.t;
+    for (const d of h.dice) {
+        const p = d.holder.position;
+        //floating, the pile breathes: a slow bob per die
+        const bob = held ? 0 : Math.sin(t * 2.1 + d.phase) * d.contact * 0.08;
+        _pf.set(-p.x, bob - p.y, -p.z).multiplyScalar(pull).addScaledVector(d.vel, -damping);
+        if (inertia) _pf.add(inertia);
+        d.vel.addScaledVector(_pf, dt);
+        p.addScaledVector(d.vel, dt);
+    }
+    const dice = h.dice;
+    for (let pass = 0; pass < 3; pass++) {
+        for (let i = 0; i < dice.length; i++) {
+            for (let j = i + 1; j < dice.length; j++) {
+                const a = dice[i].holder.position, b = dice[j].holder.position;
+                _pd.subVectors(b, a);
+                const min = (dice[i].contact + dice[j].contact) * gap;
+                let dist = _pd.length();
+                if (dist >= min) continue;
+                if (dist < 1e-6) { _pd.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5); dist = _pd.length(); }
+                _pd.multiplyScalar((min - dist) / dist * 0.5);
+                a.sub(_pd);
+                b.add(_pd);
+                //what the push took out of the closing speed
+                if (dt > 0) { dice[i].vel.addScaledVector(_pd, -0.5 / dt); dice[j].vel.addScaledVector(_pd, 0.5 / dt); }
+            }
+        }
     }
 }
+const _pf = new Vector3();
+const _pd = new Vector3();
 
 // ---------------------------------------------------------------------------------------------
 // Input
@@ -604,9 +644,10 @@ function throwHand(v) {
     const box = board();
     const W = box.diceScene.display.innerWidth;
     h.group.updateMatrixWorld(true);
+    const parted = partedPositions(h);
     const dice = [];
-    for (const d of h.dice) {
-        const wp = d.mesh.getWorldPosition(new Vector3());
+    for (const [i, d] of h.dice.entries()) {
+        const wp = parted[i];
         const wq = d.mesh.getWorldQuaternion(new Quaternion());
         //small differences per die, so the dice don't fly in formation
         const a = (Math.random() - 0.5) * 0.35;
@@ -625,7 +666,7 @@ function throwHand(v) {
             q: [wq.x, wq.y, wq.z, wq.w]
         });
     }
-    startFlight(h, dice, W);
+    startFlight(h, dice, W, parted);
     const payload = { type: SOCKET_TYPE, messageId: h.messageId, user: game.user.id, dice };
     game.socket.emit(`module.${MODULE_ID}`, payload);
     release(h.messageId, payload);
@@ -634,7 +675,33 @@ function throwHand(v) {
 // From the release, each die of the hand flies on as the simulation starts it: the same
 // position, velocity, spin and gravity. Each die leaves the hand's group for the scene so it
 // moves in world space. tMax: before the first die could reach the desk or a wall.
-function startFlight(h, dice, W) {
+// Where each die starts the throw: the pile, spread just enough that no two bounding spheres
+// overlap (the physics would otherwise kick them apart).
+function partedPositions(h) {
+    const pts = h.dice.map(d => d.mesh.getWorldPosition(new Vector3()));
+    const centre = pts.reduce((c, p) => c.add(p), new Vector3()).divideScalar(pts.length);
+    const d = new Vector3();
+    for (let pass = 0; pass < 24; pass++) {
+        let moved = false;
+        for (let i = 0; i < pts.length; i++) {
+            for (let j = i + 1; j < pts.length; j++) {
+                d.subVectors(pts[j], pts[i]);
+                const min = (h.dice[i].radius + h.dice[j].radius) * 1.02;
+                let dist = d.length();
+                if (dist >= min) continue;
+                if (dist < 1e-6) { d.subVectors(pts[j], centre); if (d.lengthSq() < 1e-12) d.set(1, 0, 0); dist = 0; }
+                d.setLength((min - dist) * 0.5);
+                pts[i].sub(d);
+                pts[j].add(d);
+                moved = true;
+            }
+        }
+        if (!moved) break;
+    }
+    return pts;
+}
+
+function startFlight(h, dice, W, parted) {
     const box = board();
     const display = box.diceScene.display;
     const size = h.size;
@@ -644,13 +711,14 @@ function startFlight(h, dice, W) {
     for (let i = 0; i < h.dice.length; i++) {
         const d = h.dice[i];
         const sent = dice[i];
-        const p0 = d.mesh.getWorldPosition(new Vector3());
+        const pile = d.mesh.getWorldPosition(new Vector3());
+        const p0 = parted[i];
         const q0 = d.mesh.getWorldQuaternion(new Quaternion());
         const v = new Vector3(sent.vel.x * W, sent.vel.y * W, sent.vel.z * W);
         const w = new Vector3(sent.spin.x, sent.spin.y, sent.spin.z);
         //desk: y = p0.y + v.y t + g t^2 / 2 reaches the die's radius
         const floor = size * 0.75;
-        const a = GRAVITY / 2, b = v.y, c = p0.y - floor;
+        const a = gravity() / 2, b = v.y, c = p0.y - floor;
         const disc = b * b - 4 * a * c;
         if (disc > 0) tMax = Math.min(tMax, (-b - Math.sqrt(disc)) / (2 * a));
         //walls: the centre reaches them less half a die
@@ -662,7 +730,7 @@ function startFlight(h, dice, W) {
         d.holder.position.copy(p0);
         d.holder.quaternion.copy(q0);
         box.scene.add(d.holder);
-        flying.push({ holder: d.holder, p0, q0, v, w, wLen: w.length() });
+        flying.push({ holder: d.holder, p0, q0, v, w, wLen: w.length(), part: pile.sub(p0) });
     }
     h.flight = { t0: performance.now(), tMax: Math.max(0, tMax), dice: flying };
 }
@@ -673,7 +741,8 @@ function flyHand(h) {
     //linear damping integrates to (1 - e^-ct) / c; gravity is left undamped (a small error)
     const k = DAMPING > 0 ? (1 - Math.exp(-DAMPING * t)) / DAMPING : t;
     for (const d of f.dice) {
-        d.holder.position.set(d.p0.x + d.v.x * k, d.p0.y + d.v.y * k + GRAVITY * t * t / 2, d.p0.z + d.v.z * k);
+        d.holder.position.set(d.p0.x + d.v.x * k, d.p0.y + d.v.y * k + gravity() * t * t / 2, d.p0.z + d.v.z * k)
+            .addScaledVector(d.part, Math.exp(-t / PART_TAU));
         if (d.wLen > 1e-6) {
             _axis.copy(d.w).divideScalar(d.wLen);
             _q.setFromAxisAngle(_axis, d.wLen * k);
