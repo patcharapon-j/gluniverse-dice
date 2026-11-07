@@ -106,6 +106,7 @@ export function readFace(geometry, shapeName, quat) {
     const up = shapeName === 'd4' ? -1 : 1;
     let closest = -1;
     let closestAngle = Math.PI * 2;
+    let normal = null;
     for (let i = 0; i < geometry.faceNormals.length; i++) {
         if (geometry.faceValues[i] == 0) continue;
         const n = rotateByQuat(geometry.faceNormals[i], quat);
@@ -114,7 +115,9 @@ export function readFace(geometry, shapeName, quat) {
         if (angle < closestAngle) {
             closestAngle = angle;
             closest = i;
+            normal = [n[0] / len, n[1] / len, n[2] / len];
         }
     }
-    return { value: geometry.faceValues[closest], angle: closestAngle };
+    //normal: the world-space normal of the chosen face
+    return { value: geometry.faceValues[closest], angle: closestAngle, normal };
 }

@@ -14,6 +14,7 @@ Changes from Dice So Nice, newest last:
 |---|---|
 | 2026-11-07 | Package renamed to `gluniverse-dice` / "GLUniverse Dice", declared as conflicting with `dice-so-nice`. The `dice-so-nice` identity stays reachable (see [Identity](#identity)). |
 | 2026-11-07 | Optional Rapier physics backend (`module/web-workers/RapierPhysicsWorker.js`), chosen by a world setting. cannon-es stays the default. |
+| 2026-11-07 | Smoothness (M2): interpolated replay and live dice, real frame delta for live stepping, idle frames skipped, shader prewarm at load, cannon's `worldAsleep` fixed, Rapier coin settle and topple. See [Smoothness](#smoothness-m2). |
 
 The AGPL requires the corresponding source to be offered to everyone who receives the module.
 The repository is private until the first release: make it public, or publish the source next
@@ -50,6 +51,9 @@ works unchanged. To keep rebasing onto upstream cheap:
 | `package.json`, `package-lock.json` | name, version, repository URLs, scripts; deps `@dimforge/rapier3d-compat`, `@rollup/plugin-replace` | Package metadata and the two new dependencies. |
 | `README.md` | Fork section at the top; Rapier added to "Built on" | AGPL notice and credits. Everything upstream wrote is kept. |
 | `.gitignore` | `tools/physics-bench/.build/` | Benchmark scratch bundles. |
+| `module/rendering/DiceBox.js` | One import (`glu/Smoothness.js`); in `animateThrow`: a `gluMoved` local, a `smoothFrame` call while a throw replays, the live `playStep` payload from `livePlayStepPayload`, a `noteLiveResult` call in its `.then`, and the render condition wrapped in `shouldRender` | Replay and live interpolation, render every moving frame, skip idle ones. |
+| `module/web-workers/PhysicsWorker.js` | `playStep` takes `frame_dt` and `interpolate` (returns `interpolatedPosition`/`Quaternion`); its `worldAsleep` test skips static bodies; `setBodyPosition(s)` also reset `previousPosition`/`interpolatedPosition` | Contract change shared with the Rapier worker. Without the static-body skip the desk kept cannon awake forever. |
+| `module/Dice3D.js` | One import; `prewarmBoard(this)` after `persistent.restoreAll()` at the end of the load chain | Shader prewarm once fonts, presets and the dice library are loaded. |
 
 Files that are entirely ours: `FORK.md`, `ROADMAP.md`, `CREDITS.md`, `CLAUDE.md`, `module/glu/*`,
 `module/lang/glu-en.json`, `module/web-workers/RapierPhysicsWorker.js`,
@@ -184,7 +188,7 @@ meters natively.
 | `applyImpulse` | `{ id, velocity, angularVelocity }` (sets velocities, makes the body dynamic) | – | no in-repo caller |
 | `getBodyQuaternion` | `id` | `{x,y,z,w}` or `null` | no in-repo caller |
 | `getDiceValue` | `id` | face value (cached until the die moves again) or `null` | `dicemesh.getValue()` (public, no in-repo caller) |
-| `playStep` | `{ time_diff }` in seconds; fixed 1/60 s steps with an accumulator, at most 10 per call; ignored while a throw is simulating | `{ ids, quaternionsBuffers: ArrayBuffer, positionsBuffers: ArrayBuffer, worldAsleep }`: flat Float32 arrays, 4 resp. 3 floats per id, dead dice excluded; `ids` empty when `worldAsleep` | `DiceBox.animateThrow`, every frame while no replay is playing |
+| `playStep` | `{ time_diff, frame_dt?, interpolate? }` in seconds; fixed 1/60 s steps with an accumulator, at most 10 per call; ignored while a throw is simulating. `frame_dt`, when given, is the real time since the previous call and is used instead of `time_diff` (see below). `interpolate: true` returns each pose blended between the last two fixed steps by the leftover time; a teleport (`setBodyPosition(s)`) is never blended | `{ ids, quaternionsBuffers: ArrayBuffer, positionsBuffers: ArrayBuffer, worldAsleep }`: flat Float32 arrays, 4 resp. 3 floats per id, dead dice excluded; `ids` empty when `worldAsleep`. `worldAsleep` ignores static bodies | `DiceBox.animateThrow`, every frame while no replay is playing |
 | `simulateThrow` | `{ minIterations, nbIterationsBetweenRolls, framerate, canBeFlipped, impulses: {[id]: {velocity, angularVelocity}} \| null }` | see below | `ThrowEngine.startUnifiedBatch` |
 | `updateBarriers` | same shape as `init`'s size | – | `DiceBox` on resize |
 | `getWorldInfo` | – | logs the world | debugging only |
@@ -256,6 +260,41 @@ already with cannon-es.
 machines. Same-machine reproducibility is not needed either, because inputs are random. The
 standard `@dimforge/rapier3d-compat` package is used.
 
+## Smoothness (M2)
+
+`module/glu/Smoothness.js`, `ReplayInterpolator.js`, `ShaderPrewarm.js`.
+
+- **Replay.** Upstream copies whole 60 Hz frames into the dice and renders only on frames where a
+  whole step elapsed. While a throw replays, `smoothFrame` blends each die's parent group
+  between recorded frames `i` and `i+1` by the leftover time, scaled by `ThrowEngine.speed`,
+  every display frame. It skips constrained dice, dice dead before frame `i`, dice not yet
+  spawned (`startAtIteration > i`) and zeroed frames, and stops once `iteration` reaches
+  `iterationsNeeded`, where upstream has placed the final frame. `swapDiceFace` rotates the
+  child mesh, so the forced result is untouched.
+- **Live dice.** Upstream passes `time_diff`, the time since the last *whole* step, on every
+  frame. That counts the leftover of earlier frames again each frame, so both workers'
+  accumulators over-advanced on displays faster than 60 Hz (held and persistent dice ran fast).
+  `livePlayStepPayload` adds `frame_dt`, the real time since the previous live call (capped at
+  0.25 s), and `interpolate: true`. `time_diff` is still sent. The pre-roll wobble
+  (`InputHandler.updatePreRoll`, `updateRemoteAnimations`) still gets upstream's `time_diff`
+  and so still spins faster at high refresh rates: not changed.
+- **Idle frames.** With interactivity or persistent dice on, upstream renders every frame forever.
+  `shouldRender` keeps upstream's condition and skips the frame when the board is idle: no
+  replay, the worker has reported `worldAsleep` for 250 ms, no pointer, wheel, key or resize
+  event for 750 ms, no SFX, fading or animated dice, and no persistent die that is held,
+  replaying, or moved by another player. Client setting `gluniverse-dice.idleRenderSkip`
+  (default on) turns it off.
+- **Shader prewarm.** At the end of `Dice3D.init`'s load chain, the current user's d4 to d20 are
+  built once through `DiceFactory.create` (so the materials land in the factory caches), added
+  1 km below the desk, compiled with `renderer.compileAsync`, and removed. Shadow-depth programs
+  are not covered; they still compile on the first shadow render. Client setting
+  `gluniverse-dice.shaderPrewarm` (default on). The console logs the time and program count.
+
+**Not yet verified in a running Foundry:** all four. The worker side (frame delta, interpolated
+pose, teleports, cannon reporting asleep) is covered by `tests/workerContract.test.mjs`; the
+DiceBox side and the prewarm only run in a browser. The first-throw hitch before and after has
+not been measured.
+
 ## Rapier backend
 
 `module/web-workers/rapier/RapierPhysicsEngine.js` implements the contract above. The worker entry
@@ -288,9 +327,19 @@ Mapping and deliberate differences:
   to a mass-0 body). The anchor moves through `setNextKinematicTranslation`, so a held die is
   pulled rather than teleported.
 - **`worldAsleep`** really becomes true when every die is settled. cannon's desk never sleeps,
-  so with cannon `playStep` never reported asleep.
+  so with cannon `playStep` never reported asleep, until M2 made its test skip static bodies.
 - Collision sounds use the die's speed *before* the step, as cannon's narrowphase event does,
   with the same thresholds converted to m/s.
+
+- **Coins** (M2). A thin hull lying on the desk gets angular kicks from the contact solver every
+  few steps, up to about 1.4 rad/s about a horizontal axis at under 1° of tilt. So it never passed
+  the angular settle test and 7 of 200 three-coin throws ran to the 1000-frame cap. More angular
+  damping, a smaller `lengthUnit`, more PGS iterations and a true cylinder collider all left 6 to
+  16 throws capped. A coin within `coinFlatAngle` (0.15 rad) of flat, and slower than
+  `coinSlowSpeed`, now settles on the linear test alone: **1 of 200** capped. A coin standing on
+  an edge facet past `coinEdgeAngle` for `coinToppleDelay` gets a `coinToppleKick` toward flat, at
+  most `coinToppleTries` times, with the direction alternating in case a wall blocks it. That
+  halves edge-standing coins (cocked 1.8% to 0.8%).
 
 Benchmark: [docs/fork/PHYSICS_BENCH.md](./docs/fork/PHYSICS_BENCH.md).
 

@@ -176,6 +176,7 @@ async function runEngine(engine, scenarioName, types) {
             }
             if (py < -0.005 || Math.abs(px) > halfX + 0.01 || Math.abs(pz) > halfZ + 0.01) { out.outOfBounds++; if (process.env.BENCH_DEBUG) console.log(engine, "OOB", trial, id, px.toFixed(3), py.toFixed(3), pz.toFixed(3), "start", JSON.stringify(spec.vectordata.pos), "frames", last); }
             const tm = tailMotion(pos, quat, last, 30);
+            if (process.env.BENCH_DEBUG && last >= 1000) console.log(engine, 'capped', trial, id, spec.shape, 'tilt', (r.angle * DEG).toFixed(1), 'height mm', (py * 1000).toFixed(0), 'last-0.5s path mm', (tm.path * 1000).toFixed(1), 'rot', (tm.rot * DEG).toFixed(0));
             out.tailPathMm.push(tm.path * 1000);
             out.tailRotDeg.push(tm.rot * DEG);
             out.faces[spec.shape] ??= {};

@@ -104,3 +104,38 @@ for (const engine of ['cannon', 'rapier']) {
         assert.deepEqual(idle.ids, []);
     });
 }
+
+//ROADMAP M2: playStep takes an optional real frame delta (frame_dt) and interpolate flag
+for (const engine of ['cannon', 'rapier']) {
+    test(`${engine}: playStep frame_dt, interpolate and sleep`, async () => {
+        const w = await loadWorker(engine);
+        await w.exec('init', { muteSoundSecretRolls: false, height: H, width: W, margin: { top: 0, bottom: 0, left: 0, right: 0 } });
+        await w.exec('createShape', { name: 'd6', radius: 0.0488, definition: DiceShapeLibrary.getWorkerDefinition('d6') });
+        await w.exec('createDice', { ...spec(1, 0, { options: { persistent: true }, vx: 0 }), vectordata: { type: 'd6', pos: { x: 0, y: 0.5, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, angle: { x: 0, y: 0, z: 0 }, axis: { x: 0, y: 0, z: 0, a: 0 } } });
+        await w.exec('addDice', 1);
+        const y = (r) => new Float32Array(r.positionsBuffers)[r.ids.indexOf(1) * 3 + 1];
+
+        for (let i = 0; i < 10; i++) await w.exec('playStep', { time_diff: 1 / 60, frame_dt: 1 / 60 });
+        const raw = await w.exec('playStep', { time_diff: 1 / 60, frame_dt: 1 / 120 });
+        const blended = await w.exec('playStep', { time_diff: 1 / 60, frame_dt: 0, interpolate: true });
+        assert.deepEqual(keysOf(blended), ['ids', 'positionsBuffers', 'quaternionsBuffers', 'worldAsleep']);
+        //falling: the blended pose lies between the previous fixed step (higher) and the current one
+        assert.ok(y(blended) >= y(raw) - 1e-6, `blended ${y(blended)} is not below the current step ${y(raw)}`);
+        assert.ok(y(blended) - y(raw) < 0.02, 'blended pose is within one step of the current one');
+
+        //frame_dt wins over time_diff: one frame's fall, not ten substeps
+        const before = y(await w.exec('playStep', { time_diff: 1 / 60, frame_dt: 0 }));
+        const after = y(await w.exec('playStep', { time_diff: 10, frame_dt: 1 / 60 }));
+        assert.ok(before - after < 0.03, `fell ${before - after} m in one frame`);
+
+        //a teleport is not interpolated
+        await w.exec('setBodyPositions', { updates: [{ id: 1, position: { x: 0.1, y: 0.3, z: 0 } }] });
+        const tp = await w.exec('playStep', { time_diff: 1 / 60, frame_dt: 0, interpolate: true });
+        assert.ok(Math.abs(y(tp) - 0.3) < 1e-4, `teleported die reported at y=${y(tp)}`);
+
+        //the die lands and the world reports asleep (cannon: static bodies are ignored)
+        let asleep = false;
+        for (let i = 0; i < 900 && !asleep; i++) asleep = (await w.exec('playStep', { time_diff: 1 / 60, frame_dt: 1 / 60, interpolate: true })).worldAsleep;
+        assert.equal(asleep, true, 'world reports asleep once the die rests');
+    });
+}

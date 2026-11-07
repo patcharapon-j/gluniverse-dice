@@ -136,9 +136,9 @@ It does not matter because `swapDiceFace` always shows Foundry's result.
   ±1 point.
 - **Resting jitter is zero for both** on every polyhedral die. Rapier dice report
   `worldAsleep` once settled, so the idle loop stops stepping.
-- **Known gap: coins.** 6 of 200 three-coin throws reach the 1000-frame cap with Rapier (cannon:
-  0). A coin keeps rolling on its edge. M2 should address this before Rapier can be the default
-  (rolling resistance for the d2, or a coin-specific settle rule).
+- **Known gap: coins (fixed in M2, see below).** 6 of 200 three-coin throws reach the 1000-frame
+  cap with Rapier (cannon: 0). M1 read this as a coin rolling on its edge. M2 found otherwise: the
+  coin lies flat and the contact solver keeps kicking it.
 - **Fewer collision sounds** with Rapier (10d6: 33.5 vs 53.9 per throw). Both engines queue a sound
   when a contact pair *starts*, with the same speed thresholds and throttling. The likely reasons
   are shorter replays and fewer bounces, but this run did not isolate the cause. The cues are
@@ -146,3 +146,34 @@ It does not matter because `swapDiceFace` always shows Foundry's result.
 
 Recommendation: keep cannon-es the default (as the setting does) until M2 has tuned feel and
 fixed the coin case in a running Foundry.
+
+## M2: coins
+
+Raw data: [physics-bench-m2.json](./physics-bench-m2.json), same method and seeds, 200 trials.
+Only coins changed. The other three scenarios match M1 within noise, because the new rules
+apply to cylinder colliders only.
+
+A rerun of the M1 code before any change gave 7 of 200 capped (the M1 table says 6). Tracing a
+capped throw showed a coin lying flat, under 1° of tilt and slower than 2 cm/s. It kept
+receiving angular velocity spikes of 0.3 to 1.4 rad/s about a horizontal axis, which
+reset its settle timer. What did **not** help (capped throws out of 200): coin angular damping
+1.5 or 3 (16, 12), rolling damping on a flat coin up to 40/s (5 to 7), `lengthUnit` 0.01 (12),
+`pgsIterations` 4 (11), a true cylinder collider (11), desk restitution 0.1 (6).
+
+What shipped: a coin within 0.15 rad of flat and slower than 0.15 m/s settles on the linear
+test alone. A coin standing on an edge facet gets up to four topple kicks.
+
+| 3 coins (d2) | cannon-es | Rapier M1 | Rapier M2 |
+|---|---:|---:|---:|
+| throws hitting 1000-frame cap | 0/200 | 6/200 | **1/200** |
+| replay s (median) | 3.78 | 2.45 | 2.42 |
+| replay s (p95) | 4.67 | 6.3 | 3.28 |
+| dice tilted >5° | 1.7% | 2.0% | 1.0% |
+| dice cocked >15° | 1.0% | 1.8% | 0.8% |
+| sim ms (p95) | 4.6 | 9.9 | 4.9 |
+| idle 2s drift mm (max) | 0 | 2.498 | 1.099 |
+| faces 1 / 2 | 295 / 305 | | 296 / 304 |
+
+The remaining capped throw is a coin rocking at about 3°, beyond the flat window, while drifting
+a few mm. The topple kick alone (with the flat rule off) left cocked coins at 1.8%; with both,
+0.8%.

@@ -17,6 +17,7 @@ import { AnimationQueue } from './throw/AnimationQueue.js';
 import { ThrowPipeline } from './throw/ThrowPipeline.js';
 import { RollRules } from './throw/RollRules.js';
 import { LEGACY_TO_METERS } from './engine/SceneConstants.js';
+import { prewarmBoard } from './glu/ShaderPrewarm.js'; //GLUniverse Dice: M2 shader prewarm
 /**
  * Main class to handle 3D Dice animations.
  */
@@ -365,6 +366,7 @@ export class Dice3D {
                 await this._preloadActorDocuments();
                 //restore persistent dice from flags
                 await this.persistent.restoreAll();
+                prewarmBoard(this); //GLUniverse Dice: compile the user's dice shaders before the first throw
             });
         }
 
