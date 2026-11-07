@@ -9,7 +9,9 @@ All bundled assets ship **as they are in Dice So Nice 6.4.5**. Nothing is remove
 gated. Dice So Nice's README says the textures and themes come from artists who gave **Dice So
 Nice** permission to include them, and that extra sounds come from zapsplat.com. That permission
 was given to DSN. Whether it extends to a fork is being confirmed with the owners: **the
-maintainer is handling it**. This table is the list for those conversations.
+maintainer is handling it**. This table is the list for those conversations. The repository and
+its releases have been public since 2026-11-07, by the maintainer's decision, with the
+permissions below still pending.
 
 "Source" is what the repository itself shows: the README credits, git history, and file
 headers. Where it says *likely*, it is an inference to confirm with the owner.

@@ -1,8 +1,53 @@
-> **GLUniverse Dice** is a modified version (soft fork) of Dice So Nice! by Simone and JDW, forked
-> from 6.4.5. It keeps Dice So Nice's public API, so systems and modules built for Dice So Nice
-> work unchanged. See [FORK.md](./FORK.md) for what changed and why, [ROADMAP.md](./ROADMAP.md)
-> for what is planned, and [CREDITS.md](./CREDITS.md) for asset credits. Everything below is
-> Dice So Nice's own README, kept as written, including its credits.
+# GLUniverse Dice
+
+3D dice for Foundry VTT v14: a modified version (soft fork) of **Dice So Nice!** by Simone and
+JDW, forked from 6.4.5. It keeps Dice So Nice's public API (`game.dice3d`, the `diceSoNice*`
+hooks, colorsets, roles and the `dice-so-nice` settings), so systems and modules built for Dice
+So Nice work unchanged, and a world switching over keeps its dice settings.
+
+## Install
+
+In Foundry's setup screen: **Add-on Modules → Install Module**, paste this manifest URL into
+**Manifest URL**, then **Install**:
+
+```
+https://github.com/patcharapon-j/gluniverse-dice/releases/latest/download/module.json
+```
+
+Enable **GLUniverse Dice** in the world and keep **Dice So Nice!** disabled (the two declare a
+conflict). Foundry v14 only. Updates arrive through Foundry's normal update check.
+
+## What it adds to Dice So Nice
+
+- **Grab and roll.** An interactive roll waits in the roller's hand: the dice float spread out
+  next to the pointer, above the sheet the roll came from, slowly turning. Grab them and they
+  gather into a pile that jostles with your hand; flick to throw, click to throw, or shake.
+  Nobody else sees the dice, or the result, until they are thrown, and there is no extra chat
+  card. Which rolls wait is Dice So Nice's own interactive-throw rule.
+- **Burn away.** After the dice have been on the table for a world-set time (default 5 s), they
+  burn away in spreading, white-edged holes, the glowing result number with them.
+- **Result glow and impact sparks.** The result face lights up when the dice settle (it ignites,
+  flashes, cools and stays lit), in the die's own colour; hard hits throw sparks.
+- **Rapier physics (optional).** A second physics engine, chosen by a world setting, with dice
+  that roll rather than skid and settle a little sooner. cannon-es stays the default.
+- **Smoother motion.** Interpolated replay and live dice, real frame timing, idle frames skipped,
+  shaders compiled at load.
+- **Materials.** Gemstone, inner-galaxy and pearlescent materials, enhanced versions of the
+  built-in ones, and the Nice more Dice texture pack bundled (CC BY 4.0, LyncsCwtsh).
+- **For streams.** `game.dice3d.rollArea` sets, previews and applies a client's dice roll area
+  live, and lets a GM drive it on another user's client (a stream capture login).
+- **For systems.** Dice can be tagged and emphasised (`term.options.gluDice`, hook
+  `gluDiceSettle`), so a system can say which die matters; the glow follows.
+
+[FORK.md](./FORK.md) says what changed and how, [ROADMAP.md](./ROADMAP.md) what is planned, and
+[CREDITS.md](./CREDITS.md) lists the bundled assets and their credits. Licence: AGPL-3.0, like
+Dice So Nice; the full source is this repository.
+
+---
+
+> Everything below is Dice So Nice's own README, kept as written, including its credits. Its
+> install instructions are for Dice So Nice itself; to install GLUniverse Dice use the manifest
+> URL above.
 
 ![Banner](./banner.jpg?raw=true)  
 [![Forge Installs](https://img.shields.io/badge/dynamic/json?label=Forge%20Installs&query=package.installs&suffix=%25&url=https%3A%2F%2Fforge-vtt.com%2Fapi%2Fbazaar%2Fpackage%2Fdice-so-nice&colorB=4aa94a)](https://forge-vtt.com/bazaar#package=dice-so-nice)
