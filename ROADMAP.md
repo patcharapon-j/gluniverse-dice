@@ -156,7 +156,7 @@ capture client. Feed the area to M6's showcase. Risks: the capture client's canv
 the configured area; remote clients simulate against their own board size (FORK.md
 determinism), which is fine.
 
-## M8 Daggerheart pass
+## M8 Daggerheart pass: dice side built, Foundry check pending
 
 `gluniverse-daggerheart` `src/module/dice/dsn.ts` registers colorsets (Hope gold / Fear violet,
 frosted; advantage d6s velvet), textures, roles, and a material hook (`diceSoNiceOnMaterialReady`,
@@ -167,6 +167,16 @@ Plan: duality-aware showcase (Hope vs Fear side by side, the higher one emphasis
 the die's own hue, and a check that M3's materials keep `frosted`/`velvet` and the system's
 shader hook working. Most of this belongs in the system repository, using hooks this module
 exposes; this module only adds the hooks.
+
+**Status (dice side).** Built: `term.options.gluDice = { tag, glow, emphasis }`, the
+`gluDiceSettle` hook and `api.presentation` (`module/glu/fx/DicePresentation.js`); the settle glow
+cools to the die's own hue or a per-die colour, and the emphasised die glows brighter, the one
+that lost quieter (`GlowHue.js`, client setting `glowHue`); M3 checked against the system's
+`frosted`/`velvet` dice and its material hook, and one fix (the number mask is now a copy, so the
+system's cut glow no longer lights at settle). FORK.md "Daggerheart pass (M8)", docs page "Tags
+and Emphasis". Because M6 is deferred, the emphasis lives on the settle glow; `presentationOrder`
+is the input M6 will lay out from. **Still to do**: the system side (tag its terms, in
+`gluniverse-daggerheart`), and checks in a running Foundry.
 
 ## M9 Dice that connect to the rest of the suite
 

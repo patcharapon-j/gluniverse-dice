@@ -160,8 +160,11 @@ export function decorateMaterial(factory, mat, materialData, canvasBump, canvasE
         mat.userData.gluLabelMask = mask;
     }
     //number mask: M4's settle glow lights only the numbers through it
+    //A copy, not DSN's canvas: that canvas is also `mat.emissiveMap.image`, and systems draw into
+    //it from diceSoNiceOnMaterialReady (Daggerheart lights its cut there). On the shared canvas
+    //their art would glow as if it were the number (M8).
     if (canvasEmissive && !mat.userData.gluNumberMask) {
-        const numbers = new CanvasTexture(canvasEmissive);
+        const numbers = new CanvasTexture(snapshotCanvas(canvasEmissive));
         numbers.flipY = false;
         mat.userData.gluNumberMask = numbers;
     }
@@ -177,6 +180,25 @@ export function decorateMaterial(factory, mat, materialData, canvasBump, canvasE
 
     if (selected.gluGalaxy) addInnerShader(mat, canvasBump, 'galaxy', GALAXY_MAP_FRAGMENT, GALAXY_OUTPUT_FRAGMENT);
     else if (selected.gluPearl) addInnerShader(mat, canvasBump, 'pearl', PEARL_MAP_FRAGMENT, PEARL_OUTPUT_FRAGMENT);
+}
+
+/**
+ * A copy of a canvas as it is now. Falls back to the canvas itself when no copy can be made.
+ * @param {HTMLCanvasElement} source
+ * @param {() => HTMLCanvasElement} [create]
+ */
+export function snapshotCanvas(source, create = () => document.createElement('canvas')) {
+    try {
+        const copy = create();
+        copy.width = source.width;
+        copy.height = source.height;
+        const ctx = copy.getContext('2d');
+        if (!ctx) return source;
+        ctx.drawImage(source, 0, 0);
+        return copy;
+    } catch {
+        return source;
+    }
 }
 
 //wraps upstream's onBeforeCompile with object-space varyings, the label mask and two chunks
