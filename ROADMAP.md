@@ -77,6 +77,13 @@ cache keys (`customProgramCacheKey`), and the M2 prewarm needing to know the new
 
 ## M4 Face glow on settle; particles on impact and settle
 
+**Built, Foundry check pending.** Delivered (FORK.md
+[Glow and particles](./FORK.md#glow-and-particles-m4)): contact position in both workers'
+collision timeline, impact sparks, a result-face glow that lights the number, sparkles on settle,
+two client settings. Done with one pooled `Points` instead of Proton, and an overlay mesh instead
+of a per-face emissive uniform: shared materials cannot carry per-die uniforms. Open: tune with
+DSN's bloom, check every die shape and custom models in Foundry.
+
 | Item | Seam |
 |---|---|
 | "The dice settled" moment | `DiceBox.animateThrow` → `throwEngine.throwFinished()` → `fireResultEvents()` (`DiceSystem.DICE_EVENT_TYPE.RESULT` per die) |

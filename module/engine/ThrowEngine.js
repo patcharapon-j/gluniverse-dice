@@ -1,4 +1,5 @@
 import { DiceShapeLibrary } from './DiceShapeLibrary.js';
+import { noteSimulation } from '../glu/fx/DiceFx.js'; //GLUniverse Dice: M4
 import { DiceSFXManager } from '../sfx/DiceSFXManager.js';
 import { DiceSystem } from '../DiceSystem.js';
 import { LEGACY_TO_METERS } from './SceneConstants.js';
@@ -624,6 +625,7 @@ export class ThrowEngine {
 		// === PLAYBACK SETUP ===
 
 		this.detectedCollides = this.soundManager.generateCollisionSounds(detectedCollides);
+		noteSimulation(this, detectedCollides); //GLUniverse Dice: M4 impact particles
 		this.iteration = 0;
 		this.rolling = true;
 		this.running = (new Date()).getTime();

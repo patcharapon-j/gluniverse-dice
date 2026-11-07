@@ -55,7 +55,11 @@ for (const engine of ['cannon', 'rapier']) {
         assert.ok(Array.isArray(res.detectedCollides));
         for (const c of res.detectedCollides.filter(Boolean)) {
             assert.ok(c[0] === 'dice' || c[0] === 'table');
-            assert.equal(c.length, 4);
+            //[source, type, material, strength, [x, y, z] in meters] (5th element: ROADMAP M4)
+            assert.equal(c.length, 5);
+            assert.equal(c[4].length, 3);
+            assert.ok(c[4].every(Number.isFinite), 'contact position is finite');
+            assert.ok(Math.abs(c[4][0]) < W && c[4][1] > -0.01 && c[4][1] < 1 && Math.abs(c[4][2]) < H, `contact position ${c[4]} lies on the board`);
         }
 
         //persistent die: created, added, grabbed, moved, released, thrown by impulse

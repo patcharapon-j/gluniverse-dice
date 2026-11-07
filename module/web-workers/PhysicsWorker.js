@@ -318,7 +318,7 @@ class PhysicsWorker {
         const finalStrength = shouldMute ? 0 : strength;
 
         if (this.animstate === "simulate") {
-            this.detectedCollides[this.iteration] = ["dice", body.diceType, body.diceMaterial, finalStrength];
+            this.detectedCollides[this.iteration] = ["dice", body.diceType, body.diceMaterial, finalStrength, [(body.position.x + target.position.x) * 0.5 * LEGACY_TO_METERS, (body.position.y + target.position.y) * 0.5 * LEGACY_TO_METERS, (body.position.z + target.position.z) * 0.5 * LEGACY_TO_METERS]]; //GLUniverse Dice: 5th element = contact position (m)
         } else {
             this.host.emit("collide", { source: "dice", type: body.diceType, material: body.diceMaterial, strength: finalStrength });
         }
@@ -337,7 +337,7 @@ class PhysicsWorker {
         const finalStrength = shouldMute ? 0 : strength;
 
         if (this.animstate === "simulate") {
-            this.detectedCollides[this.iteration] = ["table", null, null, finalStrength];
+            this.detectedCollides[this.iteration] = ["table", null, null, finalStrength, [target.position.x * LEGACY_TO_METERS, target.position.y * LEGACY_TO_METERS, target.position.z * LEGACY_TO_METERS]]; //GLUniverse Dice: 5th element = die position (m)
         } else {
             this.host.emit("collide", { source: "table", type: null, material: null, strength: finalStrength });
         }
