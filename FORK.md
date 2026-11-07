@@ -409,7 +409,9 @@ with many dice.
   spread out, each bobbing on its own spot (1.4 bounding diameters apart). Grabbed, they gather
   into a pile that touches, like dice pulled into a ball: each one is pulled to the hand's centre
   and pushed off its neighbours (contact radius 0.8 of its bounding sphere); let go without a
-  throw, they spread back out. The pile feels the hand's acceleration, so the dice lag, bunch and jostle. At the release the
+  throw, they spread back out. While it waits, the hand keeps the board above the top window
+  (DSN's "auto" and "over" layer modes), so it floats over the sheet it was rolled from, as
+  thrown dice do. The pile feels the hand's acceleration, so the dice lag, bunch and jostle. At the release the
   dice part to their full bounding spheres (so the physics never starts with two dice inside each
   other) and the flying dice ease from the pile into that within a few frames. The local flight
   uses the active engine's gravity. Lean and inertia are off with prefers-reduced-motion.
