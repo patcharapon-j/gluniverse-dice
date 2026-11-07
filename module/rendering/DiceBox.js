@@ -8,6 +8,7 @@ import { ThrowEngine } from '../engine/ThrowEngine.js';
 import { Utils } from '../Utils.js';
 import { OutlinePass } from 'three/examples/jsm/postprocessing/OutlinePass.js';
 import Stats from 'stats-gl';
+import * as GLUSmooth from '../glu/Smoothness.js'; //GLUniverse Dice: M2 smoothness
 
 import {
 	PCFShadowMap,
@@ -359,6 +360,7 @@ export class DiceBox {
 		let time_diff = (time - this.last_time) / 1000;
 
 		let neededSteps = Math.floor(time_diff / this.throwEngine.framerate);
+		let gluMoved = false; //GLUniverse Dice
 
 		if(this.stats)
 			this.stats.update();
@@ -378,10 +380,12 @@ export class DiceBox {
 					this.throwEngine.fastForwardPlayback();
 				else
 					this.throwEngine.updateThrowPlayback(neededSteps);
+			}
+			if (this.throwEngine.rolling) {
+				gluMoved = GLUSmooth.smoothFrame(this, time_diff, neededSteps); //GLUniverse Dice: interpolated replay
 			} else if (!this.throwEngine.rolling && !anyPersistentThrowPlaying) {
-				this.physicsWorker.exec('playStep', {
-					time_diff: time_diff
-				}).then((result) => {
+				this.physicsWorker.exec('playStep', GLUSmooth.livePlayStepPayload(this, time_diff)).then((result) => { //GLUniverse Dice: frame delta + interpolation
+					GLUSmooth.noteLiveResult(this, result); //GLUniverse Dice: idle detection
 					if (!result || !result.ids)
 						return;
 					const { ids, quaternionsBuffers, positionsBuffers, worldAsleep } = result;
@@ -444,7 +448,7 @@ export class DiceBox {
 			}
 		}
 
-		if (this.isVisible && (this.allowInteractivity || this.diceScene.animatedDiceDetected || neededSteps || DiceSFXManager.renderQueue.length || this.persistentDiceList.length > 0 || this.fadingDice.length > 0)) {
+		if (this.isVisible && GLUSmooth.shouldRender(this, this.allowInteractivity || this.diceScene.animatedDiceDetected || neededSteps || DiceSFXManager.renderQueue.length || this.persistentDiceList.length > 0 || this.fadingDice.length > 0, gluMoved)) { //GLUniverse Dice: render every moving frame, skip idle ones
 			DiceSFXManager.renderSFX();
 			if (this.dicefactory.realisticLighting && this.immersiveDarkness) {
 				let darknessLevel = canvas.darknessLevel || 0;

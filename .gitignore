@@ -5,4 +5,5 @@ dist
 node_modules
 .github
 docs/public/
-docs/node_modules/tools/physics-bench/.build/
+docs/node_modules/
+tools/physics-bench/.build/

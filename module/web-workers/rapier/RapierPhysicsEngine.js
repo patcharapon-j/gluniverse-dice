@@ -48,6 +48,20 @@ export const DEFAULT_TUNING = Object.freeze({
     spinSpeed: 0.1,
     // d2: octagonal hull like cannon-es (true cylinders roll on their edge far longer)
     coinAsHull: true,
+    // d2 only. A thin hull lying on the desk gets angular kicks from the contact solver every
+    // few steps (up to ~1.4 rad/s about a horizontal axis at < 1 deg of tilt), so it never passes
+    // the angular settle test and the throw runs to the frame cap. And the octagonal hull has
+    // flat facets, so a slow coin can stand on its edge. Below coinSlowSpeed (m/s):
+    //  - tilt under coinFlatAngle (rad): settles on the linear test alone
+    //  - tilt over coinEdgeAngle for coinToppleDelay s: a kick of coinToppleKick rad/s toward flat,
+    //    at most coinToppleTries times per die and throw; the direction alternates per try in
+    //    case a wall or another die blocks the first one
+    coinSlowSpeed: 0.15,
+    coinFlatAngle: 0.15,
+    coinEdgeAngle: 0.7,
+    coinToppleDelay: 0.3,
+    coinToppleKick: 2.5,
+    coinToppleTries: 4,
     // optional rounded edges (meters). 0 = exact DSN hull
     borderRadius: 0,
     maxSubSteps: 10
@@ -375,6 +389,7 @@ export class RapierPhysicsEngine {
             return;
         }
         die.body.setTranslation(position, true);
+        die.prevPose = null; //a teleport is not interpolated
         die.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
         die.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
         die.rest = 0;
@@ -543,7 +558,10 @@ export class RapierPhysicsEngine {
                 w = { x: w.x, y: w.y * k, z: w.z };
                 body.setAngvel(w, false);
             }
-            if (v.x * v.x + v.y * v.y + v.z * v.z < lin2 && w.x * w.x + w.y * w.y + w.z * w.z < ang2) {
+            die.coinFlat = false;
+            if (die.geometry.collider?.kind === "cylinder") w = this._coinTick(die, body, v, w, dt);
+            //a coin lying flat counts as at rest despite contact jitter on its face (see coinFlatAngle)
+            if (v.x * v.x + v.y * v.y + v.z * v.z < lin2 && (die.coinFlat || w.x * w.x + w.y * w.y + w.z * w.z < ang2)) {
                 die.rest += dt;
                 if (die.rest >= t.sleepTime) die.settled = true;
             } else {
@@ -551,6 +569,36 @@ export class RapierPhysicsEngine {
                 die.settled = false;
             }
         }
+    }
+
+    _coinTick(die, body, v, w, dt) {
+        const t = this.tuning;
+        if (v.x * v.x + v.y * v.y + v.z * v.z > t.coinSlowSpeed * t.coinSlowSpeed) { die.tipping = 0; return w; }
+        const r = readFace(die.geometry, die.diceShape, body.rotation());
+        if (r.angle < t.coinFlatAngle) {
+            die.tipping = 0;
+            die.coinFlat = true;
+        } else if (r.angle > t.coinEdgeAngle && t.coinToppleKick > 0 && r.normal && (die.topples || 0) < t.coinToppleTries) {
+            die.tipping = (die.tipping || 0) + dt;
+            if (die.tipping > t.coinToppleDelay) {
+                //one kick about n x up, which turns the face normal n toward +Y. The direction
+                //alternates per try, in case a wall or another die blocks the first one.
+                const n = r.normal;
+                const l = Math.hypot(n[2], n[0]);
+                if (l > 1e-6) {
+                    const a = t.coinToppleKick * (die.topples % 2 ? -1 : 1) / l;
+                    w = { x: w.x - n[2] * a, y: w.y, z: w.z + n[0] * a };
+                    body.setAngvel(w, true);
+                    die.rest = 0;
+                    die.settled = false;
+                }
+                die.tipping = 0;
+                die.topples = (die.topples || 0) + 1;
+            }
+        } else {
+            die.tipping = 0;
+        }
+        return w;
     }
 
     // === collision sounds (same policy as the cannon-es worker) ===
@@ -628,6 +676,7 @@ export class RapierPhysicsEngine {
         this.nbIterationsBetweenRolls = nbIterationsBetweenRolls;
         this.framerate = framerate;
         this.canBeFlipped = canBeFlipped;
+        for (const die of this.diceList.values()) { die.topples = 0; die.tipping = 0; }
 
         //apply impulses atomically before the first world step
         const impulseIds = new Set();
@@ -783,7 +832,22 @@ export class RapierPhysicsEngine {
         }, [...quaternionsBuffers, ...positionsBuffers]);
     }
 
-    playStep({ time_diff }) {
+    _snapshotPoses() {
+        for (const die of this.diceList.values()) {
+            if (!die.body || die.dead) continue;
+            const p = die.body.translation();
+            const q = die.body.rotation();
+            const prev = die.prevPose || (die.prevPose = { p: { x: 0, y: 0, z: 0 }, q: { x: 0, y: 0, z: 0, w: 1 } });
+            prev.p.x = p.x; prev.p.y = p.y; prev.p.z = p.z;
+            prev.q.x = q.x; prev.q.y = q.y; prev.q.z = q.z; prev.q.w = q.w;
+            prev.step = this.stepnumber;
+        }
+    }
+
+    //time_diff: upstream's time since the last whole step (re-counts the remainder each frame).
+    //frame_dt: the real time since the previous playStep; used when given.
+    //interpolate: return the pose blended between the last two fixed steps by the leftover time.
+    playStep({ time_diff, frame_dt, interpolate }) {
         if (this.animstate == 'simulate') return;
         const ids = [];
         let worldAsleep = this.diceConstraints.size === 0;
@@ -797,9 +861,10 @@ export class RapierPhysicsEngine {
         if (!worldAsleep) {
             //fixed timestep with accumulator, like cannon-es World.step(dt, timeSinceLastCalled, maxSubSteps)
             const dt = this.framerate;
-            this.accumulator += Math.max(0, time_diff || 0);
+            this.accumulator += Math.max(0, (frame_dt ?? time_diff) || 0);
             let substeps = 0;
             while (this.accumulator >= dt && substeps < this.tuning.maxSubSteps) {
+                if (interpolate) this._snapshotPoses();
                 this._step(dt);
                 this.accumulator -= dt;
                 substeps++;
@@ -810,8 +875,9 @@ export class RapierPhysicsEngine {
             positions = new Float32Array(this.diceList.size * 3);
             for (const [id, die] of this.diceList) {
                 if (die.dead || !die.body) continue;
-                const p = die.body.translation();
-                const q = die.body.rotation();
+                let p = die.body.translation();
+                let q = die.body.rotation();
+                if (interpolate && die.prevPose?.step === this.stepnumber - 1) ({ p, q } = blendPose(die.prevPose, p, q, this.accumulator / dt));
                 ids.push(id);
                 const n = ids.length - 1;
                 quaternions[n * 4] = q.x; quaternions[n * 4 + 1] = q.y; quaternions[n * 4 + 2] = q.z; quaternions[n * 4 + 3] = q.w;
@@ -828,6 +894,21 @@ export class RapierPhysicsEngine {
             console.log(die.id, die.diceShape, die.body ? die.body.translation() : 'pending', { fixed: die.fixed, sleeping: die.body?.isSleeping(), persistent: die.persistent });
         }
     }
+}
+
+//lerp positions, nlerp quaternions (shortest arc). Steps are 1/60 s, so nlerp is close to slerp.
+function blendPose(prev, p, q, t) {
+    const u = Math.max(0, Math.min(1, t));
+    const s = prev.q.x * q.x + prev.q.y * q.y + prev.q.z * q.z + prev.q.w * q.w < 0 ? -1 : 1;
+    const qx = prev.q.x + (q.x * s - prev.q.x) * u;
+    const qy = prev.q.y + (q.y * s - prev.q.y) * u;
+    const qz = prev.q.z + (q.z * s - prev.q.z) * u;
+    const qw = prev.q.w + (q.w * s - prev.q.w) * u;
+    const l = Math.hypot(qx, qy, qz, qw) || 1;
+    return {
+        p: { x: prev.p.x + (p.x - prev.p.x) * u, y: prev.p.y + (p.y - prev.p.y) * u, z: prev.p.z + (p.z - prev.p.z) * u },
+        q: { x: qx / l, y: qy / l, z: qz / l, w: qw / l }
+    };
 }
 
 function rotate(v, q) {

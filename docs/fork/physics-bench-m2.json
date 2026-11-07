@@ -1,0 +1,395 @@
+{
+  "trials": 200,
+  "tuning": null,
+  "node": "v22.21.1",
+  "results": {
+    "10d6": {
+      "cannon": {
+        "summary": {
+          "sim ms (median)": 7.9,
+          "sim ms (p95)": 10.1,
+          "replay s (median)": 2.58,
+          "replay s (p95)": 3.35,
+          "throws hitting 1000-frame cap": "0/200",
+          "dice tilted >5°": "0.9%",
+          "dice cocked >15°": "0.9%",
+          "dice out of bounds": 0,
+          "last-0.5s path mm (median)": 0,
+          "last-0.5s path mm (p95)": 0,
+          "last-0.5s rotation ° (p95)": 1.06,
+          "idle 2s drift mm (p95)": 0,
+          "idle 2s drift mm (max)": 0,
+          "idle 2s rotation ° (max)": 0,
+          "sound events / throw": 53.9
+        },
+        "faces": {
+          "d6": {
+            "1": 263,
+            "2": 325,
+            "3": 347,
+            "4": 282,
+            "5": 330,
+            "6": 453
+          }
+        }
+      },
+      "rapier": {
+        "summary": {
+          "sim ms (median)": 7.6,
+          "sim ms (p95)": 10.8,
+          "replay s (median)": 1.7,
+          "replay s (p95)": 2.58,
+          "throws hitting 1000-frame cap": "0/200",
+          "dice tilted >5°": "0.8%",
+          "dice cocked >15°": "0.8%",
+          "dice out of bounds": 0,
+          "last-0.5s path mm (median)": 0,
+          "last-0.5s path mm (p95)": 34.09,
+          "last-0.5s rotation ° (p95)": 30.68,
+          "idle 2s drift mm (p95)": 0,
+          "idle 2s drift mm (max)": 0,
+          "idle 2s rotation ° (max)": 0,
+          "sound events / throw": 33.5
+        },
+        "faces": {
+          "d6": {
+            "1": 306,
+            "2": 257,
+            "3": 304,
+            "4": 177,
+            "5": 497,
+            "6": 459
+          }
+        }
+      }
+    },
+    "10 mixed": {
+      "cannon": {
+        "summary": {
+          "sim ms (median)": 14.6,
+          "sim ms (p95)": 24.8,
+          "replay s (median)": 3.62,
+          "replay s (p95)": 4.6,
+          "throws hitting 1000-frame cap": "0/200",
+          "dice tilted >5°": "4.5%",
+          "dice cocked >15°": "2.6%",
+          "dice out of bounds": 0,
+          "last-0.5s path mm (median)": 0,
+          "last-0.5s path mm (p95)": 0.01,
+          "last-0.5s rotation ° (p95)": 1.07,
+          "idle 2s drift mm (p95)": 0,
+          "idle 2s drift mm (max)": 0,
+          "idle 2s rotation ° (max)": 0,
+          "sound events / throw": 76.9
+        },
+        "faces": {
+          "d4": {
+            "1": 77,
+            "2": 33,
+            "3": 29,
+            "4": 61
+          },
+          "d6": {
+            "1": 64,
+            "2": 65,
+            "3": 63,
+            "4": 74,
+            "5": 53,
+            "6": 81
+          },
+          "d8": {
+            "1": 43,
+            "2": 42,
+            "3": 46,
+            "4": 47,
+            "5": 53,
+            "6": 63,
+            "7": 56,
+            "8": 50
+          },
+          "d10": {
+            "1": 37,
+            "2": 40,
+            "3": 28,
+            "4": 40,
+            "5": 52,
+            "6": 56,
+            "7": 30,
+            "8": 55,
+            "9": 30,
+            "10": 32
+          },
+          "d12": {
+            "1": 18,
+            "2": 15,
+            "3": 18,
+            "4": 13,
+            "5": 17,
+            "6": 22,
+            "7": 18,
+            "8": 16,
+            "9": 15,
+            "10": 18,
+            "11": 17,
+            "12": 13
+          },
+          "d20": {
+            "1": 23,
+            "2": 23,
+            "3": 22,
+            "4": 16,
+            "5": 15,
+            "6": 23,
+            "7": 22,
+            "8": 13,
+            "9": 18,
+            "10": 20,
+            "11": 24,
+            "12": 23,
+            "13": 16,
+            "14": 21,
+            "15": 15,
+            "16": 28,
+            "17": 20,
+            "18": 19,
+            "19": 24,
+            "20": 15
+          }
+        }
+      },
+      "rapier": {
+        "summary": {
+          "sim ms (median)": 9.2,
+          "sim ms (p95)": 13.5,
+          "replay s (median)": 2.17,
+          "replay s (p95)": 3,
+          "throws hitting 1000-frame cap": "0/200",
+          "dice tilted >5°": "5.8%",
+          "dice cocked >15°": "3.5%",
+          "dice out of bounds": 0,
+          "last-0.5s path mm (median)": 0,
+          "last-0.5s path mm (p95)": 16.16,
+          "last-0.5s rotation ° (p95)": 16.86,
+          "idle 2s drift mm (p95)": 0,
+          "idle 2s drift mm (max)": 0,
+          "idle 2s rotation ° (max)": 0,
+          "sound events / throw": 36
+        },
+        "faces": {
+          "d4": {
+            "1": 77,
+            "2": 23,
+            "3": 14,
+            "4": 86
+          },
+          "d6": {
+            "1": 38,
+            "2": 58,
+            "3": 68,
+            "4": 42,
+            "5": 95,
+            "6": 99
+          },
+          "d8": {
+            "1": 35,
+            "2": 25,
+            "3": 26,
+            "4": 29,
+            "5": 66,
+            "6": 75,
+            "7": 94,
+            "8": 50
+          },
+          "d10": {
+            "1": 24,
+            "2": 79,
+            "3": 28,
+            "4": 31,
+            "5": 41,
+            "6": 50,
+            "7": 29,
+            "8": 43,
+            "9": 45,
+            "10": 30
+          },
+          "d12": {
+            "1": 20,
+            "2": 20,
+            "3": 24,
+            "4": 11,
+            "5": 17,
+            "6": 9,
+            "7": 18,
+            "8": 24,
+            "9": 13,
+            "10": 11,
+            "11": 14,
+            "12": 19
+          },
+          "d20": {
+            "1": 26,
+            "2": 17,
+            "3": 34,
+            "4": 8,
+            "5": 12,
+            "6": 11,
+            "7": 31,
+            "8": 28,
+            "9": 23,
+            "10": 25,
+            "11": 8,
+            "12": 16,
+            "13": 7,
+            "14": 9,
+            "15": 10,
+            "16": 26,
+            "17": 45,
+            "18": 21,
+            "19": 29,
+            "20": 14
+          }
+        }
+      }
+    },
+    "2d20": {
+      "cannon": {
+        "summary": {
+          "sim ms (median)": 1.7,
+          "sim ms (p95)": 3.4,
+          "replay s (median)": 3.15,
+          "replay s (p95)": 3.9,
+          "throws hitting 1000-frame cap": "0/200",
+          "dice tilted >5°": "1.5%",
+          "dice cocked >15°": "0.3%",
+          "dice out of bounds": 0,
+          "last-0.5s path mm (median)": 0,
+          "last-0.5s path mm (p95)": 0.01,
+          "last-0.5s rotation ° (p95)": 0.84,
+          "idle 2s drift mm (p95)": 0,
+          "idle 2s drift mm (max)": 0,
+          "idle 2s rotation ° (max)": 0,
+          "sound events / throw": 26.3
+        },
+        "faces": {
+          "d20": {
+            "1": 21,
+            "2": 17,
+            "3": 18,
+            "4": 18,
+            "5": 17,
+            "6": 17,
+            "7": 18,
+            "8": 19,
+            "9": 21,
+            "10": 15,
+            "11": 25,
+            "12": 25,
+            "13": 21,
+            "14": 17,
+            "15": 21,
+            "16": 17,
+            "17": 25,
+            "18": 24,
+            "19": 18,
+            "20": 26
+          }
+        }
+      },
+      "rapier": {
+        "summary": {
+          "sim ms (median)": 2.2,
+          "sim ms (p95)": 3.6,
+          "replay s (median)": 1.83,
+          "replay s (p95)": 2.97,
+          "throws hitting 1000-frame cap": "0/200",
+          "dice tilted >5°": "1.5%",
+          "dice cocked >15°": "1.3%",
+          "dice out of bounds": 0,
+          "last-0.5s path mm (median)": 11.93,
+          "last-0.5s path mm (p95)": 32.43,
+          "last-0.5s rotation ° (p95)": 23.94,
+          "idle 2s drift mm (p95)": 0,
+          "idle 2s drift mm (max)": 0,
+          "idle 2s rotation ° (max)": 0,
+          "sound events / throw": 14.4
+        },
+        "faces": {
+          "d20": {
+            "1": 21,
+            "2": 14,
+            "3": 44,
+            "4": 11,
+            "5": 11,
+            "6": 15,
+            "7": 32,
+            "8": 25,
+            "9": 19,
+            "10": 25,
+            "11": 15,
+            "12": 11,
+            "13": 12,
+            "14": 18,
+            "15": 13,
+            "16": 29,
+            "17": 28,
+            "18": 14,
+            "19": 21,
+            "20": 22
+          }
+        }
+      }
+    },
+    "3 coins (d2)": {
+      "cannon": {
+        "summary": {
+          "sim ms (median)": 3.3,
+          "sim ms (p95)": 4.6,
+          "replay s (median)": 3.78,
+          "replay s (p95)": 4.67,
+          "throws hitting 1000-frame cap": "0/200",
+          "dice tilted >5°": "1.7%",
+          "dice cocked >15°": "1.0%",
+          "dice out of bounds": 0,
+          "last-0.5s path mm (median)": 0,
+          "last-0.5s path mm (p95)": 0,
+          "last-0.5s rotation ° (p95)": 1.03,
+          "idle 2s drift mm (p95)": 0,
+          "idle 2s drift mm (max)": 0,
+          "idle 2s rotation ° (max)": 0,
+          "sound events / throw": 30.2
+        },
+        "faces": {
+          "d2": {
+            "1": 295,
+            "2": 305
+          }
+        }
+      },
+      "rapier": {
+        "summary": {
+          "sim ms (median)": 3.4,
+          "sim ms (p95)": 4.9,
+          "replay s (median)": 2.42,
+          "replay s (p95)": 3.28,
+          "throws hitting 1000-frame cap": "1/200",
+          "dice tilted >5°": "1.0%",
+          "dice cocked >15°": "0.8%",
+          "dice out of bounds": 0,
+          "last-0.5s path mm (median)": 0.66,
+          "last-0.5s path mm (p95)": 46.17,
+          "last-0.5s rotation ° (p95)": 83.59,
+          "idle 2s drift mm (p95)": 0,
+          "idle 2s drift mm (max)": 1.099,
+          "idle 2s rotation ° (max)": 3.896,
+          "sound events / throw": 19.8
+        },
+        "faces": {
+          "d2": {
+            "1": 296,
+            "2": 304
+          }
+        }
+      }
+    }
+  }
+}

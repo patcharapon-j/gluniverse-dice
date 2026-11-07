@@ -242,6 +242,7 @@ class PhysicsWorker {
         const dice = this.diceList.get(id);
         if (!dice) return;
         dice.position.set(position.x * METERS_TO_LEGACY, position.y * METERS_TO_LEGACY, position.z * METERS_TO_LEGACY);
+        dice.previousPosition.copy(dice.position); dice.interpolatedPosition.copy(dice.position); //GLUniverse Dice: a teleport is not interpolated
         dice.velocity.set(0, 0, 0);
         dice.angularVelocity.set(0, 0, 0);
     }
@@ -252,6 +253,7 @@ class PhysicsWorker {
             const dice = this.diceList.get(id);
             if (!dice) continue;
             dice.position.set(position.x * METERS_TO_LEGACY, position.y * METERS_TO_LEGACY, position.z * METERS_TO_LEGACY);
+            dice.previousPosition.copy(dice.position); dice.interpolatedPosition.copy(dice.position); //GLUniverse Dice: a teleport is not interpolated
             dice.velocity.set(0, 0, 0);
             dice.angularVelocity.set(0, 0, 0);
         }
@@ -732,7 +734,7 @@ class PhysicsWorker {
         return stopped;
     }
 
-    playStep({time_diff}) {
+    playStep({time_diff, frame_dt, interpolate}) {
         if(this.animstate == 'simulate')
             return;
         const ids = [];
@@ -742,20 +744,23 @@ class PhysicsWorker {
         let worldAsleep = this.diceConstraints.size === 0;
         if (worldAsleep) {
             for (let i = 0; i < this.world.bodies.length; i++) {
-                if (this.world.bodies[i].sleepState < 2) {
+                if (this.world.bodies[i].type !== Body.STATIC && this.world.bodies[i].sleepState < 2) { //GLUniverse Dice: the desk never sleeps, so ignore static bodies
                     worldAsleep = false;
                     break;
                 }
             }
         }
         if (!worldAsleep) {
-            this.world.step(this.framerate, time_diff);
+            this.world.step(this.framerate, frame_dt ?? time_diff); //GLUniverse Dice: real frame delta (FORK.md)
             for(const [id, dice] of this.diceList){
                 if(!dice.dead){
                     ids.push(id);
-                    quaternions.set([dice.quaternion.x, dice.quaternion.y, dice.quaternion.z,dice.quaternion.w], ids.length*4-4);
+                    //GLUniverse Dice: interpolated pose between the last two fixed steps
+                    const q = interpolate ? dice.interpolatedQuaternion : dice.quaternion;
+                    const p = interpolate ? dice.interpolatedPosition : dice.position;
+                    quaternions.set([q.x, q.y, q.z, q.w], ids.length*4-4);
 
-                    positions.set([dice.position.x * LEGACY_TO_METERS, dice.position.y * LEGACY_TO_METERS, dice.position.z * LEGACY_TO_METERS], ids.length*3-3);
+                    positions.set([p.x * LEGACY_TO_METERS, p.y * LEGACY_TO_METERS, p.z * LEGACY_TO_METERS], ids.length*3-3);
                 }
             }
         }

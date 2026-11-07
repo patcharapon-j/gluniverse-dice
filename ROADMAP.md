@@ -28,9 +28,18 @@ automatic fallback, contract and shape-parity tests, and a benchmark
 Open items, carried into M2: coins can roll on their edge until the 1000-frame cap (6 of 200
 throws); tune feel in Foundry; verify grab-and-throw in a browser; decide the default engine.
 
-## M2 Smoothness
+## M2 Smoothness: built, Foundry check pending
 
 Goal: dice move at the display's refresh rate, no first-roll hitch, no idle cost.
+
+Delivered (FORK.md [Smoothness](./FORK.md#smoothness-m2)): interpolated replay, interpolated live
+dice with a real frame delta (upstream over-advanced live physics above 60 Hz), idle frames
+skipped, shader prewarm at load, cannon's `worldAsleep` fixed, Rapier coins 6/200 to 1/200
+capped. Still open, all needing a running Foundry: watch a throw at 120/144 Hz, measure the
+first-throw hitch with and without prewarm, check that nothing on the board stops redrawing
+when idle, tune Rapier's feel side by side with cannon and decide the default, and run the
+compatibility smoke test. Interpolation is hooked from `DiceBox.animateThrow`, not from
+`updateThrowPlayback` as planned below, because it has to run on frames with no whole step.
 
 | Item | Seam | Notes |
 |---|---|---|
