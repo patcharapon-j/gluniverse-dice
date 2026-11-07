@@ -104,8 +104,12 @@ runs before ours. The shim does not wait for `init`: at script evaluation it tra
 `globalThis.game` assignment and installs the moment `game.modules` exists, before any package
 code can look. An `init` fallback covers anything unusual.
 
-**Conflict.** If the real Dice So Nice is installed, the shim never shadows it. If both are
-active, it logs an error and shows a permanent notification. `relationships.conflicts` makes
+**Conflict.** If the real Dice So Nice is **active**, the shim never shadows it; with both
+active it logs an error and shows a permanent notification. Installed but disabled (a server
+that switched over and kept DSN on disk), the shim still maps `dice-so-nice` to us: otherwise
+`get("dice-so-nice")?.active` reads false for every integration, and Foundry files DSN's settings
+under the disabled package's own tab (`SettingsConfig._categorizeEntry` uses
+`game.modules.get(namespace)`). `tests/legacyIdentity.test.mjs` covers the three cases. `relationships.conflicts` makes
 Foundry warn at activation.
 
 Options considered:

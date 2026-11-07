@@ -24,9 +24,12 @@ function installModulesAlias(modules) {
     const self = modules.get(MODULE_ID);
     if (!self) return;
     const real = modules.get(LEGACY_ID);
-    if (real) {
-        //the real DSN is installed: never shadow it. if both are active they conflict.
-        legacyConflict = !!(real.active && self.active);
+    //the real DSN active as well: the two conflict, never shadow it. Installed but disabled (a
+    //server that switched over and kept DSN on disk) it must not win the lookup: integrations
+    //asking get("dice-so-nice")?.active would see false, and DSN's settings would be filed under
+    //the disabled package's own tab instead of ours.
+    if (real?.active) {
+        legacyConflict = !!self.active;
         return;
     }
     //instance-level overrides only: iteration (module lists, flag scopes) is untouched, so the
