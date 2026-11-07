@@ -1,6 +1,7 @@
 import { DsnSettings } from '../settings/DsnSettings.js';
 import { Accumulator } from '../Accumulator.js';
 import { DiceNotation } from '../DiceNotation.js';
+import { isHandThrow } from '../glu/hand/HandOfDice.js'; //GLUniverse Dice
 
 //serializes the 3d animations: accumulates the queued rolls into batches and plays them one after the other
 export class AnimationQueue {
@@ -32,11 +33,12 @@ export class AnimationQueue {
 
     enqueue(notation, dsnConfig) {
         notation.dsnConfig = dsnConfig;
+        const immediate = isHandThrow(notation.messageId) && this.queue.length === 0 && !this.box?.running; //GLUniverse Dice: M5 no merge wait for a throw from the hand
         return new Promise((resolve, reject) => {
             this.nextAnimation.addItem({
                 params: notation,
                 resolve: resolve
-            });
+            }, { immediate });
         });
     }
 

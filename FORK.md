@@ -58,7 +58,8 @@ works unchanged. To keep rebasing onto upstream cheap:
 | `module/web-workers/PhysicsWorker.js` | `playStep` takes `frame_dt` and `interpolate` (returns `interpolatedPosition`/`Quaternion`); its `worldAsleep` test skips static bodies; `setBodyPosition(s)` also reset `previousPosition`/`interpolatedPosition` | Contract change shared with the Rapier worker. Without the static-body skip the desk kept cannon awake forever. |
 | `module/engine/ThrowEngine.js` (M4) | One import; `noteSimulation(this, detectedCollides)` after the sound list replaces the raw collisions | Keeps the impact timeline with positions for the particles. |
 | `module/main.js` (M5) | One import; in `preCreateChatMessage`, `if (holdInHand(message)) return;` after DSN's interactive check; in `createChatMessage`, `if (interceptHeld(chatMessage, rolls)) return;` before the pending-throw branch | Holds an interactive roll in the hand instead of DSN's pending throw, on every client. |
-| `module/engine/ThrowEngine.js` (M5) | One more import; `applyHandThrow(this, notation)` after `getVectors` in `startUnifiedBatch` | A throw from the hand starts from the hand's pose with the throw's velocity and spin. |
+| `module/engine/ThrowEngine.js` (M5) | One more import; `applyHandThrow(this, notation)` after `getVectors` in `startUnifiedBatch`; `seekHandReplay(this)` after `this.iteration = 0` | A throw from the hand starts from the hand's pose with the throw's velocity and spin, and the replay picks up where the flying hand is. |
+| `module/throw/AnimationQueue.js` (M5) | One import; `enqueue` passes `{ immediate }` to `addItem`, true for a throw from the hand when the queue is idle | Skips the 400 ms wait for simultaneous rolls, as DSN already does for persistent throws. |
 | `module/web-workers/PhysicsWorker.js` (M4) | `handleDiceCollision` / `handleTableCollision` append the contact position as the 5th tuple element | Contract change shared with the Rapier worker. |
 | `module/engine/DiceFactory.js` (M3) | One more import; `extendMaterialOptions(this)` at the end of `initializeMaterials`; `decorateMaterial(this, mat, materialData, canvasBump)` right after `mat.onBeforeCompile` is set in `createMaterial` | New material ids and the enhanced variants. Runs before `diceSoNiceOnMaterialReady`, so systems still patch the result. |
 | `module/ui/DiceConfig.js`, `module/ui/DiceEditor.js` | One import each; `...gluMaterialChoices()` appended to the material picker list | Show the new materials. |
@@ -389,6 +390,13 @@ with many dice.
   `ThrowPipeline.renderRolls` for the message, and `applyHandThrow` replaces the start vectors DSN
   made for that message's dice (clamped inside the walls). Coins keep DSN's flip. The result is
   Foundry's, forced by `swapDiceFace` as always; each client simulates on its own, as DSN does.
+- **No pause after the release.** DSN waits 400 ms in `AnimationQueue` to merge simultaneous
+  rolls, then simulates the whole throw before the replay starts: measured 470 ms from the
+  release, with the dice frozen mid-air. Now a hand throw skips that wait when the queue is idle
+  (replay starts 8 to 75 ms after the release), the released dice fly on locally exactly as the
+  simulation starts them (same velocity, spin, gravity and damping, until they could reach the
+  desk or a wall), and `seekHandReplay` starts the replay at the frame the flight has reached, so
+  the dice never jump back. Measured gap at the handoff: 6 to 15 mm, under half a frame of motion.
 - **Never stuck.** The roller disconnecting makes the other clients play the roll normally;
   deleting the message drops it; after 10 minutes any client plays it normally.
 - Verified in a live Foundry with one client: the hand, click, flick, shake, slow release and
@@ -455,8 +463,13 @@ Mapping and deliberate differences:
   axis at 8/s. Without it a coin or a flat d6 could spin in place until the 1000-frame cap.
 - **Materials.** Rapier has per-collider coefficients with a combine rule, not cannon's
   per-pair contact materials. cannon's friction 0.01 relies on its own friction model; in Rapier
-  dice would slide forever. The current values (`DEFAULT_TUNING`) are a first fit and are the
-  main lever for "feel" in M2.
+  dice would slide forever. DSN's legacy gravity is light (about 2.5 m/s²) and friction slows a
+  die by μ·g, so the first fit (0.4 everywhere) let dice skid flat across the board, and the d6
+  faces came out uneven. Now: desk friction 1.0 with the **Max** combine rule (the desk grips),
+  dice 0.3 (die on die stays slippery, fewer dice cocked against each other), restitution desk
+  0.5, dice 0.6. Bench, 100 trials, 1920x1080: sliding share of desk travel 66% → 25%, d6 face
+  chi² 114 → 8.7 (fair below 11.07), mixed dice cocked >15° 3.4% → 3.0%; 2d20 cocked 0% → 3%;
+  throws 0.5 s longer (still shorter than cannon). `npm run bench` reports the sliding share.
 - **Grab** is a spherical impulse joint to a kinematic anchor (cannon: `PointToPointConstraint`
   to a mass-0 body). The anchor moves through `setNextKinematicTranslation`, so a held die is
   pulled rather than teleported.

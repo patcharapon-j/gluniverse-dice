@@ -1,6 +1,6 @@
 import { DiceShapeLibrary } from './DiceShapeLibrary.js';
 import { noteSimulation } from '../glu/fx/DiceFx.js'; //GLUniverse Dice: M4
-import { applyHandThrow } from '../glu/hand/HandOfDice.js'; //GLUniverse Dice: M5
+import { applyHandThrow, seekHandReplay } from '../glu/hand/HandOfDice.js'; //GLUniverse Dice: M5
 import { DiceSFXManager } from '../sfx/DiceSFXManager.js';
 import { DiceSystem } from '../DiceSystem.js';
 import { LEGACY_TO_METERS } from './SceneConstants.js';
@@ -629,6 +629,7 @@ export class ThrowEngine {
 		this.detectedCollides = this.soundManager.generateCollisionSounds(detectedCollides);
 		noteSimulation(this, detectedCollides); //GLUniverse Dice: M4 impact particles
 		this.iteration = 0;
+		seekHandReplay(this); //GLUniverse Dice: M5 the replay picks up where the flying hand is
 		this.rolling = true;
 		this.running = (new Date()).getTime();
 		this.playbackStaleAt = persistentThrowData?.queuedAt ? persistentThrowData.queuedAt + 10000 : Infinity;

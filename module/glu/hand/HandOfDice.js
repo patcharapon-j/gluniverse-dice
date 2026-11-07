@@ -24,7 +24,7 @@ import { Group, Plane, Quaternion, Vector2, Vector3 } from 'three';
 import { MODULE_ID } from '../LegacyIdentity.js';
 import { DiceNotation } from '../../DiceNotation.js';
 import { DsnSettings } from '../../settings/DsnSettings.js';
-import { TARGET_D6_EDGE_METERS } from '../../engine/SceneConstants.js';
+import { LEGACY_TO_METERS, TARGET_D6_EDGE_METERS } from '../../engine/SceneConstants.js';
 
 export const HAND_SETTING = "grabAndRoll";
 const FLAG = "hand";
@@ -57,6 +57,12 @@ const LOFT = 0.55;
 const SHAKE_REVERSALS = 3;
 const SHAKE_STROKE_MS = 300;
 const HOLD_LIMIT_MS = 10 * 60 * 1000;
+//after the release the hand flies on as the simulation will (both workers: gravity
+//-9.8 * 800 legacy units/s^2, damping 0.1), until the replay takes over; it never flies longer
+//than this, nor into the desk or a wall, where the two would part
+const GRAVITY = -9.8 * 800 * LEGACY_TO_METERS;
+const DAMPING = -Math.log(0.9);
+const FLIGHT_MAX = 0.6;
 
 const _plane = new Plane(new Vector3(0, 1, 0), 0);
 const _hit = new Vector3();
@@ -335,6 +341,7 @@ function closeHand() {
     if (!hand) return;
     //the meshes come from the factory's caches: remove them, don't dispose
     hand.group.removeFromParent();
+    for (const d of hand.dice) d.holder.removeFromParent();
     hand = null;
     grab = null;
     document.documentElement.style.removeProperty("cursor");
@@ -367,6 +374,7 @@ function startLoop() {
 function animateHand(dt) {
     const h = hand;
     h.t += dt;
+    if (h.flight) return flyHand(h);
     const size = h.size;
     const pos = h.group.position;
     if (grab) {
@@ -545,9 +553,61 @@ function throwHand(v) {
             q: [wq.x, wq.y, wq.z, wq.w]
         });
     }
+    startFlight(h, dice, W);
     const payload = { type: SOCKET_TYPE, messageId: h.messageId, user: game.user.id, dice };
     game.socket.emit(`module.${MODULE_ID}`, payload);
     release(h.messageId, payload);
+}
+
+// From the release, each die of the hand flies on as the simulation starts it: the same
+// position, velocity, spin and gravity. Each die leaves the hand's group for the scene so it
+// moves in world space. tMax: before the first die could reach the desk or a wall.
+function startFlight(h, dice, W) {
+    const box = board();
+    const display = box.diceScene.display;
+    const size = h.size;
+    let tMax = FLIGHT_MAX;
+    const flying = [];
+    h.group.updateMatrixWorld(true);
+    for (let i = 0; i < h.dice.length; i++) {
+        const d = h.dice[i];
+        const sent = dice[i];
+        const p0 = d.mesh.getWorldPosition(new Vector3());
+        const q0 = d.mesh.getWorldQuaternion(new Quaternion());
+        const v = new Vector3(sent.vel.x * W, sent.vel.y * W, sent.vel.z * W);
+        const w = new Vector3(sent.spin.x, sent.spin.y, sent.spin.z);
+        //desk: y = p0.y + v.y t + g t^2 / 2 reaches the die's radius
+        const floor = size * 0.75;
+        const a = GRAVITY / 2, b = v.y, c = p0.y - floor;
+        const disc = b * b - 4 * a * c;
+        if (disc > 0) tMax = Math.min(tMax, (-b - Math.sqrt(disc)) / (2 * a));
+        //walls: the centre reaches them less half a die
+        const inside = clampToWalls(display, { x: p0.x + v.x * 10, z: p0.z + v.z * 10 }, size * 0.6);
+        if (Math.abs(v.x) > 1e-6) tMax = Math.min(tMax, Math.abs((inside.x - p0.x) / v.x));
+        if (Math.abs(v.z) > 1e-6) tMax = Math.min(tMax, Math.abs((inside.z - p0.z) / v.z));
+        //world pose; the holder keeps the mesh's model scale
+        d.holder.removeFromParent();
+        d.holder.position.copy(p0);
+        d.holder.quaternion.copy(q0);
+        box.scene.add(d.holder);
+        flying.push({ holder: d.holder, p0, q0, v, w, wLen: w.length() });
+    }
+    h.flight = { t0: performance.now(), tMax: Math.max(0, tMax), dice: flying };
+}
+
+function flyHand(h) {
+    const f = h.flight;
+    const t = Math.min(f.tMax, (performance.now() - f.t0) / 1000);
+    //linear damping integrates to (1 - e^-ct) / c; gravity is left undamped (a small error)
+    const k = DAMPING > 0 ? (1 - Math.exp(-DAMPING * t)) / DAMPING : t;
+    for (const d of f.dice) {
+        d.holder.position.set(d.p0.x + d.v.x * k, d.p0.y + d.v.y * k + GRAVITY * t * t / 2, d.p0.z + d.v.z * k);
+        if (d.wLen > 1e-6) {
+            _axis.copy(d.w).divideScalar(d.wLen);
+            _q.setFromAxisAngle(_axis, d.wLen * k);
+            d.holder.quaternion.copy(d.q0).premultiply(_q);
+        }
+    }
 }
 
 function onRemoteThrow(request) {
@@ -588,6 +648,11 @@ function release(messageId, payload) {
     }
 }
 
+/** AnimationQueue.enqueue: a throw from a hand skips the 400 ms wait for simultaneous rolls. */
+export function isHandThrow(messageId) {
+    return !!messageId && throws.has(messageId);
+}
+
 /**
  * ThrowEngine.startUnifiedBatch, after DSN made the start vectors of a notation: a throw from a
  * hand replaces them with the hand's pose and the throw's velocity and spin.
@@ -616,6 +681,44 @@ export function applyHandThrow(throwEngine, notation) {
         die.vectors.axis = { x: _axis.x, y: _axis.y, z: _axis.z, a: angle / (Math.PI * 2) };
     }
     if (data.next >= data.dice.length) throws.delete(notation.messageId);
-    //the thrown dice take over from the hand
-    if (data.mine && hand?.messageId === notation.messageId) closeHand();
+    //on the roller's client the replay starts where the flying hand has got to
+    if (data.mine && hand?.messageId === notation.messageId && hand.flight) throwEngine._gluHandSeek = hand;
+}
+
+/**
+ * ThrowEngine.startUnifiedBatch, once the playback is set up (iteration 0): a throw from this
+ * client's hand skips the frames the hand already flew, then the thrown dice replace the hand.
+ */
+export function seekHandReplay(throwEngine) {
+    const h = throwEngine._gluHandSeek;
+    if (!h) return;
+    delete throwEngine._gluHandSeek;
+    if (hand !== h || !h.flight) return;
+    const waited = (performance.now() - h.flight.t0) / 1000;
+    const t = Math.min(h.flight.tMax, waited);
+    const frames = Math.min(Math.round(t / throwEngine.framerate), Math.max(0, (throwEngine.iterationsNeeded ?? 0) - 1));
+    //how far the replay's first frame is from where the flying hand shows each die
+    flyHand(h);
+    let gap = 0;
+    throwEngine.diceList.forEach((die, i) => {
+        const p = die.sim?.stepPositions, f = h.flight.dice[i];
+        if (!p || !f || p[frames * 3] === undefined) return;
+        gap = Math.max(gap, Math.hypot(p[frames * 3] - f.holder.position.x, p[frames * 3 + 1] - f.holder.position.y, p[frames * 3 + 2] - f.holder.position.z));
+    });
+    console.debug(`${MODULE_ID} | hand throw: replay starts ${Math.round(waited * 1000)} ms after the release at frame ${frames} (flight ${Math.round(h.flight.tMax * 1000)} ms max), largest gap ${(gap * 1000).toFixed(1)} mm`);
+    if (frames > 0) {
+        //DiceBox adds the first dice only on iteration 0, and updateThrowPlayback the later
+        //groups on their iteration: add every die due by now, then start there
+        for (const die of throwEngine.diceList) {
+            if (die.startAtIteration <= frames && !die.parent?.parent) throwEngine._spawnDiceIntoScene(die);
+            //straight to the frame the hand reached, not frame 0 (no flash back)
+            const sim = die.sim;
+            if (die.parent && sim?.stepPositions?.[frames * 3] !== undefined && !(sim.dead && sim.dead <= frames)) {
+                die.parent.position.fromArray(sim.stepPositions, frames * 3);
+                die.parent.quaternion.fromArray(sim.stepQuaternions, frames * 4);
+            }
+        }
+        throwEngine.iteration = frames;
+    }
+    closeHand();
 }

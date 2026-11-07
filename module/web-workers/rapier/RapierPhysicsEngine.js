@@ -27,10 +27,15 @@ export const DEFAULT_TUNING = Object.freeze({
     linearDamping: -Math.log(0.9),
     angularDamping: -Math.log(0.9),
     // materials. Rapier has per-collider coefficients plus a combine rule (Max > Multiply > Min > Average)
-    diceFriction: 0.4,
-    diceRestitution: 0.45,
-    deskFriction: 0.4,
-    deskRestitution: 0.35,
+    // The desk grips (desk-die friction 1.0, Max rule) and dice slip on each other (0.3). With
+    // DSN's light legacy gravity (~2.5 m/s^2) friction only slows a die by mu*g, so at 0.4 dice
+    // skidded flat across the board: 66% of their desk travel was sliding, and the d6 faces came
+    // out uneven (bench chi^2 114). These values: 25% sliding, chi^2 8.7, fewer cocked dice.
+    diceFriction: 0.3,
+    diceRestitution: 0.6,
+    deskFriction: 1.0,
+    deskRestitution: 0.5,
+    deskFrictionRule: "max",
     barrierFriction: 0,
     barrierRestitution: 0.85,
     // continuous collision detection for fast throws
@@ -175,9 +180,12 @@ export class RapierPhysicsEngine {
     _addDesk() {
         const R = this.R;
         const t = this.tuning;
-        //Min: the desk value wins when it is the lower one, so desk-die contact uses the desk numbers
+        //deskFrictionRule "max": desk-die contact takes the larger friction, so the desk can grip
+        //(dice roll instead of skidding) while die-on-die contact keeps diceFriction.
+        //"min": the smaller one wins (the desk value when it is the lower one).
+        const frictionRule = t.deskFrictionRule === "max" ? R.CoefficientCombineRule.Max : R.CoefficientCombineRule.Min;
         this.desk = this._addStaticPlane({ x: 0, y: 1, z: 0 }, { x: 0, y: 0, z: 0 }, t.deskFriction, t.deskRestitution,
-            R.CoefficientCombineRule.Min, R.CoefficientCombineRule.Min);
+            frictionRule, R.CoefficientCombineRule.Min);
     }
 
     _barrierPositions(height, width, margin) {
