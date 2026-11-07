@@ -391,6 +391,27 @@ function showBoard() {
     const dice3d = game.dice3d;
     if (!dice3d?.canvas) return;
     if (dice3d.canvas.style.display === "none" || dice3d.canvas.style.opacity === "0") dice3d._beforeShow?.();
+    keepAboveWindows(dice3d);
+}
+
+// The waiting hand floats over the sheet it was rolled from, as thrown dice do. DSN raises the
+// board above the windows when it shows it ("auto" layer mode, and "over" sits at 1000), but the
+// click on the sheet's roll button brings the sheet to the front after that, burying the hand.
+// While the hand waits, the board stays above the top window. DSN's "under" mode (the board
+// behind every window) is the user's choice and is left alone.
+function keepAboveWindows(dice3d) {
+    let mode;
+    try {
+        mode = DsnSettings.CONFIG().canvasZIndex;
+    } catch {
+        return;
+    }
+    if (mode !== "auto" && mode !== "over") return;
+    const api = foundry.applications?.api?.ApplicationV2;
+    const top = Number(api?._maxZ);
+    if (!Number.isFinite(top)) return;
+    const z = Number(dice3d.canvas.style.zIndex) || 0;
+    if (z <= top) dice3d.canvas.style.zIndex = String(++api._maxZ);
 }
 
 function startLoop() {
