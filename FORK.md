@@ -320,9 +320,17 @@ the board rendering while an effect is alive.
   around the glyph, masked by DSN's emissive canvas (black, with the text labels in grey), which
   `decorateMaterial` now keeps on every material as `userData.gluNumberMask`. The bump canvas is
   not usable for this: DSN paints the texture's own bump into it, so on textured dice the whole
-  face reads as label. The overlay is on layer 1, so DSN's selective bloom keeps it. It rises in
-  0.18 s, pulses, and is gone after 2.6 s. Not on d4 (its result reads from the bottom), and not
-  on image faces that have no emissive art. A small ring of white sparkles rises around each die.
+  face reads as label. Not on d4 (its result reads from the bottom), and not on image faces that
+  have no emissive art. A small ring of white sparkles rises around each die.
+- **The motion** (`glowEnvelope`), 1.85 s per die, inside DSN's default 2 s before the board
+  hides: ignite to a brief flash (0.22 s, exponential ease-out) while the glow radius grows; one
+  glint band sweeps diagonally across the number (0.05 to 0.45 s); the flash eases down to a
+  steady glow with a slight breath (to 1.3 s); then an ease-in-out exhale with the glow drawing in.
+  Dice light in a 60 ms cascade, capped at 180 ms. With `prefers-reduced-motion`: no flash, glint,
+  growing glow or sparkles, only a gentle fade in and out.
+- **Bloom.** The overlay is on layer 1 and carries a white `emissive`, which is what makes DSN run
+  its selective bloom pass. In that pass (`globalBloom` = 1) it outputs only a dim core and spill:
+  at full strength the bloom swallowed the digit.
 - **Log depth.** DSN's renderer uses `logarithmicDepthBuffer`, so both custom shaders include
   three's `logdepthbuf` chunks; without them the overlay failed the depth test against its own die
   and was never drawn.

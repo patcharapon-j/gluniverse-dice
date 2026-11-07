@@ -10,7 +10,7 @@
 // Everything here is drawn by our own objects in the board scene: no dice material is changed,
 // so it works with every system, preset and material. tick() is driven from Smoothness.shouldRender.
 import {
-    AdditiveBlending, BufferAttribute, BufferGeometry, Color, Mesh, Points, ShaderMaterial, Vector3, Matrix3
+    AdditiveBlending, BufferAttribute, BufferGeometry, Color, Mesh, Points, ShaderMaterial, Vector2, Vector3, Matrix3
 } from 'three';
 import { MODULE_ID } from '../LegacyIdentity.js';
 
@@ -19,7 +19,8 @@ export const GLOW_SETTING = "settleGlow";
 
 const MAX_PARTICLES = 768;
 const GRAVITY = -2.2;          // m/s^2, light sparks
-const GLOW_TIME = 2.6;         // s, total glow time
+const STAGGER = 0.06;          // s between dice lighting up, capped at STAGGER_MAX
+const STAGGER_MAX = 0.18;
 const UP = new Vector3(0, 1, 0);
 
 export function registerFxSettings() {
@@ -203,7 +204,12 @@ void main() {
 const GLOW_FRAGMENT = /* glsl */`
 #include <common>
 #include <logdepthbuf_pars_fragment>
-uniform float uIntensity;
+uniform float uIntensity;   // brightness envelope (flash > 1 at ignition)
+uniform float uSpread;      // glow radius envelope, 0..1
+uniform float uSweep;       // glint position across the face, -0.3..1.3
+uniform vec2 uUvMin;
+uniform vec2 uUvMax;
+uniform float uBloom;       // DSN's globalBloom: 1 while its bloom pass renders
 uniform sampler2D uMask;
 varying vec2 vUv;
 float gluLabel(vec2 uv) {
@@ -211,17 +217,24 @@ float gluLabel(vec2 uv) {
     return smoothstep(0.08, 0.45, texture2D(uMask, uv).r);
 }
 void main() {
-    //only the number: its core, plus a soft white bloom spilling just around the glyph
     vec2 px = 1.0 / vec2(textureSize(uMask, 0));
     float core = gluLabel(vUv);
+    //soft glow around the glyph: three rings whose radius follows uSpread
     float spill = 0.0;
+    float radius = mix(3.0, 18.0, uSpread);
     for (int i = 0; i < 12; i++) {
-        float a = 6.2831853 * float(i) / 12.0;
-        vec2 d = vec2(cos(a), sin(a));
-        spill += gluLabel(vUv + d * px * 3.0) + gluLabel(vUv + d * px * 7.0) * 0.6;
+        float a = 6.2831853 * (float(i) + 0.5) / 12.0;
+        vec2 d = vec2(cos(a), sin(a)) * px * radius;
+        spill += gluLabel(vUv + d * 0.35) * 0.5 + gluLabel(vUv + d * 0.7) * 0.32 + gluLabel(vUv + d) * 0.18;
     }
-    spill /= 19.2;
-    float a = uIntensity * (core * 1.2 + spill * 0.9);
+    spill /= 12.0;
+    //the glint: one diagonal band of light crossing the face, on the number only
+    vec2 f = clamp((vUv - uUvMin) / max(uUvMax - uUvMin, vec2(1e-5)), 0.0, 1.0);
+    float band = exp(-pow((f.x + f.y) * 0.5 - uSweep, 2.0) / 0.006);
+    float a = uIntensity * (core * (1.15 + 1.4 * band) + spill * 1.25 * uSpread);
+    //DSN's bloom amplifies whatever reaches its pass: feed it a dim core only, so the halo
+    //stays soft and the number stays readable
+    a = mix(a, uIntensity * (core * 0.3 + spill * 0.15 * uSpread), step(0.5, uBloom));
     if (a < 0.003) discard;
     #include <logdepthbuf_fragment>
     gl_FragColor = vec4(vec3(a), min(a, 1.0));
@@ -275,11 +288,23 @@ function addGlow(box, mesh) {
     if (!mask) return;
     const geo = upFaceGeometry(mesh);
     if (!geo?.attributes.uv) return;
+    //the face's own rectangle in the label atlas, for the glint's direction
+    const uvs = geo.attributes.uv.array;
+    const uvMin = new Vector2(Infinity, Infinity), uvMax = new Vector2(-Infinity, -Infinity);
+    for (let i = 0; i < uvs.length; i += 2) {
+        uvMin.x = Math.min(uvMin.x, uvs[i]); uvMin.y = Math.min(uvMin.y, uvs[i + 1]);
+        uvMax.x = Math.max(uvMax.x, uvs[i]); uvMax.y = Math.max(uvMax.y, uvs[i + 1]);
+    }
     const glowMat = new ShaderMaterial({
         vertexShader: GLOW_VERTEX,
         fragmentShader: GLOW_FRAGMENT,
         uniforms: {
             uIntensity: { value: 0 },
+            uSpread: { value: 0 },
+            uSweep: { value: -1 },
+            uUvMin: { value: uvMin },
+            uUvMax: { value: uvMax },
+            uBloom: game.dice3d?.uniforms?.globalBloom ?? { value: 0 },
             uMask: { value: mask }
         },
         transparent: true,
@@ -289,16 +314,21 @@ function addGlow(box, mesh) {
         polygonOffsetFactor: -2,
         polygonOffsetUnits: -2
     });
+    //DSN runs its selective bloom pass only while some visible material has a non-black
+    //emissive: this marks the overlay as one, so the white number blooms
+    glowMat.emissive = new Color(1, 1, 1);
     const overlay = new Mesh(geo, glowMat);
     overlay.name = 'gluniverse-dice-glow';
     overlay.renderOrder = 9;
     //DSN's selective bloom only keeps objects on layer 1; the white number should bloom
     overlay.layers.enable(1);
     mesh.add(overlay);
-    fxState(box).glows.push({ overlay, t: 0 });
+    const glows = fxState(box).glows;
+    const order = glows.filter(g => g.t < 0.05).length;
+    glows.push({ overlay, t: 0, delay: Math.min(STAGGER_MAX, order * STAGGER), calm: reducedMotion() });
 
-    //sparkles around the die
-    if (setting(PARTICLES_SETTING)) {
+    //sparkles around the die (not with reduced motion)
+    if (setting(PARTICLES_SETTING) && !reducedMotion()) {
         const P = pool(box);
         const wp = new Vector3();
         mesh.getWorldPosition(wp);
@@ -312,10 +342,41 @@ function addGlow(box, mesh) {
     }
 }
 
-function glowIntensity(t) {
-    if (t < 0.18) return (t / 0.18) * 1.4;
-    const decay = (t - 0.18) / (GLOW_TIME - 0.18);
-    return Math.max(0, 1.4 * (1 - decay) * (1 - decay) * (0.85 + 0.15 * Math.cos(t * 9)));
+// The result moment: ignite with a brief flash and a glint, settle, hold, exhale. Times in s,
+// measured from the die's own start (after its stagger delay). Total 1.85 s, inside DSN's default
+// 2 s before the board hides.
+const IGNITE = 0.22, SETTLE = 0.55, HOLD = 1.3, END = 1.85, FLASH = 1.55;
+const easeOutExpo = (x) => x >= 1 ? 1 : 1 - Math.pow(2, -10 * x);
+const easeOutCubic = (x) => 1 - Math.pow(1 - x, 3);
+const easeInOutSine = (x) => -(Math.cos(Math.PI * x) - 1) / 2;
+const clamp01 = (x) => Math.max(0, Math.min(1, x));
+
+function reducedMotion() {
+    try {
+        return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    } catch {
+        return false;
+    }
+}
+
+/** @returns {{intensity:number, spread:number, sweep:number}} */
+function glowEnvelope(t, calm) {
+    if (t <= 0) return { intensity: 0, spread: 0, sweep: -1 };
+    if (calm) {
+        //reduced motion: no flash, glint or growing glow, just a gentle fade in and out
+        const k = t < 0.3 ? easeInOutSine(t / 0.3) : t < HOLD ? 1 : 1 - easeInOutSine(clamp01((t - HOLD) / (END - HOLD)));
+        return { intensity: k, spread: 0.7, sweep: -1 };
+    }
+    let intensity;
+    if (t < IGNITE) intensity = FLASH * easeOutExpo(t / IGNITE);
+    else if (t < SETTLE) intensity = FLASH + (1 - FLASH) * easeOutCubic((t - IGNITE) / (SETTLE - IGNITE));
+    else if (t < HOLD) intensity = 1 + 0.05 * Math.sin((t - SETTLE) * 5.2);
+    else intensity = 1 - easeInOutSine(clamp01((t - HOLD) / (END - HOLD)));
+    const grow = easeOutCubic(clamp01(t / 0.4));
+    const shrink = t > HOLD ? 1 - 0.45 * easeInOutSine(clamp01((t - HOLD) / (END - HOLD))) : 1;
+    const spread = (0.35 + 0.65 * grow) * shrink;
+    const sweep = t > 0.05 && t < 0.45 ? -0.3 + 1.6 * easeInOutSine((t - 0.05) / 0.4) : -1;
+    return { intensity: Math.max(0, intensity), spread, sweep };
 }
 
 function updateGlows(box, dt) {
@@ -323,14 +384,18 @@ function updateGlows(box, dt) {
     for (let i = s.glows.length - 1; i >= 0; i--) {
         const g = s.glows[i];
         g.t += dt;
-        if (!g.overlay.parent || g.t >= GLOW_TIME) {
+        if (!g.overlay.parent || g.t >= g.delay + END) {
             g.overlay.removeFromParent();
             g.overlay.geometry.dispose();
             g.overlay.material.dispose();
             s.glows.splice(i, 1);
             continue;
         }
-        g.overlay.material.uniforms.uIntensity.value = glowIntensity(g.t);
+        const e = glowEnvelope(g.t - g.delay, g.calm);
+        const u = g.overlay.material.uniforms;
+        u.uIntensity.value = e.intensity;
+        u.uSpread.value = e.spread;
+        u.uSweep.value = e.sweep;
     }
     return s.glows.length > 0;
 }
