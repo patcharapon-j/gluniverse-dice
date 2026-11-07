@@ -53,7 +53,9 @@ works unchanged. To keep rebasing onto upstream cheap:
 
 Files that are entirely ours: `FORK.md`, `ROADMAP.md`, `CREDITS.md`, `CLAUDE.md`, `module/glu/*`,
 `module/lang/glu-en.json`, `module/web-workers/RapierPhysicsWorker.js`,
-`module/web-workers/rapier/*`, `tools/*`, `tests/*`, `docs/fork/*`.
+`module/web-workers/rapier/*`, `tools/*`, `tests/*`, `docs/fork/*`, `docs/mocks/*`.
+`docs/mocks/` holds design mocks. They are not part of the module: the build copies only
+`module/` into `dist/`, and the release zip is made from `dist/`.
 
 ## Identity
 
@@ -291,6 +293,26 @@ Mapping and deliberate differences:
   with the same thresholds converted to m/s.
 
 Benchmark: [docs/fork/PHYSICS_BENCH.md](./docs/fork/PHYSICS_BENCH.md).
+
+Reference mock: [docs/mocks/drama3d.html](./docs/mocks/drama3d.html). It is a standalone page
+(three.js r184 and Rapier 0.21 from jsDelivr), made for the parked "Moments of drama" ideas
+(ROADMAP, Later). It is also a compact working example of what this backend and M2 build toward:
+
+- **Simulate, then replay**: the whole throw is run in Rapier before anything is shown, then
+  played back. That is the same model as `simulateThrow` and `updateThrowPlayback`.
+- **Box colliders** for the tray floor and walls, which agrees with the half-space finding above.
+- **Interpolated playback**: recorded at 120 Hz, sampled with lerp and slerp per display frame.
+  That is the M2 replay interpolation, in about ten lines (`sample()`).
+- **Face remapping** by swapping labels on the atlas, so the face Rapier landed up shows the
+  wanted result. DSN instead rotates the mesh inside its parent (`swapDiceFace`). Both show
+  Foundry's result; ours keeps the textures fixed, so keep DSN's approach.
+- **Contact-force events** (`CONTACT_FORCE_EVENTS` with a threshold, merged within 8 steps) give
+  each impact a strength, which drives the dust. This is a better input for M4's impact particles
+  than the collision-start events the worker uses for sounds.
+- Its own settle rule (a run of slow frames), not `body.sleep()`, like this worker.
+
+It is a single die in its own world with its own scale, gravity and materials. Its numbers are
+not DSN's tuning; use it for technique, not parameters.
 
 **Not yet verified in a running Foundry:** rendering of the replay, grab-and-throw of persistent
 dice with the joint, the settings UI entry, the fallback notice, and the worker URL under a route

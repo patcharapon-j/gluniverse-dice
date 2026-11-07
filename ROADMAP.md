@@ -7,8 +7,8 @@ places a feature has to hook into. Line numbers are as of DSN 6.4.5.
 Order: **M0 fork hygiene ✔ → M1 Rapier ✔ (experimental) → M2 smoothness → M3 materials →
 M4 glow + particles → M5 grab and roll → M6 showcase → M7 stream client → M8 Daggerheart →
 M9 dice that connect to the suite → M10 rolling together → M11 dice forge.**
-M11 depends only on M3 and M4, so it can move up to right after M4 if it is wanted sooner. Ideas
-still being decided are under [Under review](#under-review), and deferred ones under [Later](#later).
+M11 depends only on M3 and M4, so it can move up to right after M4 if it is wanted sooner. Deferred
+and parked ideas are under [Later](#later).
 This is the suggested order, with two adjustments the code argues for:
 
 - A **compatibility smoke test** with `gluniverse-daggerheart` and the Stream Client moves into M2.
@@ -281,18 +281,26 @@ without the font module installed must fall back cleanly.
 
 ---
 
-## Under review
+## Later
 
-Not milestones yet. The user is reviewing a mock.
+Parked by choice, not rejected. Each item keeps its notes so it can be picked up later.
 
-**Moments of drama:** the clutch cam (slow-motion and a push-in on the deciding die),
-per-system crit and fumble reactions, instant replay from a second camera, and auto-saved highlight
-clips. Notes for the clutch cam, if approved:
+### Moments of drama: on hold
+
+The user saw the mock and put this group **on hold for later**. It is parked, not
+rejected. Mock: [docs/mocks/drama3d.html](./docs/mocks/drama3d.html), a standalone page
+(three.js r184 and Rapier 0.21 from jsDelivr) showing simulate-then-replay, face remapping,
+contact-force dust, and the four effects below.
+
+The group: the clutch cam (slow-motion and a push-in on the deciding die), per-system crit and
+fumble reactions, instant replay from a second camera, and auto-saved highlight clips. Notes for
+the clutch cam, when it comes back:
 
 - Feasible because a throw is simulated before playback: from the returned buffers we know which
   die settles last and at which frame, before anything is shown.
 - Slow-motion is a playback-rate curve over `updateThrowPlayback`'s `iteration` (it pairs with
-  M2's interpolation); the push-in is a `DiceScene.camera` move, eased back afterwards.
+  M2's interpolation); the push-in is a `DiceScene.camera` move, eased back afterwards. The mock
+  eases the rate from 1x to about 0.2x over the last 1.35 s of the recording, and adds a letterbox.
 - Which die decides comes from the system: a hook or `game.dice3d` call marking deciding dice and
   how close the outcome is (Daggerheart: the Hope/Fear pair, strongest on a near tie; d20
   systems: the d20 against a known Difficulty).
@@ -302,10 +310,13 @@ clips. Notes for the clutch cam, if approved:
   hard cap of about +1.5 s. The Stream Client races `waitFor3DAnimationByMessageID` against 10 s
   and its hook fallback times out at 5 s (`stream/dice-wait.js`), so the cap has to keep a long
   throw under both.
+- Instant replay is cheap for the same reason: the recording already exists, so a replay is the
+  same buffers played back from another camera. The mock replays at 0.45x from an orbiting low
+  camera.
 
-## Later
+### Personal dice beyond the forge
 
-Personal dice beyond the forge: **a dice bag with history**, **dice jail**, and **wear**.
+**A dice bag with history**, **dice jail**, and **wear**.
 
 ---
 
