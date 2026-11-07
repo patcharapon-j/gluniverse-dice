@@ -7,5 +7,10 @@
     "GLUDICE.Settings.IdleRenderSkip.Name": "Skip idle frames",
     "GLUDICE.Settings.IdleRenderSkip.Hint": "Stop redrawing the dice board while every die is at rest and you are not touching the mouse or keyboard. Saves GPU time while persistent dice sit on the table. Turn it off if dice on the board stop updating.",
     "GLUDICE.Settings.ShaderPrewarm.Name": "Prepare dice shaders at load",
-    "GLUDICE.Settings.ShaderPrewarm.Hint": "After the world loads, build your dice once out of sight so the first throw does not stutter while the graphics driver compiles shaders."
+    "GLUDICE.Settings.ShaderPrewarm.Hint": "After the world loads, build your dice once out of sight so the first throw does not stutter while the graphics driver compiles shaders.",
+    "GLUDICE.Material.Gemstone": "Gemstone",
+    "GLUDICE.Material.Galaxy": "Inner galaxy",
+    "GLUDICE.Material.Pearlescent": "Pearlescent",
+    "GLUDICE.Settings.EnhancedMaterials.Name": "Enhanced materials",
+    "GLUDICE.Settings.EnhancedMaterials.Hint": "Richer versions of the built-in materials: a clear coat on plastic and wood, colour dispersion in glass and resin, denser velvet, brighter metal. Turn it off to render them exactly as Dice So Nice does. Needs realistic lighting."
 }

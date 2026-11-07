@@ -21,6 +21,7 @@ import { ShaderUtils } from './ShaderUtils';
 import PhysicsWorker from 'web-worker:../web-workers/PhysicsWorker.js';
 import WebworkerPromise from 'webworker-promise';
 import { createPhysicsWorker } from '../glu/PhysicsEngine.js'; //GLUniverse Dice
+import { extendMaterialOptions, decorateMaterial } from '../glu/materials/GluMaterials.js'; //GLUniverse Dice: M3 materials
 
 import {
 	MixOperation,
@@ -441,6 +442,7 @@ export class DiceFactory {
 				}
 			}
 		}
+		extendMaterialOptions(this); //GLUniverse Dice: M3 materials
 	}
 
 	setScale(scale){
@@ -1547,6 +1549,7 @@ export class DiceFactory {
 		}
 
 		mat.onBeforeCompile = ShaderUtils.applyDiceSoNiceShader;
+		decorateMaterial(this, mat, materialData, canvasBump); //GLUniverse Dice: M3 materials
 
 		// deprecated shader hook
 		Hooks.callAll("diceSoNiceOnMaterialReady", mat, baseMaterialCacheString);

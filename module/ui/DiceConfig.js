@@ -1,4 +1,5 @@
 import { DsnSettings } from '../settings/DsnSettings.js';
+import { gluMaterialChoices } from '../glu/materials/GluMaterials.js'; //GLUniverse Dice: M3 materials
 import { DiceScene } from '../engine/DiceScene.js';
 import { DiceSFXManager } from '../sfx/DiceSFXManager.js';
 import { SFXFormulaMatcher } from '../sfx/SFXFormulaMatcher.js';
@@ -173,7 +174,8 @@ export class DiceConfig extends HandlebarsApplicationMixin(ApplicationV2) {
                 "resin": "DICESONICE.MaterialResin",
                 "stone": "DICESONICE.MaterialStone",
                 "velvet": "DICESONICE.MaterialVelvet",
-                "wood": "DICESONICE.MaterialWood"
+                "wood": "DICESONICE.MaterialWood",
+                ...gluMaterialChoices() //GLUniverse Dice: M3 materials
             }),
             fontList: Utils.prepareFontList(),
             colorsetList: Utils.prepareColorsetList(),
