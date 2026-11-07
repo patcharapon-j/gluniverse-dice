@@ -1,13 +1,16 @@
 {
-    "id": "dice-so-nice",
-    "title": "Dice So Nice!",
-    "description": "Adds customizable 3D dice to Foundry VTT with lots of options to fit your playstyle.",
-    "version": "6.4.5",
+    "id": "gluniverse-dice",
+    "title": "GLUniverse Dice",
+    "description": "3D dice for Foundry VTT. A modified version (soft fork) of Dice So Nice! by Simone and JDW, keeping its public API (game.dice3d, diceSoNice* hooks).",
+    "version": "6.4.5-glu.1",
     "compatibility": {
         "minimum": 14,
         "verified": "14.370"
     },
     "authors": [
+        {
+            "name": "GLUniverse"
+        },
         {
             "name": "JDW",
             "discord": "JDW#6422",
@@ -34,6 +37,11 @@
             "lang": "en",
             "name": "English",
             "path": "./lang/en.json"
+        },
+        {
+            "lang": "en",
+            "name": "English",
+            "path": "./lang/glu-en.json"
         },
         {
             "lang": "it",
@@ -131,6 +139,15 @@
             "path": "./lang/nl.json"
         }
     ],
+    "relationships": {
+        "conflicts": [
+            {
+                "id": "dice-so-nice",
+                "type": "module",
+                "reason": "GLUniverse Dice is a fork of Dice So Nice and provides the same API (game.dice3d). Enable only one of them."
+            }
+        ]
+    },
     "media": [
         {
             "type": "cover",
@@ -154,11 +171,12 @@
             "url": "https://gitlab.com/riccisi/foundryvtt-dice-so-nice/-/raw/master/screenshot2.jpg"
         }
     ],
-    "url": "https://gitlab.com/riccisi/foundryvtt-dice-so-nice",
-    "manifest": "https://gitlab.com/riccisi/foundryvtt-dice-so-nice/-/raw/master/module/module.json",
-    "download": "https://gitlab.com/riccisi/foundryvtt-dice-so-nice/-/jobs/artifacts/6.4.5/raw/dist/dice-so-nice.zip?job=build",
-    "bugs": "https://gitlab.com/riccisi/foundryvtt-dice-so-nice/-/issues",
-    "readme": "https://gitlab.com/riccisi/foundryvtt-dice-so-nice/-/blob/master/README.md",
+    "url": "https://github.com/patcharapon-j/gluniverse-dice",
+    "manifest": "https://github.com/patcharapon-j/gluniverse-dice/releases/latest/download/module.json",
+    "download": "https://github.com/patcharapon-j/gluniverse-dice/releases/download/6.4.5-glu.1/module.zip",
+    "bugs": "https://github.com/patcharapon-j/gluniverse-dice/issues",
+    "readme": "https://github.com/patcharapon-j/gluniverse-dice/blob/main/README.md",
+    "license": "LICENSE.md",
     "flags": {
         "allowBugReporter": true
     }
