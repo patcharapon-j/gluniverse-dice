@@ -4,8 +4,9 @@
 // position (meters) as the 5th element of each `detectedCollides` entry. ThrowEngine replaces
 // its own copy with the sound list, so noteSimulation() keeps the raw one. While a throw
 // replays, every frame spawns the impacts of the frames it passed. When the replay reaches its
-// last frame, the number on the face that landed up glows white, and a small burst of white
-// sparkles rises around each die.
+// last frame, the number on the face that landed up is "forged": it ignites from its centre,
+// flashes, cools from warm to white with embers lifting off the glyph, and keeps a steady white
+// glow while the die stays on the board.
 //
 // Everything here is drawn by our own objects in the board scene: no dice material is changed,
 // so it works with every system, preset and material. tick() is driven from Smoothness.shouldRender.
@@ -92,6 +93,7 @@ class ParticlePool {
         this.life = new Float32Array(n);
         this.maxLife = new Float32Array(n);
         this.drag = new Float32Array(n);
+        this.grav = new Float32Array(n);
         this.next = 0;
         this.alive = 0;
         const g = new BufferGeometry();
@@ -113,7 +115,7 @@ class ParticlePool {
         this.points.name = 'gluniverse-dice-fx';
     }
 
-    spawn(x, y, z, vx, vy, vz, color, size, life, drag = 1.5) {
+    spawn(x, y, z, vx, vy, vz, color, size, life, drag = 1.5, gravity = GRAVITY) {
         const i = this.next;
         this.next = (this.next + 1) % MAX_PARTICLES;
         this.pos[i * 3] = x; this.pos[i * 3 + 1] = y; this.pos[i * 3 + 2] = z;
@@ -123,6 +125,7 @@ class ParticlePool {
         this.life[i] = life;
         this.maxLife[i] = life;
         this.drag[i] = drag;
+        this.grav[i] = gravity;
         this.alpha[i] = 1;
         this.spawned = true;
     }
@@ -139,7 +142,7 @@ class ParticlePool {
             alive++;
             const k = Math.exp(-this.drag[i] * dt);
             this.vel[i * 3] *= k; this.vel[i * 3 + 2] *= k;
-            this.vel[i * 3 + 1] = this.vel[i * 3 + 1] * k + GRAVITY * dt;
+            this.vel[i * 3 + 1] = this.vel[i * 3 + 1] * k + this.grav[i] * dt;
             this.pos[i * 3] += this.vel[i * 3] * dt;
             this.pos[i * 3 + 1] = Math.max(0.001, this.pos[i * 3 + 1] + this.vel[i * 3 + 1] * dt);
             this.pos[i * 3 + 2] += this.vel[i * 3 + 2] * dt;
@@ -170,7 +173,6 @@ function pool(box) {
 
 const IMPACT_DICE = new Color(1.0, 0.85, 0.55);
 const IMPACT_TABLE = new Color(0.75, 0.78, 0.85);
-const SPARKLE = new Color(1, 1, 1);
 
 function spawnImpact(box, entry) {
     const [source, , , strength, p] = entry;
@@ -204,11 +206,12 @@ void main() {
 const GLOW_FRAGMENT = /* glsl */`
 #include <common>
 #include <logdepthbuf_pars_fragment>
-uniform float uIntensity;   // brightness envelope (flash > 1 at ignition)
-uniform float uSpread;      // glow radius envelope, 0..1
-uniform float uSweep;       // glint position across the face, -0.3..1.3
-uniform vec2 uUvMin;
-uniform vec2 uUvMax;
+uniform float uIntensity;   // brightness envelope (flash > 1 at ignition, rest < 1)
+uniform float uSpread;      // halo radius envelope, 0..1
+uniform float uReveal;      // radius of the ignition front, in face units (0 = centre)
+uniform float uHeat;        // 1 = just forged (warm), 0 = cooled to white
+uniform vec2 uCenter;       // the face's centre in the label atlas
+uniform vec2 uScale;        // 1 / the face's extent in the atlas
 uniform float uBloom;       // DSN's globalBloom: 1 while its bloom pass renders
 uniform sampler2D uMask;
 varying vec2 vUv;
@@ -219,7 +222,6 @@ float gluLabel(vec2 uv) {
 void main() {
     vec2 px = 1.0 / vec2(textureSize(uMask, 0));
     float core = gluLabel(vUv);
-    //soft glow around the glyph: three rings whose radius follows uSpread
     float spill = 0.0;
     float radius = mix(3.0, 18.0, uSpread);
     for (int i = 0; i < 12; i++) {
@@ -228,16 +230,29 @@ void main() {
         spill += gluLabel(vUv + d * 0.35) * 0.5 + gluLabel(vUv + d * 0.7) * 0.32 + gluLabel(vUv + d) * 0.18;
     }
     spill /= 12.0;
-    //the glint: one diagonal band of light crossing the face, on the number only
-    vec2 f = clamp((vUv - uUvMin) / max(uUvMax - uUvMin, vec2(1e-5)), 0.0, 1.0);
-    float band = exp(-pow((f.x + f.y) * 0.5 - uSweep, 2.0) / 0.006);
-    float a = uIntensity * (core * (1.15 + 1.4 * band) + spill * 1.25 * uSpread);
-    //DSN's bloom amplifies whatever reaches its pass: feed it a dim core only, so the halo
-    //stays soft and the number stays readable
-    a = mix(a, uIntensity * (core * 0.3 + spill * 0.15 * uSpread), step(0.5, uBloom));
+
+    //forging: light ignites at the centre of the digit and runs out through its strokes
+    float dist = length((vUv - uCenter) * uScale);
+    float lit = 1.0 - smoothstep(uReveal - 0.07, uReveal, dist);
+    float front = exp(-pow(dist - uReveal, 2.0) / 0.0016) * step(0.001, uReveal) * (1.0 - step(0.98, uReveal));
+
+    float coreA = core * (lit * 1.15 + front * 2.4);
+    float haloA = spill * 1.25 * uSpread * (lit + front * 0.8);
+    //white-hot core, forge-orange rim and halo while hot, all cooling to white
+    vec3 warm = vec3(1.0, 0.52, 0.18);
+    vec3 col = (coreA * mix(vec3(1.0), vec3(1.0, 0.8, 0.55), uHeat * 0.8)
+              + haloA * mix(vec3(1.0), warm, min(1.0, uHeat * 1.3))
+              + core * front * 1.6 * warm * uHeat) * uIntensity;
+    float a = (coreA + haloA) * uIntensity;
+    //DSN's bloom amplifies whatever reaches its pass: feed it a dim core, so the halo stays soft
+    //and the number readable
+    float bloomA = (core * (lit * 0.3 + front * 0.6) + spill * 0.15 * uSpread * lit) * uIntensity;
+    float inBloom = step(0.5, uBloom);
+    col = mix(col, vec3(bloomA), inBloom);
+    a = mix(a, bloomA, inBloom);
     if (a < 0.003) discard;
     #include <logdepthbuf_fragment>
-    gl_FragColor = vec4(vec3(a), min(a, 1.0));
+    gl_FragColor = vec4(col, min(a, 1.0));
 }`;
 
 function upFaceGeometry(mesh) {
@@ -288,22 +303,26 @@ function addGlow(box, mesh) {
     if (!mask) return;
     const geo = upFaceGeometry(mesh);
     if (!geo?.attributes.uv) return;
-    //the face's own rectangle in the label atlas, for the glint's direction
+    //the face's centre and extent in the label atlas, for the ignition front
     const uvs = geo.attributes.uv.array;
-    const uvMin = new Vector2(Infinity, Infinity), uvMax = new Vector2(-Infinity, -Infinity);
+    const uvMin = new Vector2(Infinity, Infinity), uvMax = new Vector2(-Infinity, -Infinity), centre = new Vector2();
     for (let i = 0; i < uvs.length; i += 2) {
         uvMin.x = Math.min(uvMin.x, uvs[i]); uvMin.y = Math.min(uvMin.y, uvs[i + 1]);
         uvMax.x = Math.max(uvMax.x, uvs[i]); uvMax.y = Math.max(uvMax.y, uvs[i + 1]);
+        centre.x += uvs[i]; centre.y += uvs[i + 1];
     }
+    centre.multiplyScalar(2 / uvs.length);
+    const scale = new Vector2(1 / Math.max(1e-5, uvMax.x - uvMin.x), 1 / Math.max(1e-5, uvMax.y - uvMin.y));
     const glowMat = new ShaderMaterial({
         vertexShader: GLOW_VERTEX,
         fragmentShader: GLOW_FRAGMENT,
         uniforms: {
             uIntensity: { value: 0 },
             uSpread: { value: 0 },
-            uSweep: { value: -1 },
-            uUvMin: { value: uvMin },
-            uUvMax: { value: uvMax },
+            uReveal: { value: 0 },
+            uHeat: { value: 1 },
+            uCenter: { value: centre },
+            uScale: { value: scale },
             uBloom: game.dice3d?.uniforms?.globalBloom ?? { value: 0 },
             uMask: { value: mask }
         },
@@ -320,33 +339,93 @@ function addGlow(box, mesh) {
     const overlay = new Mesh(geo, glowMat);
     overlay.name = 'gluniverse-dice-glow';
     overlay.renderOrder = 9;
-    //DSN's selective bloom only keeps objects on layer 1; the white number should bloom
+    //DSN's selective bloom only keeps objects on layer 1
     overlay.layers.enable(1);
     mesh.add(overlay);
     const glows = fxState(box).glows;
     const order = glows.filter(g => g.t < 0.05).length;
-    glows.push({ overlay, t: 0, delay: Math.min(STAGGER_MAX, order * STAGGER), calm: reducedMotion() });
+    const calm = reducedMotion();
+    glows.push({
+        overlay, mesh, mask, t: 0, calm, resting: false,
+        delay: Math.min(STAGGER_MAX, order * STAGGER),
+        embers: !calm && setting(PARTICLES_SETTING) ? 0 : -1
+    });
+}
 
-    //sparkles around the die (not with reduced motion)
-    if (setting(PARTICLES_SETTING) && !reducedMotion()) {
-        const P = pool(box);
-        const wp = new Vector3();
-        mesh.getWorldPosition(wp);
-        for (let k = 0; k < 14; k++) {
-            const a = (k / 14) * Math.PI * 2 + Math.random() * 0.3;
-            const r = 0.025 + Math.random() * 0.015;
-            P.spawn(wp.x + Math.cos(a) * r, Math.max(0.004, wp.y - 0.01), wp.z + Math.sin(a) * r,
-                Math.cos(a) * 0.05, 0.18 + Math.random() * 0.12, Math.sin(a) * 0.05,
-                SPARKLE, 0.003 + Math.random() * 0.002, 0.7 + Math.random() * 0.4, 1.2);
+// Points on the number itself, in world space: lit pixels of the face's mask, mapped back
+// through the face's triangles. Used to lift embers off the glyph.
+function numberPoints(mesh, geo, mask, count) {
+    const img = mask.image;
+    if (!img?.width || !img.getContext) return [];
+    const uvs = geo.attributes.uv.array;
+    const pos = geo.attributes.position.array;
+    let u0 = 1, v0 = 1, u1 = 0, v1 = 0;
+    for (let i = 0; i < uvs.length; i += 2) {
+        u0 = Math.min(u0, uvs[i]); v0 = Math.min(v0, uvs[i + 1]);
+        u1 = Math.max(u1, uvs[i]); v1 = Math.max(v1, uvs[i + 1]);
+    }
+    //flipY = false: uv (0,0) is the canvas' top-left pixel
+    const x0 = Math.floor(u0 * img.width), y0 = Math.floor(v0 * img.height);
+    const w = Math.max(1, Math.ceil((u1 - u0) * img.width)), h = Math.max(1, Math.ceil((v1 - v0) * img.height));
+    let data;
+    try {
+        data = img.getContext('2d').getImageData(x0, y0, w, h).data;
+    } catch {
+        return [];
+    }
+    const lit = [];
+    const step = Math.max(1, Math.floor(Math.sqrt((w * h) / 6000)));
+    for (let y = 0; y < h; y += step) for (let x = 0; x < w; x += step) {
+        if (data[(y * w + x) * 4] > 70) lit.push((x0 + x + 0.5) / img.width, (y0 + y + 0.5) / img.height);
+    }
+    if (!lit.length) return [];
+    const out = [];
+    const p = new Vector3();
+    mesh.updateWorldMatrix(true, false);
+    for (let k = 0; k < count; k++) {
+        const j = Math.floor(Math.random() * (lit.length / 2)) * 2;
+        const u = lit[j], v = lit[j + 1];
+        //find the triangle holding (u, v) and interpolate its corners
+        for (let t = 0; t < uvs.length / 6; t++) {
+            const ax = uvs[t * 6], ay = uvs[t * 6 + 1], bx = uvs[t * 6 + 2], by = uvs[t * 6 + 3], cx = uvs[t * 6 + 4], cy = uvs[t * 6 + 5];
+            const den = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
+            if (Math.abs(den) < 1e-12) continue;
+            const l1 = ((by - cy) * (u - cx) + (cx - bx) * (v - cy)) / den;
+            const l2 = ((cy - ay) * (u - cx) + (ax - cx) * (v - cy)) / den;
+            const l3 = 1 - l1 - l2;
+            if (l1 < -1e-4 || l2 < -1e-4 || l3 < -1e-4) continue;
+            p.set(
+                pos[t * 9] * l1 + pos[t * 9 + 3] * l2 + pos[t * 9 + 6] * l3,
+                pos[t * 9 + 1] * l1 + pos[t * 9 + 4] * l2 + pos[t * 9 + 7] * l3,
+                pos[t * 9 + 2] * l1 + pos[t * 9 + 5] * l2 + pos[t * 9 + 8] * l3
+            );
+            out.push(mesh.localToWorld(p.clone()));
+            break;
         }
+    }
+    return out;
+}
+
+const EMBER_WARM = new Color(1.0, 0.6, 0.25);
+const EMBER_WHITE = new Color(1.0, 0.96, 0.9);
+
+function spawnEmbers(box, g) {
+    const pts = numberPoints(g.mesh, g.overlay.geometry, g.mask, 36);
+    if (!pts.length) return;
+    const P = pool(box);
+    for (const p of pts) {
+        P.spawn(p.x, p.y + 0.0008, p.z,
+            (Math.random() - 0.5) * 0.06, 0.04 + Math.random() * 0.09, (Math.random() - 0.5) * 0.06,
+            Math.random() < 0.7 ? EMBER_WARM : EMBER_WHITE,
+            0.0028 + Math.random() * 0.003, 0.9 + Math.random() * 1.1, 0.8, 0.18 + Math.random() * 0.16);
     }
 }
 
-// The result moment: ignite with a brief flash and a glint, settle, hold, exhale. Times in s,
-// measured from the die's own start (after its stagger delay). Total 1.85 s, inside DSN's default
-// 2 s before the board hides.
-const IGNITE = 0.22, SETTLE = 0.55, HOLD = 1.3, END = 1.85, FLASH = 1.55;
-const easeOutExpo = (x) => x >= 1 ? 1 : 1 - Math.pow(2, -10 * x);
+// The result moment, "forged": the digit ignites at its centre and the light runs out through
+// its strokes behind a hot front, flashes, cools from warm to white, and settles to a steady
+// glow that stays while the die is on the table. Times in s from the die's own start (after its
+// cascade delay).
+const REVEAL = 0.42, SETTLE = 0.85, HOLD = 1.5, REST_AT = 2.3, FLASH = 1.5, REST = 0.75, EMBERS_AT = 0.2;
 const easeOutCubic = (x) => 1 - Math.pow(1 - x, 3);
 const easeInOutSine = (x) => -(Math.cos(Math.PI * x) - 1) / 2;
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
@@ -359,45 +438,60 @@ function reducedMotion() {
     }
 }
 
-/** @returns {{intensity:number, spread:number, sweep:number}} */
+/** @returns {{intensity:number, spread:number, reveal:number, heat:number, resting:boolean}} */
 function glowEnvelope(t, calm) {
-    if (t <= 0) return { intensity: 0, spread: 0, sweep: -1 };
+    if (t <= 0) return { intensity: 0, spread: 0, reveal: 0, heat: 1, resting: false };
     if (calm) {
-        //reduced motion: no flash, glint or growing glow, just a gentle fade in and out
-        const k = t < 0.3 ? easeInOutSine(t / 0.3) : t < HOLD ? 1 : 1 - easeInOutSine(clamp01((t - HOLD) / (END - HOLD)));
-        return { intensity: k, spread: 0.7, sweep: -1 };
+        //reduced motion: no front, heat, flash or embers: fade in, then ease to the resting glow
+        const intensity = t < 0.35 ? easeInOutSine(t / 0.35) : 1 + (REST - 1) * easeInOutSine(clamp01((t - 0.35) / 1.2));
+        return { intensity, spread: 0.7, reveal: 1, heat: 0, resting: t >= 1.55 };
     }
     let intensity;
-    if (t < IGNITE) intensity = FLASH * easeOutExpo(t / IGNITE);
-    else if (t < SETTLE) intensity = FLASH + (1 - FLASH) * easeOutCubic((t - IGNITE) / (SETTLE - IGNITE));
-    else if (t < HOLD) intensity = 1 + 0.05 * Math.sin((t - SETTLE) * 5.2);
-    else intensity = 1 - easeInOutSine(clamp01((t - HOLD) / (END - HOLD)));
-    const grow = easeOutCubic(clamp01(t / 0.4));
-    const shrink = t > HOLD ? 1 - 0.45 * easeInOutSine(clamp01((t - HOLD) / (END - HOLD))) : 1;
-    const spread = (0.35 + 0.65 * grow) * shrink;
-    const sweep = t > 0.05 && t < 0.45 ? -0.3 + 1.6 * easeInOutSine((t - 0.05) / 0.4) : -1;
-    return { intensity: Math.max(0, intensity), spread, sweep };
+    if (t < REVEAL) intensity = FLASH * easeOutCubic(t / REVEAL);
+    else if (t < SETTLE) intensity = FLASH + (1 - FLASH) * easeOutCubic((t - REVEAL) / (SETTLE - REVEAL));
+    else if (t < HOLD) intensity = 1 + 0.04 * Math.sin((t - SETTLE) * 5.5);
+    else intensity = 1 + (REST - 1) * easeInOutSine(clamp01((t - HOLD) / (REST_AT - HOLD)));
+    //the front runs out a little past the glyph's reach (0.75) before the face counts as lit
+    const reveal = t < REVEAL ? 0.8 * easeOutCubic(t / REVEAL) : 1;
+    const heat = 1 - easeInOutSine(clamp01((t - 0.15) / 0.9));
+    const grow = easeOutCubic(clamp01(t / 0.45));
+    const rest = t > HOLD ? 1 - 0.3 * easeInOutSine(clamp01((t - HOLD) / (REST_AT - HOLD))) : 1;
+    return { intensity: Math.max(0, intensity), spread: (0.35 + 0.65 * grow) * rest, reveal, heat, resting: t >= REST_AT };
 }
 
+function inScene(obj) {
+    for (let o = obj; o; o = o.parent) if (o.isScene) return true;
+    return false;
+}
+
+function disposeGlow(g) {
+    g.overlay.removeFromParent();
+    g.overlay.geometry.dispose();
+    g.overlay.material.dispose();
+}
+
+/** @returns {boolean} a glow is still animating (a resting glow needs no new frames) */
 function updateGlows(box, dt) {
     const s = fxState(box);
+    let animating = false;
     for (let i = s.glows.length - 1; i >= 0; i--) {
         const g = s.glows[i];
+        //the die left the board (cleared, faded, rerolled): its glow goes with it
+        if (!inScene(g.overlay)) { disposeGlow(g); s.glows.splice(i, 1); continue; }
+        if (g.resting) continue;
         g.t += dt;
-        if (!g.overlay.parent || g.t >= g.delay + END) {
-            g.overlay.removeFromParent();
-            g.overlay.geometry.dispose();
-            g.overlay.material.dispose();
-            s.glows.splice(i, 1);
-            continue;
-        }
-        const e = glowEnvelope(g.t - g.delay, g.calm);
+        const local = g.t - g.delay;
+        if (g.embers === 0 && local >= EMBERS_AT) { g.embers = 1; spawnEmbers(box, g); }
+        const e = glowEnvelope(local, g.calm);
         const u = g.overlay.material.uniforms;
         u.uIntensity.value = e.intensity;
         u.uSpread.value = e.spread;
-        u.uSweep.value = e.sweep;
+        u.uReveal.value = e.reveal;
+        u.uHeat.value = e.heat;
+        g.resting = e.resting;
+        animating = true;
     }
-    return s.glows.length > 0;
+    return animating;
 }
 
 // === hooks ==================================================================================
@@ -469,11 +563,7 @@ function ensureLoop(box) {
 
 function clearFx(box) {
     const s = fxState(box);
-    for (const g of s.glows) {
-        g.overlay.removeFromParent();
-        g.overlay.geometry.dispose();
-        g.overlay.material.dispose();
-    }
+    for (const g of s.glows) disposeGlow(g);
     s.glows.length = 0;
     if (s.pool) { s.pool.life.fill(0); s.pool.alpha.fill(0); s.pool.alive = 0; s.pool.spawned = true; }
 }
