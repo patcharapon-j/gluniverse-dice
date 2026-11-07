@@ -442,14 +442,8 @@ compiles there and not on the first moving frame; the clock starts on the next f
 `requestAnimationFrame` timestamps. Fallbacks: an unpatched die fades, an unpatched number fades,
 an unpatched shadow goes partway through. Reduced motion shortens the burn to 0.6x.
 
-### Impact shake
-
-`module/glu/fx/ImpactShake.js`, client setting `impactShake` (**default off**: the dice board is
-an overlay on a map that stays still, so a camera shake reads as the dice layer jittering; always
-off with prefers-reduced-motion). Each impact of the replayed collision timeline (strength 0.35 or more)
-adds strength squared to a sideways camera tremor, table hits more than dice on dice, capped at
-0.045 die sizes and settling in about a quarter of a second. A camera move by anything else
-becomes the new rest position.
+An impact camera shake was tried and removed: on a board that overlays a still map it read as
+the dice layer jittering.
 
 ## Daggerheart pass (M8)
 

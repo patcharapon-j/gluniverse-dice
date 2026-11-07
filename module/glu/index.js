@@ -10,7 +10,6 @@ import { registerFxSettings } from "./fx/DiceFx.js";
 import { registerHandSetting } from "./hand/HandOfDice.js";
 import { registerRollArea } from "./stream/RollArea.js";
 import { registerBurnSettings } from "./fx/DiceBurn.js";
-import { registerShakeSetting } from "./fx/ImpactShake.js";
 import { registerPresentationSettings, exposePresentationApi } from "./fx/DicePresentation.js";
 
 Hooks.once("init", () => {
@@ -21,7 +20,6 @@ Hooks.once("init", () => {
     registerFxSettings();
     registerHandSetting();
     registerBurnSettings();
-    registerShakeSetting();
     registerPresentationSettings();
     exposePresentationApi();
 });

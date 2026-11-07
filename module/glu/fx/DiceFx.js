@@ -14,7 +14,6 @@ import {
     AdditiveBlending, BufferAttribute, BufferGeometry, Color, Mesh, Points, ShaderMaterial, Vector2, Vector3, Matrix3
 } from 'three';
 import { MODULE_ID } from '../LegacyIdentity.js';
-import { addShake, applyShake } from './ImpactShake.js';
 import { settlePresentation } from './DicePresentation.js'; //M8: glow hue and emphasis
 
 export const PARTICLES_SETTING = "impactParticles";
@@ -455,7 +454,6 @@ export function tickFx(box) {
             const hit = th.impacts[i];
             if (!hit) continue;
             if (sparks) spawnImpact(box, hit);
-            addShake(box, hit[0], hit[3]);
         }
         th.iter = Math.max(th.iter, until);
         if (!th.settled && engine.iterationsNeeded > 0 && engine.iteration >= engine.iterationsNeeded) {
@@ -476,8 +474,7 @@ function advance(box) {
     s.lastTime = now;
     const glowing = updateGlows(box, dt);
     const particles = s.pool ? s.pool.update(dt) : false;
-    const shaking = applyShake(box, dt);
-    return glowing || particles || shaking;
+    return glowing || particles;
 }
 
 // DiceBox removes its ticker as soon as a throw's result is in, unless something else animates
