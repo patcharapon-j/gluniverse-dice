@@ -11,14 +11,15 @@
 // Licence: AGPL-3.0, like the rest of the module. Rapier itself is Apache-2.0.
 
 import { buildShapeGeometry, readFace } from './shapeGeometry.js';
+import { RAPIER_GRAVITY } from './gravity.js';
 
 // legacy (cannon-es worker) units per meter: TARGET_D6_EDGE_METERS / 50
 const LEGACY_TO_METERS = 0.016 / 50;
 const L = LEGACY_TO_METERS;
 
 export const DEFAULT_TUNING = Object.freeze({
-    // cannon-es worker: gravity -9.8 * 800 legacy units/s^2
-    gravity: -9.8 * 800 * L,
+    // twice the cannon-es worker's gravity, for weight (gravity.js)
+    gravity: RAPIER_GRAVITY,
     // Rapier tolerances scale with this. Dice are ~3-6 cm across.
     lengthUnit: 0.05,
     solverIterations: 8,
@@ -27,10 +28,15 @@ export const DEFAULT_TUNING = Object.freeze({
     linearDamping: -Math.log(0.9),
     angularDamping: -Math.log(0.9),
     // materials. Rapier has per-collider coefficients plus a combine rule (Max > Multiply > Min > Average)
-    diceFriction: 0.4,
-    diceRestitution: 0.45,
-    deskFriction: 0.4,
-    deskRestitution: 0.35,
+    // The desk grips (desk-die friction 1.0, Max rule) and dice slip on each other (0.3). With
+    // DSN's light legacy gravity (~2.5 m/s^2) friction only slows a die by mu*g, so at 0.4 dice
+    // skidded flat across the board: 66% of their desk travel was sliding, and the d6 faces came
+    // out uneven (bench chi^2 114). These values: 25% sliding, chi^2 8.7, fewer cocked dice.
+    diceFriction: 0.3,
+    diceRestitution: 0.6,
+    deskFriction: 1.0,
+    deskRestitution: 0.5,
+    deskFrictionRule: "max",
     barrierFriction: 0,
     barrierRestitution: 0.85,
     // continuous collision detection for fast throws
@@ -46,6 +52,13 @@ export const DEFAULT_TUNING = Object.freeze({
     // torsional friction: below spinSpeed (m/s), spin about the vertical decays at spinFriction /s
     spinFriction: 8,
     spinSpeed: 0.1,
+    // rolling resistance, which Rapier does not model either: a real die's edges catch on the
+    // table, so a slow die stops within a face or two, while a hull (a d20 most of all, being
+    // nearly round) rolls on and creeps for a second. Below rollSpeed (m/s, horizontal, with
+    // little vertical motion), linear and angular velocity decay at up to rollDrag /s, more the
+    // slower the die goes. 0 turns it off.
+    rollDrag: 0,
+    rollSpeed: 0.25,
     // d2: octagonal hull like cannon-es (true cylinders roll on their edge far longer)
     coinAsHull: true,
     // d2 only. A thin hull lying on the desk gets angular kicks from the contact solver every
@@ -175,9 +188,12 @@ export class RapierPhysicsEngine {
     _addDesk() {
         const R = this.R;
         const t = this.tuning;
-        //Min: the desk value wins when it is the lower one, so desk-die contact uses the desk numbers
+        //deskFrictionRule "max": desk-die contact takes the larger friction, so the desk can grip
+        //(dice roll instead of skidding) while die-on-die contact keeps diceFriction.
+        //"min": the smaller one wins (the desk value when it is the lower one).
+        const frictionRule = t.deskFrictionRule === "max" ? R.CoefficientCombineRule.Max : R.CoefficientCombineRule.Min;
         this.desk = this._addStaticPlane({ x: 0, y: 1, z: 0 }, { x: 0, y: 0, z: 0 }, t.deskFriction, t.deskRestitution,
-            R.CoefficientCombineRule.Min, R.CoefficientCombineRule.Min);
+            frictionRule, R.CoefficientCombineRule.Min);
     }
 
     _barrierPositions(height, width, margin) {
@@ -557,6 +573,15 @@ export class RapierPhysicsEngine {
                 const k = Math.exp(-t.spinFriction * dt);
                 w = { x: w.x, y: w.y * k, z: w.z };
                 body.setAngvel(w, false);
+            }
+            if (t.rollDrag > 0 && Math.abs(v.y) < t.rollSpeed * 0.5) {
+                const sp = Math.sqrt(v.x * v.x + v.z * v.z);
+                if (sp < t.rollSpeed) {
+                    const k = Math.exp(-t.rollDrag * dt * (1 - sp / t.rollSpeed));
+                    w = { x: w.x * k, y: w.y * k, z: w.z * k };
+                    body.setAngvel(w, false);
+                    body.setLinvel({ x: v.x * k, y: v.y, z: v.z * k }, false);
+                }
             }
             die.coinFlat = false;
             if (die.geometry.collider?.kind === "cylinder") w = this._coinTick(die, body, v, w, dt);

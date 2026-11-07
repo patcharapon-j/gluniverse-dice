@@ -14,6 +14,7 @@ import {
     AdditiveBlending, BufferAttribute, BufferGeometry, Color, Mesh, Points, ShaderMaterial, Vector2, Vector3, Matrix3
 } from 'three';
 import { MODULE_ID } from '../LegacyIdentity.js';
+import { addShake, applyShake } from './ImpactShake.js';
 
 export const PARTICLES_SETTING = "impactParticles";
 export const GLOW_SETTING = "settleGlow";
@@ -438,13 +439,17 @@ export function tickFx(box) {
     const engine = box.throwEngine;
     const th = engine?._gluFxThrow;
     if (th && engine.rolling) {
-        if (setting(PARTICLES_SETTING)) {
-            const until = Math.min(engine.iteration, engine.iterationsNeeded);
-            //a fast-forwarded replay (hidden tab, stale playback) skips its impacts
-            if (until - th.iter > 120) th.iter = until;
-            for (let i = th.iter + 1; i <= until; i++) if (th.impacts[i]) spawnImpact(box, th.impacts[i]);
-            th.iter = Math.max(th.iter, until);
+        const sparks = setting(PARTICLES_SETTING);
+        const until = Math.min(engine.iteration, engine.iterationsNeeded);
+        //a fast-forwarded replay (hidden tab, stale playback) skips its impacts
+        if (until - th.iter > 120) th.iter = until;
+        for (let i = th.iter + 1; i <= until; i++) {
+            const hit = th.impacts[i];
+            if (!hit) continue;
+            if (sparks) spawnImpact(box, hit);
+            addShake(box, hit[0], hit[3]);
         }
+        th.iter = Math.max(th.iter, until);
         if (!th.settled && engine.iterationsNeeded > 0 && engine.iteration >= engine.iterationsNeeded) {
             th.settled = true;
             if (setting(GLOW_SETTING)) for (const mesh of engine.diceList ?? []) addGlow(box, mesh);
@@ -462,7 +467,8 @@ function advance(box) {
     s.lastTime = now;
     const glowing = updateGlows(box, dt);
     const particles = s.pool ? s.pool.update(dt) : false;
-    return glowing || particles;
+    const shaking = applyShake(box, dt);
+    return glowing || particles || shaking;
 }
 
 // DiceBox removes its ticker as soon as a throw's result is in, unless something else animates

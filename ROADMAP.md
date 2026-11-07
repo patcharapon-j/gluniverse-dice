@@ -77,10 +77,9 @@ cache keys (`customProgramCacheKey`), and the M2 prewarm needing to know the new
 
 ## M4 Face glow on settle; particles on impact and settle
 
-**Built, Foundry check pending.** Delivered (FORK.md
+**Built, Foundry check done.** Delivered (FORK.md
 [Glow and particles](./FORK.md#glow-and-particles-m4)): contact position in both workers'
-collision timeline, impact sparks, a result-face glow that lights the number, sparkles on settle,
-two client settings. Done with one pooled `Points` instead of Proton, and an overlay mesh instead
+collision timeline, impact sparks, the result number forged and kept lit, two client settings. Done with one pooled `Points` instead of Proton, and an overlay mesh instead
 of a per-face emissive uniform: shared materials cannot carry per-die uniforms. Open: tune with
 DSN's bloom, check every die shape and custom models in Foundry.
 
@@ -97,21 +96,24 @@ budget with many dice: pool emitters.
 
 ## M5 Grab and roll
 
-Extend DSN's interactive throws; don't rebuild them. Docs:
-`docs/src/content/docs/api/interactive-throws.md`.
+**Built, multi-client check pending.** Delivered (FORK.md
+[Grab and roll](./FORK.md#grab-and-roll-m5)): an interactive roll waits in the roller's hand, a
+local cluster floating next to the pointer that only the roller sees; click, flick or shake
+throws it, and every client plays the throw from the hand through DSN's normal pipeline. Built
+beside DSN's pending throw rather than on it, because its guest dice are physics bodies synced to
+every client and it posts a progress card, which the table did not want. Which rolls are held is
+still DSN's rule. The hand has weight (spring follow, lean, cupped dice that jostle), hard
+impacts shake the camera a little, and the dice burn away in a white dissolve after a world
+linger time (default 5 s). Open: check with a second user watching; tune the feel at full frame
+rate.
 
 | Item | Seam |
 |---|---|
-| Hold the roll | `PendingThrowManager` (pending registry, slot model, `dice-so-nice.interactive` flag, chat progress card, "Just roll it", GM force-resolve, disconnect handling) |
-| Dice "in hand" | Guest dice: `PersistentDice.spawn(..., { guest: { pendingId, reservedForUserId } })`; `SpawnLayout` |
-| Grab and flick | `InputHandler` (constraints, pre-roll wobble `updatePreRoll`, release velocity), `PersistentDiceManager.buildImpulseMap`, `ThrowEngine.startUnifiedBatch(persistentThrowData)` |
-| Click to throw | new: a click on the hand cluster calls the same release path with a generated velocity |
-| Remote viewers | socket `persistent-pickup/move/release/throw`; remotes re-simulate from `velocityPct` |
-
-What is new: dice that gather in a visible "hand" group for every roll (not only for persistent
-dice), and click-to-throw. Risks: completion timing for integrations (`diceSoNiceRollComplete`,
-`waitFor3DAnimationByMessageID`); the Stream Client and Daggerheart wait on these. The hand must
-also time out for AFK players (`PendingThrowManager` already has the end conditions).
+| Which rolls | `PendingThrowManager.shouldStampInteractive` (unchanged), then `holdInHand` in `preCreateChatMessage` |
+| Hold the roll | `createChatMessage` interception: `interceptHeld` before the pending-throw branch |
+| The hand | local meshes from `ThrowEngine.createDiceMesh`, own frame loop and input listeners |
+| The throw | socket `gluHandThrow`; `ThrowPipeline.renderRolls`; `applyHandThrow` in `ThrowEngine.startUnifiedBatch` |
+| Leaving | `Dice3D._afterShow` hide timer: `burnAwayDice`, delay from `hideDelayMs` |
 
 ## M6 Result showcase
 

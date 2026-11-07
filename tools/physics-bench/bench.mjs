@@ -134,6 +134,21 @@ function tailMotion(pos, quat, last, frames) {
     return { path, rot };
 }
 
+// sliding on the desk: per frame while the die is low (on or just over the desk), the horizontal
+// distance it moved beyond what its rotation accounts for (rolling covers rot * radius)
+function deskSlide(pos, quat, last, radius) {
+    let path = 0, slide = 0;
+    for (let f = 1; f <= last; f++) {
+        if (pos[f * 3 + 1] > radius * 1.4) continue;
+        const d = Math.hypot(pos[f * 3] - pos[f * 3 - 3], pos[f * 3 + 2] - pos[f * 3 - 1]);
+        const dot = Math.abs(quat[f * 4] * quat[f * 4 - 4] + quat[f * 4 + 1] * quat[f * 4 - 3] + quat[f * 4 + 2] * quat[f * 4 - 2] + quat[f * 4 + 3] * quat[f * 4 - 1]);
+        const rot = 2 * Math.acos(Math.min(1, dot));
+        path += d;
+        slide += Math.max(0, d - rot * radius);
+    }
+    return { path, slide };
+}
+
 async function runEngine(engine, scenarioName, types) {
     const worker = await loadWorker(engine);
     await worker.exec('init', {
@@ -144,7 +159,7 @@ async function runEngine(engine, scenarioName, types) {
         await worker.exec('createShape', { name: p.shape, radius: p.scale * displayScale, definition: DiceShapeLibrary.getWorkerDefinition(p.shape) });
     }
 
-    const out = { simMs: [], frames: [], hitMax: 0, dice: 0, tilted5: 0, cocked15: 0, outOfBounds: 0, tailPathMm: [], tailRotDeg: [], restDriftMm: [], restRotDeg: [], sounds: [], faces: {}, cockedList: [] };
+    const out = { simMs: [], frames: [], hitMax: 0, dice: 0, tilted5: 0, cocked15: 0, outOfBounds: 0, tailPathMm: [], tailRotDeg: [], deskPathMm: [], slideMm: [], restDriftMm: [], restRotDeg: [], sounds: [], faces: {}, cockedList: [] };
     const halfX = containerWidth * 0.97, halfZ = containerHeight * 0.97;
 
     for (let trial = 0; trial < TRIALS; trial++) {
@@ -178,6 +193,9 @@ async function runEngine(engine, scenarioName, types) {
             const tm = tailMotion(pos, quat, last, 30);
             if (process.env.BENCH_DEBUG && last >= 1000) console.log(engine, 'capped', trial, id, spec.shape, 'tilt', (r.angle * DEG).toFixed(1), 'height mm', (py * 1000).toFixed(0), 'last-0.5s path mm', (tm.path * 1000).toFixed(1), 'rot', (tm.rot * DEG).toFixed(0));
             out.tailPathMm.push(tm.path * 1000);
+            const ds = deskSlide(pos, quat, last, PRESETS[spec.shape].scale * displayScale);
+            out.deskPathMm.push(ds.path * 1000);
+            out.slideMm.push(ds.slide * 1000);
             out.tailRotDeg.push(tm.rot * DEG);
             out.faces[spec.shape] ??= {};
             const fv = res.faceValues[id];
@@ -236,7 +254,10 @@ function summarize(o) {
         'idle 2s drift mm (p95)': +quantile(o.restDriftMm, 0.95).toFixed(3),
         'idle 2s drift mm (max)': +Math.max(...o.restDriftMm).toFixed(3),
         'idle 2s rotation ° (max)': +Math.max(...o.restRotDeg).toFixed(3),
-        'sound events / throw': +mean(o.sounds).toFixed(1)
+        'sound events / throw': +mean(o.sounds).toFixed(1),
+        'desk path mm (median)': +quantile(o.deskPathMm, 0.5).toFixed(0),
+        'sliding mm (median)': +quantile(o.slideMm, 0.5).toFixed(0),
+        'sliding share of desk path': `${(100 * o.slideMm.reduce((a, b) => a + b, 0) / Math.max(1e-9, o.deskPathMm.reduce((a, b) => a + b, 0))).toFixed(0)}%`
     };
 }
 
