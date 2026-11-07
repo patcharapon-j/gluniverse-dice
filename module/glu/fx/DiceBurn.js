@@ -4,10 +4,10 @@
 //   for every client (Dice So Nice's own "time before hide" is per user). 0 keeps each user's
 //   Dice So Nice setting.
 // - Client setting `burnAway`: the dice dissolve into light instead of Dice So Nice's fade or
-//   instant hide. A jagged white front sweeps down through each die; the surface ahead of it
-//   bleaches toward white, a thin white-hot line marks the edge, and what it passes is gone.
-//   The forged result number (DiceFx's overlay) flares as the top goes, hangs in the air while
-//   the body burns away beneath it, then goes out last. No flame colours, no particles.
+//   instant hide. Each die burns away in blotches: holes open at a few spots, spread and merge,
+//   loosely from the top of the screen down, behind a torn white-hot edge; the surface just
+//   ahead of it bleaches toward white. The forged result number (DiceFx's overlay) burns with
+//   the same front, so it goes where the face under it goes. No flame colours, no particles.
 //
 // Hook: Dice3D._afterShow, the hide timer (hideDelayMs for its delay, burnAwayDice in place of
 // its hide). Persistent dice never burn. Each burning die gets its own copy of its material:
@@ -19,15 +19,16 @@ import { MODULE_ID } from '../LegacyIdentity.js';
 export const LINGER_SETTING = "diceLinger";
 export const BURN_SETTING = "burnAway";
 
-//seconds: the sweep through the body, then the number alone going out
-const SWEEP_S = 1.75;
-const NUMBER_S = 0.55;
+//seconds for one die to burn away
+const SWEEP_S = 1.9;
 //dice don't all go at once; the order is random, the gaps small
-const STAGGER_S = 0.28;
-//the shadow goes when this much of the sweep is done (the shadow pass does not burn)
+const STAGGER_S = 0.3;
+//the shadow goes when this much of the burn is done, if its depth pass could not be patched
 const SHADOW_OFF = 0.62;
-//the front starts just above the die and ends just below it (the noise reaches +-0.2)
-const FRONT_FROM = -0.2, FRONT_TO = 1.24;
+//the front's range: the burn time gluN spans about 0..1, a little past it with the crackle
+const FRONT_FROM = -0.12, FRONT_TO = 1.12;
+//the warm-up frame: a front this far back burns nothing and lights nothing
+const FRONT_IDLE = -10;
 
 export function registerBurnSettings() {
     game.settings.register(MODULE_ID, LINGER_SETTING, {
@@ -110,17 +111,22 @@ float gluBFbm(vec3 p) {
     }
     return s;
 }
+float gluBFbm2(vec3 p) {
+    return gluBNoise(p) * 0.65 + gluBNoise(p * 2.03 + vec3(4.1, 7.3, 1.9)) * 0.35;
+}
 vec3 gluBurnGlow = vec3(0.0);
 `;
-// before <opaque_fragment>. gluN is when this point goes: 0 at the top of the die, 1 at the
-// bottom, made jagged by domain-warped noise plus a fine crackle so the front has a torn edge.
+// gluN is when this point goes, 0 first, 1 last. Mostly blotches (warped noise: a few holes
+// open, spread and merge), a third of it the screen's top-to-bottom, so the die still reads as
+// going from the top; a fine crackle tears the edge. Shared by the die, its shadow and its
+// number, in world space, so all three burn as one.
 const BURN_FRONT = /* glsl */`
     vec3 gluP = (vGluBurnW - gluBurnCentre) / gluBurnRadius;
-    vec3 gluQ = gluP * 2.2 + vec3(gluBurnSeed);
-    vec3 gluWarp = vec3(gluBFbm(gluQ), gluBFbm(gluQ + vec3(5.2, 1.3, 7.7)), gluBFbm(gluQ + vec3(2.9, 8.1, 4.4))) - 0.5;
-    float gluN = dot(gluP, gluBurnDown) * 0.5 + 0.5
-        + (gluBFbm(gluQ * 1.3 + gluWarp * 1.8) - 0.5) * 0.36
-        + (gluBNoise(gluP * 19.0 + vec3(gluBurnSeed)) - 0.5) * 0.045;
+    vec3 gluQ = gluP * 1.9 + vec3(gluBurnSeed);
+    vec3 gluWarp = vec3(gluBFbm2(gluQ), gluBFbm2(gluQ + vec3(5.2, 1.3, 7.7)), gluBFbm2(gluQ + vec3(2.9, 8.1, 4.4))) - 0.5;
+    float gluBlot = clamp((gluBFbm(gluQ * 1.35 + gluWarp * 2.2) - 0.28) / 0.44, 0.0, 1.0);
+    float gluN = (dot(gluP, gluBurnDown) * 0.5 + 0.5) * 0.34 + gluBlot * 0.66
+        + (gluBNoise(gluP * 21.0 + vec3(gluBurnSeed)) - 0.5) * 0.05;
     float gluEdge = gluN - gluBurn;
     if (gluEdge < 0.0) discard;
 `;
@@ -143,6 +149,34 @@ ${BURN_FRONT}
 const BURN_BLOOM = /* glsl */`
 if (gluBurnBloom > 0.5) gl_FragColor.rgb = max(gl_FragColor.rgb, gluBurnGlow * gluBurnGlow.r * 0.12);
 `;
+
+// DiceFx's number overlay: the same front, and its strokes flare white as the edge crosses them.
+const GLOW_BURN = /* glsl */`
+{
+${BURN_FRONT}
+    float gluFlare = exp(-gluEdge / 0.03);
+    col = col * (1.0 + gluFlare * 2.0) + vec3(gluFlare * 0.6) * a;
+    a = min(1.0, a * (1.0 + gluFlare));
+}
+`;
+
+function burnGlowMaterial(mat, uniforms, state) {
+    const upstream = mat.onBeforeCompile;
+    mat.onBeforeCompile = function (shader, renderer) {
+        upstream?.call(this, shader, renderer);
+        const fs = shader.fragmentShader, vs = shader.vertexShader;
+        const at = 'gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);';
+        if (!vs.includes(at) || !fs.includes('#include <logdepthbuf_fragment>') || !fs.includes('uniform sampler2D uMask;')) return;
+        Object.assign(shader.uniforms, uniforms);
+        shader.vertexShader = `${BURN_VERTEX_PARS}\n` + vs.replace(at, `${at}\nvGluBurnW = (modelMatrix * vec4(position, 1.0)).xyz;`);
+        shader.fragmentShader = fs
+            .replace('uniform sampler2D uMask;', `uniform sampler2D uMask;\n${BURN_FRAGMENT_PARS}`)
+            .replace('#include <logdepthbuf_fragment>', `${GLOW_BURN}\n#include <logdepthbuf_fragment>`);
+        state.glowPatched = true;
+    };
+    mat.customProgramCacheKey = () => 'glu-glow-burn';
+    mat.needsUpdate = true;
+}
 
 const BLACK = new Color(0, 0, 0);
 
@@ -235,7 +269,7 @@ export function burnAwayDice(dice3d) {
         //little into the die and leaning a little each time so no two dice burn alike
         const down = new Vector3((Math.random() - 0.5) * 0.6, -0.35, 1).normalize();
         const uniforms = {
-            gluBurn: { value: FRONT_FROM },
+            gluBurn: { value: FRONT_IDLE },
             gluBurnSeed: { value: Math.random() * 40 },
             gluBurnCentre: { value: centre },
             gluBurnRadius: { value: (geo?.boundingSphere?.radius || 1) * scale },
@@ -245,11 +279,11 @@ export function burnAwayDice(dice3d) {
         const state = { patched: false };
         const originals = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
         const clones = originals.map(m => m ? burnMaterial(m, uniforms, state) : m);
-        const glows = mesh.children.filter(c => c.name === 'gluniverse-dice-glow');
+        const glows = mesh.children.filter(c => c.name === 'gluniverse-dice-glow' && c.material?.uniforms?.uMask);
+        for (const g of glows) burnGlowMaterial(g.material, uniforms, state);
         const depth = burnDepthMaterial(uniforms, state);
         entries.push({
             mesh, originals, clones, uniforms, state, calm, glows,
-            glowFrom: glows.map(g => ({ i: g.material?.uniforms?.uIntensity?.value ?? 0, s: g.material?.uniforms?.uSpread?.value ?? 0 })),
             container: mesh.parent,
             delay: order[i] / Math.max(1, dice.length - 1) * STAGGER_S * (dice.length > 1 ? 1 : 0),
             castShadow: mesh.castShadow,
@@ -262,18 +296,40 @@ export function burnAwayDice(dice3d) {
         proxy.matrixAutoUpdate = false;
         proxy.matrixWorld.copy(mesh.matrixWorld);
         proxies.add(proxy);
+        const shadowProxy = new Mesh(mesh.geometry, depth);
+        shadowProxy.matrixAutoUpdate = false;
+        shadowProxy.matrixWorld.copy(mesh.matrixWorld);
+        proxies.add(shadowProxy);
+        for (const g of glows) {
+            g.updateWorldMatrix(true, false);
+            const gp = new Mesh(g.geometry, g.material);
+            gp.matrixAutoUpdate = false;
+            gp.matrixWorld.copy(g.matrixWorld);
+            proxies.add(gp);
+        }
     });
 
     const start = () => {
-        const now = performance.now();
         for (const e of entries) {
             e.mesh.material = Array.isArray(e.mesh.material) ? e.clones : e.clones[0];
             e.mesh.layers.enable(1);
             e.mesh.customDepthMaterial = e.depth;
-            e.t0 = now + e.delay * 1000;
-            burning.push(e);
         }
-        startLoop(dice3d);
+        //one frame with the burn idle, while nothing moves: whatever compileAsync could not
+        //warm (the shadow pass) compiles here, not on the first frame of the motion
+        try {
+            box.renderScene?.();
+        } catch (err) {
+            console.warn(`${MODULE_ID} | burn warm-up render failed`, err);
+        }
+        //the clock starts on the next frame, from its own timestamp
+        requestAnimationFrame((now) => {
+            for (const e of entries) {
+                e.t0 = now + e.delay * 1000;
+                burning.push(e);
+            }
+            startLoop(dice3d);
+        });
     };
     const renderer = box.renderer;
     const camera = box.diceScene?.camera;
@@ -282,43 +338,30 @@ export function burnAwayDice(dice3d) {
     return true;
 }
 
-//nearly linear, so the front is legible all the way: a short ease at each end only
-//(quadratic ends matched in value and slope to the line between them)
-const sweepEase = (x) => x < 0.15 ? 3.9216 * x * x : x > 0.85 ? 1 - 3.9216 * (1 - x) * (1 - x) : 0.0882 + 1.1765 * (x - 0.15);
-const easeOutCubic = (x) => 1 - Math.pow(1 - x, 3);
+//the blotches open slowly, then the burn takes the rest faster, and the last specks linger a
+//moment: ease-in-out, slightly front-loaded
+const burnEase = (x) => x < 0.45 ? 2.2222 * x * x : 1 - 1.8182 * (1 - x) * (1 - x);
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
 
 function updateEntry(e, now) {
     const sweepS = e.calm ? SWEEP_S * 0.6 : SWEEP_S;
-    const s = Math.max(0, (now - e.t0) / 1000);
-    const t = s / sweepS;
-    const front = FRONT_FROM + (FRONT_TO - FRONT_FROM) * sweepEase(clamp01(t));
-    e.uniforms.gluBurn.value = front;
+    const t = Math.max(0, (now - e.t0) / 1000) / sweepS;
+    e.uniforms.gluBurn.value = now < e.t0 ? FRONT_IDLE : FRONT_FROM + (FRONT_TO - FRONT_FROM) * burnEase(clamp01(t));
     if (e.state.patched === false && t > 0) {
         //a material we could not patch: fade it, so it still leaves smoothly
         for (const c of e.clones) if (c) { c.transparent = true; c.opacity = 1 - clamp01(t); }
     }
     //a shadow we could not burn goes partway through instead
     if (!e.state.shadowPatched && t > SHADOW_OFF) e.mesh.castShadow = false;
-
-    //the number: flares as the light takes the top, hangs while the body goes, then goes out,
-    //its halo opening as it fades (reduced motion: it simply fades with the die)
-    const tail = (s - sweepS) / NUMBER_S;
-    e.glows.forEach((g, i) => {
-        const u = g.material?.uniforms;
-        if (!u?.uIntensity) return;
-        const from = e.glowFrom[i];
-        if (e.calm) {
-            u.uIntensity.value = from.i * (1 - clamp01(t));
-            return;
+    //a number overlay we could not burn fades with the die
+    if (!e.state.glowPatched) {
+        for (const g of e.glows) {
+            const u = g.material.uniforms;
+            g.userData.gluBurnFrom ??= u.uIntensity.value;
+            u.uIntensity.value = g.userData.gluBurnFrom * (1 - clamp01(t * 1.4));
         }
-        const flare = 1 + 0.75 * easeOutCubic(clamp01(t / 0.3));
-        const out = tail > 0 ? 1 - easeOutCubic(clamp01(tail)) : 1;
-        u.uIntensity.value = from.i * flare * out;
-        if (u.uSpread) u.uSpread.value = Math.min(1, from.s + 0.3 * easeOutCubic(clamp01(t / 0.3)) + 0.4 * clamp01(tail));
-    });
-    const done = e.calm || !e.glows.length ? t >= 1 : tail >= 1;
-    if (!done) return false;
+    }
+    if (t < 1) return false;
     e.container?.removeFromParent();
     e.mesh.material = Array.isArray(e.mesh.material) ? e.originals : e.originals[0];
     e.mesh.castShadow = e.castShadow;
@@ -331,10 +374,9 @@ function updateEntry(e, now) {
 
 function startLoop(dice3d) {
     if (loopId) return;
-    const step = () => {
+    const step = (now) => {
         loopId = 0;
         const box = dice3d.box;
-        const now = performance.now();
         for (let i = burning.length - 1; i >= 0; i--) {
             if (updateEntry(burning[i], now)) burning.splice(i, 1);
         }

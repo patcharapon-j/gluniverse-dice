@@ -29,7 +29,9 @@ export function registerShakeSetting() {
         scope: "client",
         config: true,
         type: Boolean,
-        default: true
+        //off by default: the dice board is an overlay on a map that stays still, so a camera
+        //shake reads as the dice layer jittering rather than the table being hit
+        default: false
     });
 }
 
