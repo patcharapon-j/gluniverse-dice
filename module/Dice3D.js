@@ -18,6 +18,7 @@ import { ThrowPipeline } from './throw/ThrowPipeline.js';
 import { RollRules } from './throw/RollRules.js';
 import { LEGACY_TO_METERS } from './engine/SceneConstants.js';
 import { prewarmBoard } from './glu/ShaderPrewarm.js'; //GLUniverse Dice: M2 shader prewarm
+import { burnAwayDice, hideDelayMs } from './glu/fx/DiceBurn.js'; //GLUniverse Dice
 /**
  * Main class to handle 3D Dice animations.
  */
@@ -900,6 +901,7 @@ export class Dice3D {
             } else {
                 this.timeoutHandle = setTimeout(() => {
                     if (!this.box.rolling) {
+                        if (burnAwayDice(this)) return; //GLUniverse Dice: the dice burn away
                         const hasPersistentDice = this.box.persistentDiceList.length > 0;
                         if (DsnSettings.CONFIG().hideFX === 'none') {
                             if (!hasPersistentDice) {
@@ -917,7 +919,7 @@ export class Dice3D {
                             }
                         }
                     }
-                }, DsnSettings.CONFIG().timeBeforeHide);
+                }, hideDelayMs(DsnSettings.CONFIG().timeBeforeHide)); //GLUniverse Dice: world linger time
             }
         }
     }

@@ -39,6 +39,11 @@ const HAND_ABOVE_POINTER_PX = 80;
 const DEFAULT_SPOT_Y = 0.78;
 //sizes in die sizes (DiceFactory.baseScale: DSN scales the dice to the board)
 const HAND_SPACING = 1.75;
+//centre to centre, in diameters of the largest die of the hand (its bounding sphere): loose
+//while the hand floats, pulled together while it is held (still clear of each other, so the
+//throw never starts with two dice inside one another)
+const LOOSE = 1.4;
+const CUPPED = 1.06;
 const HOVER_HEIGHT = 1.6;
 const GRAB_HEIGHT = 2.4;
 const BOB = 0.12;
@@ -128,6 +133,14 @@ function installInput() {
     }, true);
 }
 if (typeof window !== "undefined") installInput();
+
+function reducedMotion() {
+    try {
+        return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+    } catch {
+        return false;
+    }
+}
 
 export function handEnabled() {
     try {
@@ -318,6 +331,9 @@ async function openHand(messageId, entry) {
         const off = offsets[i];
         holder.position.set((off.x - mid.x) * size * HAND_SPACING, 0, (off.z - mid.z) * size * HAND_SPACING);
         if (made.dicemesh.userData?.modelScale) holder.scale.setScalar(made.dicemesh.userData.modelScale);
+        const geo = made.dicemesh.geometry;
+        if (geo && !geo.boundingSphere) geo.computeBoundingSphere();
+        const radius = (geo?.boundingSphere?.radius ?? size * 0.6) * holder.scale.x;
         holder.quaternion.random();
         holder.add(made.dicemesh);
         h.group.add(holder);
@@ -325,12 +341,17 @@ async function openHand(messageId, entry) {
             holder,
             mesh: made.dicemesh,
             index: i,
+            off: { x: off.x - mid.x, z: off.z - mid.z },
+            radius,
             spinAxis: new Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize(),
             spin: 0.5 + Math.random() * 0.4,
             phase: Math.random() * Math.PI * 2
         });
     }
     if (!h.dice.length) throw new Error("no dice meshes");
+    h.diameter = 2 * Math.max(...h.dice.map(d => d.radius));
+    h.spacing = h.diameter * LOOSE;
+    for (const d of h.dice) d.holder.position.set(d.off.x * h.spacing, 0, d.off.z * h.spacing);
     box.scene.add(h.group);
     h.ready = true;
     showBoard();
@@ -371,29 +392,80 @@ function startLoop() {
     loopId = requestAnimationFrame(step);
 }
 
+// The hand has weight: it follows on a spring (held: stiff, a touch of overshoot; floating:
+// soft, no overshoot), leans into the way it is moving, and the cupped dice slosh against the
+// hand's acceleration a little, each by its own amount.
+const SPRING_HELD = { k: 260, zeta: 0.72 };
+const SPRING_FLOAT = { k: 42, zeta: 1 };
+const LEAN_MAX = 0.42;
+const SLOSH = 0.0011;
+const SLOSH_MAX = 0.06;
+const _acc = new Vector3();
+const _goal = new Vector3();
+const _v = new Vector3();
+const _lean = new Quaternion();
+const _yaw = new Quaternion();
+const _inv = new Quaternion();
+const UP_AXIS = new Vector3(0, 1, 0);
+
 function animateHand(dt) {
     const h = hand;
     h.t += dt;
     if (h.flight) return flyHand(h);
     const size = h.size;
     const pos = h.group.position;
-    if (grab) {
-        pos.lerp(h.target, 1 - Math.exp(-dt * 22));
-    } else {
-        const k = 1 - Math.exp(-dt * 8);
-        pos.x += (h.target.x - pos.x) * k;
-        pos.z += (h.target.z - pos.z) * k;
-        const y = size * HOVER_HEIGHT + Math.sin(h.t * 1.7) * size * BOB;
-        pos.y += (y - pos.y) * (1 - Math.exp(-dt * 6));
+    h.vel ??= new Vector3();
+    h.leanQ ??= new Quaternion();
+    h.yaw ??= 0;
+    _goal.copy(h.target);
+    if (!grab) _goal.y = size * HOVER_HEIGHT + Math.sin(h.t * 1.7) * size * BOB;
+    const spring = grab ? SPRING_HELD : SPRING_FLOAT;
+    const damping = 2 * Math.sqrt(spring.k) * spring.zeta;
+    //semi-implicit Euler in small steps: stable at any frame rate
+    const steps = Math.max(1, Math.ceil(dt / 0.008));
+    const sdt = dt / steps;
+    for (let i = 0; i < steps; i++) {
+        _acc.copy(_goal).sub(pos).multiplyScalar(spring.k).addScaledVector(h.vel, -damping);
+        h.vel.addScaledVector(_acc, sdt);
+        pos.addScaledVector(h.vel, sdt);
     }
-    //held, the dice turn faster; a shake makes them tumble
+
+    //lean into the motion: the top tips toward where the hand is going
+    const vx = h.vel.x, vz = h.vel.z;
+    const speed = Math.hypot(vx, vz);
+    h.calm ??= reducedMotion();
+    if (speed > 1e-5 && !h.calm) {
+        _axis.set(vz / speed, 0, -vx / speed);
+        _lean.setFromAxisAngle(_axis, LEAN_MAX * Math.tanh(speed / (size * 18)));
+    } else {
+        _lean.identity();
+    }
+    h.leanQ.slerp(_lean, 1 - Math.exp(-dt * 12));
+    h.yaw += dt * (grab ? 0.9 : 0.25);
+    _yaw.setFromAxisAngle(UP_AXIS, h.yaw);
+    h.group.quaternion.copy(h.leanQ).multiply(_yaw);
+
+    //held, the dice are pulled together and turn faster; a shake makes them tumble
     const energy = grab ? 2.5 + Math.min(8, grab.reversals * 2.2) : 1;
+    const spacing = h.diameter * (grab ? CUPPED : LOOSE);
+    h.spacing += (spacing - h.spacing) * (1 - Math.exp(-dt * (grab ? 16 : 4)));
+    //slosh, in the hand's own frame: against the acceleration, capped so cupped dice never touch
+    _inv.copy(h.group.quaternion).invert();
+    _v.copy(_acc).multiplyScalar(h.calm ? 0 : -SLOSH * size).applyQuaternion(_inv);
+    const cap = SLOSH_MAX * h.diameter;
+    if (_v.length() > cap) _v.setLength(cap);
     for (const d of h.dice) {
         _q.setFromAxisAngle(d.spinAxis, d.spin * energy * dt);
         d.holder.quaternion.premultiply(_q);
-        d.holder.position.y = Math.sin(h.t * 2.1 + d.phase) * size * 0.06;
+        d.slosh ??= new Vector3();
+        d.sloshGain ??= 0.7 + Math.random() * 0.6;
+        d.slosh.lerp(_v.clone().multiplyScalar(d.sloshGain), 1 - Math.exp(-dt * 14));
+        d.holder.position.set(
+            d.off.x * h.spacing + d.slosh.x,
+            Math.sin(h.t * 2.1 + d.phase) * size * (grab ? 0.02 : 0.06) + d.slosh.y * 0.5,
+            d.off.z * h.spacing + d.slosh.z
+        );
     }
-    h.group.rotation.y += dt * (grab ? 0.9 : 0.25);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -697,15 +769,7 @@ export function seekHandReplay(throwEngine) {
     const waited = (performance.now() - h.flight.t0) / 1000;
     const t = Math.min(h.flight.tMax, waited);
     const frames = Math.min(Math.round(t / throwEngine.framerate), Math.max(0, (throwEngine.iterationsNeeded ?? 0) - 1));
-    //how far the replay's first frame is from where the flying hand shows each die
-    flyHand(h);
-    let gap = 0;
-    throwEngine.diceList.forEach((die, i) => {
-        const p = die.sim?.stepPositions, f = h.flight.dice[i];
-        if (!p || !f || p[frames * 3] === undefined) return;
-        gap = Math.max(gap, Math.hypot(p[frames * 3] - f.holder.position.x, p[frames * 3 + 1] - f.holder.position.y, p[frames * 3 + 2] - f.holder.position.z));
-    });
-    console.debug(`${MODULE_ID} | hand throw: replay starts ${Math.round(waited * 1000)} ms after the release at frame ${frames} (flight ${Math.round(h.flight.tMax * 1000)} ms max), largest gap ${(gap * 1000).toFixed(1)} mm`);
+    console.debug(`${MODULE_ID} | hand throw: replay starts ${Math.round(waited * 1000)} ms after the release, at frame ${frames}`);
     if (frames > 0) {
         //DiceBox adds the first dice only on iteration 0, and updateThrowPlayback the later
         //groups on their iteration: add every die due by now, then start there

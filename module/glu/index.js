@@ -9,6 +9,8 @@ import { registerNiceMoreDice } from "./vendor/niceMoreDice.js";
 import { registerFxSettings } from "./fx/DiceFx.js";
 import { registerHandSetting } from "./hand/HandOfDice.js";
 import { registerRollArea } from "./stream/RollArea.js";
+import { registerBurnSettings } from "./fx/DiceBurn.js";
+import { registerShakeSetting } from "./fx/ImpactShake.js";
 
 Hooks.once("init", () => {
     registerPhysicsEngineSetting();
@@ -17,6 +19,8 @@ Hooks.once("init", () => {
     registerMaterialSettings();
     registerFxSettings();
     registerHandSetting();
+    registerBurnSettings();
+    registerShakeSetting();
 });
 
 //M7: game.dice3d.rollArea, live and remote roll area for the Stream Client

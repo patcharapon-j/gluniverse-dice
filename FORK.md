@@ -67,6 +67,7 @@ works unchanged. To keep rebasing onto upstream cheap:
 | `module/Dice3D.js` | One import; `prewarmBoard(this)` after `persistent.restoreAll()` at the end of the load chain | Shader prewarm once fonts, presets and the dice library are loaded. |
 | `module/settings/DsnSettings.js` (M7) | One import; `CONFIG()` returns `applyRollAreaOverride(config, user)` | A transient roll area (`persist: false`) reaches every reader of `rollingArea` (`_buildCanvas`, `_computeDimensions`, the resize rebuild) without touching them. A no-op unless one is set. |
 | `docs/astro.config.mjs`, `docs/src/content/docs/api/roll-area.md` (M7) | One sidebar entry; a new page | Documents `game.dice3d.rollArea`. |
+| `module/Dice3D.js` (M5) | One more import; in `_afterShow`'s hide timer, `if (burnAwayDice(this)) return;` first, and the delay wrapped in `hideDelayMs(…)` | The dice burn away instead of DSN's fade, after the world linger time. |
 
 Files that are entirely ours: `FORK.md`, `ROADMAP.md`, `CREDITS.md`, `CLAUDE.md`, `module/glu/*`,
 `module/textures/glu/*` (bundled third-party assets, CREDITS.md),
@@ -406,6 +407,32 @@ with many dice.
   Escape, results matching the roll, completion, no chat card. **Not yet verified:** a second
   user watching (the socket path), and how it feels at full frame rate (the test window ran at
   9 fps).
+- **Weight.** The hand follows the pointer on a damped spring (stiff while held, soft while
+  floating), leans into its motion (up to 0.42 rad) and turns to face it. Grabbed, the dice pull
+  together from 1.4 to 1.06 die diameters apart, and each one sloshes against the hand's
+  acceleration with its own gain, so they jostle like dice in a cupped hand. Lean and slosh are
+  off with prefers-reduced-motion.
+
+### Burn away
+
+`module/glu/fx/DiceBurn.js`. World setting `gluniverse-dice.diceLinger` (seconds, 0 to 60,
+default 5; 0 keeps each player's DSN "time before hiding"); client setting `burnAway` (default
+on; off gives DSN's own hide). Instead of DSN's fade, each die dissolves top of screen to bottom
+behind a torn white front (domain-warped noise, no particles, no flame): a hot white core, a
+lavender-to-white halo through the selective bloom, the surface just ahead bleached. Dice start
+0.28 s apart and take 1.75 s. The shadow dissolves with the die (a `customDepthMaterial` carrying
+the same front), and the glowing result number goes out last. Dice leave the throw engine's lists
+and the physics world when the burn starts; when all are gone the board is cleared and hidden as
+DSN does. Shaders are compiled with `compileAsync` before the swap, so it never hitches. Without
+a patched shader the die falls back to an opacity fade; reduced motion shortens it to 0.6x.
+
+### Impact shake
+
+`module/glu/fx/ImpactShake.js`, client setting `impactShake` (default on, off with
+prefers-reduced-motion). Each impact of the replayed collision timeline (strength 0.35 or more)
+adds strength squared to a sideways camera tremor, table hits more than dice on dice, capped at
+0.045 die sizes and settling in about a quarter of a second. A camera move by anything else
+becomes the new rest position.
 
 ## Stream roll area (M7)
 

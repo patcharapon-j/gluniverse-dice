@@ -19,5 +19,11 @@
     "GLUDICE.Settings.SettleGlow.Name": "Glowing result number",
     "GLUDICE.Settings.SettleGlow.Hint": "When the dice stop, the number on the face that landed up lights up white-hot, then stays glowing while the dice are on the table. Not on d4.",
     "GLUDICE.Settings.GrabAndRoll.Name": "Grab and roll",
-    "GLUDICE.Settings.GrabAndRoll.Hint": "When one of your rolls waits for an interactive throw, its dice float in your hand next to the pointer, and only you see them. Click the hand to throw it, flick it to aim, or shake it and let go. Drag it slowly to move it; Escape throws it. Interactive throws must be allowed by the GM and in your Dice So Nice settings."
+    "GLUDICE.Settings.GrabAndRoll.Hint": "When one of your rolls waits for an interactive throw, its dice float in your hand next to the pointer, and only you see them. Click the hand to throw it, flick it to aim, or shake it and let go. Drag it slowly to move it; Escape throws it. Interactive throws must be allowed by the GM and in your Dice So Nice settings.",
+    "GLUDICE.Settings.DiceLinger.Name": "Seconds the dice stay on the table",
+    "GLUDICE.Settings.DiceLinger.Hint": "How long thrown dice stay after they land before they leave, for every player. 0 uses each player's own Dice So Nice setting.",
+    "GLUDICE.Settings.BurnAway.Name": "Dice burn away",
+    "GLUDICE.Settings.BurnAway.Hint": "When thrown dice leave the table, they dissolve into white light from the top down, and the glowing result number goes out last. Off: Dice So Nice's own fade or instant hide.",
+    "GLUDICE.Settings.ImpactShake.Name": "Shake on hard hits",
+    "GLUDICE.Settings.ImpactShake.Hint": "The board shakes by a few pixels when dice hit the table or each other hard. Off when your system asks for reduced motion."
 }
