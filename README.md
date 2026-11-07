@@ -1,3 +1,9 @@
+> **GLUniverse Dice** is a modified version (soft fork) of Dice So Nice! by Simone and JDW, forked
+> from 6.4.5. It keeps Dice So Nice's public API, so systems and modules built for Dice So Nice
+> work unchanged. See [FORK.md](./FORK.md) for what changed and why, [ROADMAP.md](./ROADMAP.md)
+> for what is planned, and [CREDITS.md](./CREDITS.md) for asset credits. Everything below is
+> Dice So Nice's own README, kept as written, including its credits.
+
 ![Banner](./banner.jpg?raw=true)  
 [![Forge Installs](https://img.shields.io/badge/dynamic/json?label=Forge%20Installs&query=package.installs&suffix=%25&url=https%3A%2F%2Fforge-vtt.com%2Fapi%2Fbazaar%2Fpackage%2Fdice-so-nice&colorB=4aa94a)](https://forge-vtt.com/bazaar#package=dice-so-nice)
 [![Foundry Hub Endorsements](https://img.shields.io/endpoint?logoColor=white&url=https%3A%2F%2Fwww.foundryvtt-hub.com%2Fwp-json%2Fhubapi%2Fv1%2Fpackage%2Fdice-so-nice%2Fshield%2Fendorsements)](https://www.foundryvtt-hub.com/package/dice-so-nice/)
@@ -80,7 +86,7 @@ v2 of "Dice So Nice" was based on Anton's fork from MajorVictory, with his direc
 
 d10 geometry created by Greewi who did all the maths for our custom "Pentagonal Trapezohedron". You can find his homebrewed (French) TTRPG Feerie/Solaires here: https://feerie.net
 
-Built on [Three.js](https://threejs.org/), [cannon-es](https://pmndrs.github.io/cannon-es/), and [Proton](https://github.com/drawcall/three.proton).
+Built on [Three.js](https://threejs.org/), [cannon-es](https://pmndrs.github.io/cannon-es/), and [Proton](https://github.com/drawcall/three.proton). GLUniverse Dice adds an optional [Rapier](https://rapier.rs/) physics backend (Apache-2.0).
 
 ## Theme and model credits
 

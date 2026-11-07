@@ -1,25 +1,31 @@
 {
-  "name": "foundryvtt-dice-so-nice",
+  "name": "gluniverse-dice",
   "type": "module",
-  "version": "6.4.5",
-  "description": "Adds the ability to show a nice 3D dice simulation when a roll is made.",
+  "version": "6.4.5-glu.1",
+  "description": "GLUniverse Dice: a modified version of Dice So Nice! (3D dice for Foundry VTT).",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "rollup -c",
+    "build:prod": "NODE_ENV=production rollup -c",
+    "watch": "rollup -c -w",
+    "test": "node --test tests/*.test.mjs",
+    "bench": "node tools/physics-bench/bench.mjs"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://gitlab.com/riccisi/foundryvtt-dice-so-nice.git"
+    "url": "git+https://github.com/patcharapon-j/gluniverse-dice.git"
   },
-  "author": "Simone, JDW",
+  "author": "Simone, JDW (Dice So Nice); GLUniverse (fork)",
   "license": "AGPL",
   "bugs": {
-    "url": "https://gitlab.com/riccisi/foundryvtt-dice-so-nice/issues"
+    "url": "https://github.com/patcharapon-j/gluniverse-dice/issues"
   },
-  "homepage": "https://gitlab.com/riccisi/foundryvtt-dice-so-nice#readme",
+  "homepage": "https://github.com/patcharapon-j/gluniverse-dice#readme",
   "dependencies": {
+    "@dimforge/rapier3d-compat": "0.21.0",
     "@rollup/plugin-commonjs": "^28.0.6",
     "@rollup/plugin-node-resolve": "^16.0.1",
+    "@rollup/plugin-replace": "6.0.2",
     "@rollup/plugin-terser": "^1.0.0",
     "cannon-es": "github:JiDW/cannon-es#master",
     "cannon-es-debugger": "^1.0.0",

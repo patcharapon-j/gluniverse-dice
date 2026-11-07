@@ -1,0 +1,7 @@
+{
+    "GLUDICE.Settings.PhysicsEngine.Name": "Physics engine",
+    "GLUDICE.Settings.PhysicsEngine.Hint": "Which physics engine simulates the throws. Rapier is new and still being tested; cannon-es is the original Dice So Nice engine. Every client reloads when this changes.",
+    "GLUDICE.Settings.PhysicsEngine.Cannon": "cannon-es (Dice So Nice default)",
+    "GLUDICE.Settings.PhysicsEngine.Rapier": "Rapier (experimental)",
+    "GLUDICE.Notifications.RapierFallback": "GLUniverse Dice: the Rapier physics engine could not start, so dice use cannon-es for this session. See the console for details."
+}

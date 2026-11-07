@@ -20,6 +20,7 @@ import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { ShaderUtils } from './ShaderUtils';
 import PhysicsWorker from 'web-worker:../web-workers/PhysicsWorker.js';
 import WebworkerPromise from 'webworker-promise';
+import { createPhysicsWorker } from '../glu/PhysicsEngine.js'; //GLUniverse Dice
 
 import {
 	MixOperation,
@@ -101,7 +102,7 @@ export class DiceFactory {
 
 	get physicsWorker() {
 		if (!this._physicsWorker) {
-			this._physicsWorker = new WebworkerPromise(new PhysicsWorker());
+			this._physicsWorker = createPhysicsWorker(() => new WebworkerPromise(new PhysicsWorker())); //GLUniverse Dice: engine switch
 		}
 		return this._physicsWorker;
 	}

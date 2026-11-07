@@ -5,6 +5,7 @@ import terser from '@rollup/plugin-terser';
 import del from 'rollup-plugin-delete';
 import copy from 'rollup-plugin-copy';
 import webWorkerLoader from 'rollup-plugin-web-worker-loader';
+import { gluIdentityReplace, rapierWorkerConfig } from './tools/rollup-glu.js';
 import { readFileSync, writeFileSync, unlinkSync, readdirSync, existsSync } from 'fs';
 import { execSync } from 'child_process';
 
@@ -54,7 +55,7 @@ const config = {
         const compatibilityVerified = moduleJson.compatibility.verified;
         if(moduleJson.version !== packageJson.version) {
           moduleJson.version = packageJson.version;
-          moduleJson.download = `https://gitlab.com/riccisi/foundryvtt-dice-so-nice/-/jobs/artifacts/${packageJson.version}/raw/dist/dice-so-nice.zip?job=build`;
+          moduleJson.download = `https://github.com/patcharapon-j/gluniverse-dice/releases/download/${packageJson.version}/module.zip`;
 
           writeFileSync('./module/module.json', JSON.stringify(moduleJson, null, 4));
           console.log(`[Dice So Nice] Module version set to ${packageJson.version}`);
@@ -132,6 +133,7 @@ const config = {
         dest: `dist/libs/`
       }]
     }),
+    gluIdentityReplace(),
     nodeResolve({
       browser: true,
       preferBuiltins: false
@@ -159,4 +161,4 @@ const config = {
   }
 };
 
-export default config;
+export default [config, rapierWorkerConfig({ isProduction, isWatch })];
