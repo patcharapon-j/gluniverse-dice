@@ -1,3 +1,4 @@
+import "./glu/index.js"; //GLUniverse Dice: must stay the first import (FORK.md)
 import { Dice3D } from './Dice3D.js';
 import { DsnSettings } from './settings/DsnSettings.js';
 import { DiceConfig } from './ui/DiceConfig.js';
