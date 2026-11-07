@@ -13,7 +13,8 @@ changing anything. [ROADMAP.md](./ROADMAP.md) is the plan; [CREDITS.md](./CREDIT
   `tools/`, `tests/`. An upstream file gets one import plus one call, marked `//GLUniverse Dice`,
   and goes in FORK.md's "Upstream files we touch" table **in the same commit**.
 - **Never touch `upstream-master`, never push to `upstream`** (its push URL is disabled on purpose).
-  Work on a branch and open a PR to `origin/main`. `origin` is private: keep it private.
+  Work on a branch and open a PR to `origin/main`. `origin` has been public since the first
+  release (2026-11-07), as the AGPL requires: never commit secrets or private notes.
 - **Assets ship as-is.** Do not remove, replace or gate any texture, sound, model or font.
   Permission is pending with the owners (CREDITS.md).
 - AGPL-3.0: no code from incompatible licences. Keep every upstream copyright notice and credit.

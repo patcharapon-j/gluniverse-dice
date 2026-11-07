@@ -22,8 +22,15 @@ Changes from Dice So Nice, newest last:
 | 2026-11-07 | Smoothness (M2): interpolated replay and live dice, real frame delta for live stepping, idle frames skipped, shader prewarm at load, cannon's `worldAsleep` fixed, Rapier coin settle and topple. See [Smoothness](#smoothness-m2). |
 
 The AGPL requires the corresponding source to be offered to everyone who receives the module.
-The repository is private until the first release: make it public, or publish the source next
-to the release zip, **before** the first build leaves the table.
+The repository was made public for the first release (2026-11-07), so the source is offered next
+to every release.
+
+**Releases.** `.github/workflows/release.yml`, run by hand (Actions → Release → Run workflow).
+Versions are `<DSN base>-glu.N` (major stays 6, see [Identity](#identity)); blank bumps N from the
+latest such tag, or type one. It stamps `package.json` and `module/module.json`, builds with
+`npm run build:prod`, runs the tests, commits the bump, and publishes `module.json` and
+`module.zip` (made from `dist/`, without source maps). Manifest URL:
+`https://github.com/patcharapon-j/gluniverse-dice/releases/latest/download/module.json`.
 
 Licence field: upstream's `package.json` says `"AGPL"` without a version, and LICENSE.md is the
 v3 text. We kept `"AGPL"`. Choosing between `AGPL-3.0-only` and `AGPL-3.0-or-later` is a
@@ -55,7 +62,7 @@ works unchanged. To keep rebasing onto upstream cheap:
 | `rollup.config.js` | Import `tools/rollup-glu.js`; add `gluIdentityReplace()`; export `[config, rapierWorkerConfig]`; GitHub download URL | Build-time id rewrite and the Rapier worker bundle. |
 | `package.json`, `package-lock.json` | name, version, repository URLs, scripts; deps `@dimforge/rapier3d-compat`, `@rollup/plugin-replace` | Package metadata and the two new dependencies. |
 | `README.md` | Fork section at the top; Rapier and the bundled Nice more Dice added to "Built on" | AGPL notice and credits. Everything upstream wrote is kept. |
-| `.gitignore` | `tools/physics-bench/.build/` | Benchmark scratch bundles. |
+| `.gitignore` | `tools/physics-bench/.build/`; `.github` narrowed to `.github/*` with `!.github/workflows/` | Benchmark scratch bundles; our release workflow is tracked. |
 | `module/rendering/DiceBox.js` | One import (`glu/Smoothness.js`); in `animateThrow`: a `gluMoved` local, a `smoothFrame` call while a throw replays, the live `playStep` payload from `livePlayStepPayload`, a `noteLiveResult` call in its `.then`, and the render condition wrapped in `shouldRender` | Replay and live interpolation, render every moving frame, skip idle ones. |
 | `module/web-workers/PhysicsWorker.js` | `playStep` takes `frame_dt` and `interpolate` (returns `interpolatedPosition`/`Quaternion`); its `worldAsleep` test skips static bodies; `setBodyPosition(s)` also reset `previousPosition`/`interpolatedPosition` | Contract change shared with the Rapier worker. Without the static-body skip the desk kept cannon awake forever. |
 | `module/engine/ThrowEngine.js` (M4) | One import; `noteSimulation(this, detectedCollides)` after the sound list replaces the raw collisions | Keeps the impact timeline with positions for the particles. |
@@ -75,7 +82,7 @@ Files that are entirely ours: `FORK.md`, `ROADMAP.md`, `CREDITS.md`, `CLAUDE.md`
 `module/textures/glu/*` (bundled third-party assets, CREDITS.md),
 `module/lang/glu-en.json`, `module/web-workers/RapierPhysicsWorker.js`,
 `module/web-workers/rapier/*`, `tools/*`, `tests/*`, `docs/fork/*`, `docs/mocks/*`,
-`docs/src/content/docs/api/dice-presentation.md`.
+`docs/src/content/docs/api/dice-presentation.md`, `.github/workflows/release.yml`.
 `docs/mocks/` holds design mocks. They are not part of the module: the build copies only
 `module/` into `dist/`, and the release zip is made from `dist/`.
 

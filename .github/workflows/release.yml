@@ -1,0 +1,147 @@
+name: Release
+
+# Manual only: Actions tab -> "Release" -> "Run workflow".
+#
+# Versions are Dice So Nice's base version plus a GLUniverse counter, 6.4.5-glu.N. The major
+# stays 6 on purpose: other modules gate on "Dice So Nice 6 or newer" (FORK.md, Identity).
+#   - Leave "version" blank: N goes up by one from the latest 6.x.y-glu.N tag (or from
+#     package.json when there is no such tag yet).
+#   - Or type a full version (e.g. 6.4.5-glu.1, or 6.5.0-glu.1 after a rebase onto DSN 6.5.0).
+#
+# It stamps package.json and module/module.json, builds the production bundle, runs the tests,
+# commits the bump to the branch it ran on, then publishes a GitHub release whose module.json and
+# module.zip Foundry installs and updates from:
+#   manifest: https://github.com/<owner>/<repo>/releases/latest/download/module.json
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Explicit version (e.g. 6.4.5-glu.2). Blank: next -glu.N"
+        required: false
+        default: ""
+        type: string
+      prerelease:
+        description: "Mark as a pre-release (Foundry's latest manifest URL skips it)"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Resolve version
+        id: vars
+        run: |
+          set -euo pipefail
+          EXPLICIT="${{ inputs.version }}"
+          EXPLICIT="${EXPLICIT#v}"
+          if [ -n "$EXPLICIT" ]; then
+            VERSION="$EXPLICIT"
+          else
+            LATEST="$(git tag -l '[0-9]*.[0-9]*.[0-9]*-glu.[0-9]*' | sort -V | tail -n 1)"
+            if [ -z "$LATEST" ]; then
+              # no release yet: the version in package.json is the first one
+              VERSION="$(node -p "require('./package.json').version")"
+            else
+              BASE="${LATEST%-glu.*}"
+              N="${LATEST##*-glu.}"
+              VERSION="${BASE}-glu.$((N + 1))"
+            fi
+          fi
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+-glu\.[0-9]+$'; then
+            echo "Version '${VERSION}' is not X.Y.Z-glu.N" >&2
+            exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/${VERSION}" >/dev/null; then
+            echo "Tag ${VERSION} already exists" >&2
+            exit 1
+          fi
+          REPO_URL="https://github.com/${GITHUB_REPOSITORY}"
+          echo "Releasing ${VERSION}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "url=${REPO_URL}" >> "$GITHUB_OUTPUT"
+          echo "manifest=${REPO_URL}/releases/latest/download/module.json" >> "$GITHUB_OUTPUT"
+          echo "download=${REPO_URL}/releases/download/${VERSION}/module.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Stamp version
+        env:
+          VERSION: ${{ steps.vars.outputs.version }}
+          URL: ${{ steps.vars.outputs.url }}
+          MANIFEST: ${{ steps.vars.outputs.manifest }}
+          DOWNLOAD: ${{ steps.vars.outputs.download }}
+        run: |
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+          node - <<'JS'
+          const fs = require("fs");
+          const path = "module/module.json";
+          const m = JSON.parse(fs.readFileSync(path, "utf8"));
+          m.version = process.env.VERSION;
+          m.url = process.env.URL;
+          m.manifest = process.env.MANIFEST;
+          m.download = process.env.DOWNLOAD;
+          fs.writeFileSync(path, JSON.stringify(m, null, 4));
+          console.log(`module.json -> ${m.version}`);
+          JS
+
+      - name: Build and test
+        run: |
+          npm ci
+          npm run build:prod
+          npm test
+
+      - name: Package
+        env:
+          VERSION: ${{ steps.vars.outputs.version }}
+        run: |
+          set -euo pipefail
+          # Foundry wants module.json at the zip root; dist/ is the installed module
+          test "$(node -p "require('./dist/module.json').version")" = "$VERSION"
+          (cd dist && zip -qr ../module.zip . -x '*.map' -x '.DS_Store')
+          cp dist/module.json module.json
+          unzip -l module.zip | tail -n 1
+
+      - name: Commit version bump
+        id: commit
+        env:
+          VERSION: ${{ steps.vars.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json module/module.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Release ${VERSION}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.vars.outputs.version }}
+          target_commitish: ${{ steps.commit.outputs.sha }}
+          name: GLUniverse Dice ${{ steps.vars.outputs.version }}
+          prerelease: ${{ inputs.prerelease }}
+          generate_release_notes: true
+          files: |
+            module.json
+            module.zip

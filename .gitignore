@@ -3,7 +3,8 @@
 *.iml
 dist
 node_modules
-.github
+.github/*
+!.github/workflows/
 docs/public/
 docs/node_modules/
 tools/physics-bench/.build/
