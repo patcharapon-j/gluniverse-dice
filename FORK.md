@@ -319,18 +319,25 @@ the board rendering while an effect is alive.
   run). Through the label mask that `decorateMaterial` now stores on every material
   (`userData.gluLabelMask`, DSN's bump canvas), the number glows most and the face a little. The
   colour is the die's label colour, brightened if it is dark. It rises in 0.18 s, pulses, and is
-  gone after 2.6 s. Not on d4 (its result reads from the bottom). A small ring of sparkles in the
-  same colour rises around each die.
+  gone after 2.6 s. A soft halo sprite in the same colour sits over the face, so it reads as a
+  glow without bloom. Not on d4 (its result reads from the bottom). A small ring of sparkles in
+  the same colour rises around each die.
+- **Own frame loop.** DiceBox removes its ticker on the frame the result is in, unless something
+  else animates, so upstream draws nothing after it. The first build created the glow on that
+  frame at intensity 0 and nothing ever showed (found in a live Foundry). While an effect is
+  alive and DiceBox has not ticked for 50 ms, DiceFx runs its own `requestAnimationFrame` loop
+  that advances the effects and calls `box.renderScene()`, and stops when they end or the board
+  hides.
 - **Particles** are one pooled `THREE.Points` (768 particles, additive, no depth write) in the board
   scene, not Proton: one draw call whatever the dice count, and no per-emitter objects.
 - Client settings `gluniverse-dice.impactParticles` and `gluniverse-dice.settleGlow`, default on.
   No dice material is modified, so every system, preset and material gets the effects.
 
-Checked outside Foundry: both workers emit the position (contract test), and a headless-Chromium
-render with stand-in dice shows sparks at the impact points, the glowing top labels aligned with
-the label texture, and no shader errors. **Not yet verified in a running Foundry**: the look with
-DSN's bloom and lighting, d10/d12/d20 and custom-model faces, persistent dice, and cost with many
-dice.
+Checked: both workers emit the position (contract test); in the maintainer's Foundry v14 world
+(Daggerheart system), 1d20 + 2d6 throws: the overlay lands on the top face (one triangle on a d20,
+with the label mask), glows, pulses and fades over ~2.4 s, sparks finish their flight, and the
+extra loop stops. **Not yet verified**: d10/d12 and custom-model faces, persistent dice, cost
+with many dice.
 
 ## Materials (M3)
 

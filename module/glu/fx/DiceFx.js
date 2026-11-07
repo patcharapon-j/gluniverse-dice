@@ -10,7 +10,8 @@
 // Everything here is drawn by our own objects in the board scene: no dice material is changed,
 // so it works with every system, preset and material. tick() is driven from Smoothness.shouldRender.
 import {
-    AdditiveBlending, BufferAttribute, BufferGeometry, Color, Mesh, Points, ShaderMaterial, Vector3, Matrix3
+    AdditiveBlending, BufferAttribute, BufferGeometry, CanvasTexture, Color, Mesh, Points, ShaderMaterial, Sprite,
+    SpriteMaterial, Vector3, Matrix3
 } from 'three';
 import { MODULE_ID } from '../LegacyIdentity.js';
 
@@ -197,8 +198,10 @@ uniform float uHasMask;
 varying vec2 vUv;
 void main() {
     float label = uHasMask > 0.5 ? 1.0 - smoothstep(0.6, 0.9, texture2D(uMask, vUv).r) : 0.0;
-    float a = uIntensity * (0.16 + 0.84 * label);
-    gl_FragColor = vec4(uColor * a, a);
+    float a = uIntensity * (0.12 + 1.6 * label);
+    //the label core runs toward white, like a hot emissive
+    vec3 c = mix(uColor, vec3(1.0), 0.4 * label * min(uIntensity, 1.0));
+    gl_FragColor = vec4(c * a, min(a, 1.0));
 }`;
 
 function labelColor(mesh) {
@@ -253,7 +256,33 @@ function upFaceGeometry(mesh) {
     const g = new BufferGeometry();
     g.setAttribute('position', new BufferAttribute(out, 3));
     if (outUv) g.setAttribute('uv', new BufferAttribute(outUv, 2));
+    //face centre, size and outward normal in object space, for the halo
+    const centre = new Vector3();
+    for (let i = 0; i < out.length; i += 3) centre.x += out[i], centre.y += out[i + 1], centre.z += out[i + 2];
+    centre.multiplyScalar(3 / out.length);
+    let radius = 0;
+    for (let i = 0; i < out.length; i += 3) radius = Math.max(radius, Math.hypot(out[i] - centre.x, out[i + 1] - centre.y, out[i + 2] - centre.z));
+    a.fromArray(out, 0); b.fromArray(out, 3); c.fromArray(out, 6);
+    const normal = new Vector3().subVectors(c, b).cross(a.sub(b)).normalize();
+    g.userData.face = { centre, radius, normal };
     return g;
+}
+
+let haloTexture = null;
+function halo() {
+    if (haloTexture) return haloTexture;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 128;
+    const ctx = cv.getContext('2d');
+    const grd = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+    grd.addColorStop(0, 'rgba(255,255,255,1)');
+    grd.addColorStop(0.25, 'rgba(255,255,255,0.55)');
+    grd.addColorStop(0.6, 'rgba(255,255,255,0.12)');
+    grd.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, 128, 128);
+    haloTexture = new CanvasTexture(cv);
+    return haloTexture;
 }
 
 function addGlow(box, mesh) {
@@ -282,8 +311,17 @@ function addGlow(box, mesh) {
     const overlay = new Mesh(geo, glowMat);
     overlay.name = 'gluniverse-dice-glow';
     overlay.renderOrder = 9;
+    //a soft halo over the face, in the label colour: reads as a glow with or without bloom
+    const face = geo.userData.face;
+    const haloSprite = new Sprite(new SpriteMaterial({
+        map: halo(), color, transparent: true, depthWrite: false, depthTest: false, blending: AdditiveBlending, opacity: 0
+    }));
+    haloSprite.position.copy(face.centre).addScaledVector(face.normal, face.radius * 0.6);
+    haloSprite.scale.setScalar(face.radius * 4.2);
+    haloSprite.renderOrder = 11;
+    overlay.add(haloSprite);
     mesh.add(overlay);
-    fxState(box).glows.push({ overlay, t: 0 });
+    fxState(box).glows.push({ overlay, halo: haloSprite, t: 0 });
 
     //sparkles around the die, in the label colour
     if (setting(PARTICLES_SETTING)) {
@@ -316,10 +354,13 @@ function updateGlows(box, dt) {
             g.overlay.removeFromParent();
             g.overlay.geometry.dispose();
             g.overlay.material.dispose();
+            g.halo.material.dispose();
             s.glows.splice(i, 1);
             continue;
         }
-        g.overlay.material.uniforms.uIntensity.value = glowIntensity(g.t);
+        const k = glowIntensity(g.t);
+        g.overlay.material.uniforms.uIntensity.value = k;
+        g.halo.material.opacity = Math.min(1, k * 0.55);
     }
     return s.glows.length > 0;
 }
@@ -336,11 +377,8 @@ export function noteSimulation(throwEngine, detectedCollides) {
  * @returns {boolean} effects are alive and the frame should be rendered
  */
 export function tickFx(box) {
-    const now = performance.now();
     const s = fxState(box);
-    const dt = s.lastTime ? Math.min(0.1, (now - s.lastTime) / 1000) : 1 / 60;
-    s.lastTime = now;
-
+    s.lastBoxTick = performance.now();
     const engine = box.throwEngine;
     const th = engine?._gluFxThrow;
     if (th && engine.rolling) {
@@ -356,8 +394,52 @@ export function tickFx(box) {
             if (setting(GLOW_SETTING)) for (const mesh of engine.diceList ?? []) addGlow(box, mesh);
         }
     }
+    const alive = advance(box);
+    if (alive) ensureLoop(box);
+    return alive;
+}
 
+function advance(box) {
+    const s = fxState(box);
+    const now = performance.now();
+    const dt = s.lastTime ? Math.min(0.1, (now - s.lastTime) / 1000) : 1 / 60;
+    s.lastTime = now;
     const glowing = updateGlows(box, dt);
     const particles = s.pool ? s.pool.update(dt) : false;
     return glowing || particles;
+}
+
+// DiceBox removes its ticker as soon as a throw's result is in, unless something else animates
+// (Dice So Nice renders nothing after that frame). The glow starts on that very frame, so while
+// any effect is alive and DiceBox has not ticked for a few frames, advance and render it here.
+function ensureLoop(box) {
+    const s = fxState(box);
+    if (s.loop) return;
+    const step = () => {
+        s.loop = 0;
+        if (!box.isVisible) { clearFx(box); return; }
+        if (performance.now() - (s.lastBoxTick || 0) < 50) { s.loop = requestAnimationFrame(step); return; }
+        const alive = advance(box);
+        try {
+            box.renderScene();
+        } catch (err) {
+            console.warn(`${MODULE_ID} | effects render failed`, err);
+            clearFx(box);
+            return;
+        }
+        if (alive) s.loop = requestAnimationFrame(step);
+    };
+    s.loop = requestAnimationFrame(step);
+}
+
+function clearFx(box) {
+    const s = fxState(box);
+    for (const g of s.glows) {
+        g.overlay.removeFromParent();
+        g.overlay.geometry.dispose();
+        g.overlay.material.dispose();
+        g.halo.material.dispose();
+    }
+    s.glows.length = 0;
+    if (s.pool) { s.pool.life.fill(0); s.pool.alpha.fill(0); s.pool.alive = 0; s.pool.spawned = true; }
 }
