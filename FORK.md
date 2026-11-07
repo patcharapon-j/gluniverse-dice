@@ -14,7 +14,7 @@ Changes from Dice So Nice, newest last:
 |---|---|
 | 2026-11-07 | Package renamed to `gluniverse-dice` / "GLUniverse Dice", declared as conflicting with `dice-so-nice`. The `dice-so-nice` identity stays reachable (see [Identity](#identity)). |
 | 2026-11-07 | Optional Rapier physics backend (`module/web-workers/RapierPhysicsWorker.js`), chosen by a world setting. cannon-es stays the default. |
-| 2026-11-07 | Glow and particles (M4): sparks on impacts, the result number lights up (forged: ignites, flashes, sheds embers) and stays lit. Worker contract: `detectedCollides` entries gain a 5th element, the contact position. See [Glow and particles](#glow-and-particles-m4). |
+| 2026-11-07 | Glow and particles (M4): sparks on impacts, the result number lights up (forged: ignites, flashes, cools) and stays lit. Worker contract: `detectedCollides` entries gain a 5th element, the contact position. See [Glow and particles](#glow-and-particles-m4). |
 | 2026-11-07 | Materials (M3): gemstone, inner galaxy and pearlescent materials; "Enhanced materials" client setting for the built-in ones; Nice more Dice 1.4.2 (CC BY 4.0, LyncsCwtsh) bundled. See [Materials](#materials-m3). |
 | 2026-11-07 | Smoothness (M2): interpolated replay and live dice, real frame delta for live stepping, idle frames skipped, shader prewarm at load, cannon's `worldAsleep` fixed, Rapier coin settle and topple. See [Smoothness](#smoothness-m2). |
 
@@ -325,12 +325,11 @@ the board rendering while an effect is alive.
 - **The motion** (`glowEnvelope`, "forged"): the number heats like metal. Light ignites at the
   centre of the digit and a bright front races out through the strokes (0.42 s, cubic
   ease-out) while the intensity climbs to a white-hot flash; a warm rim that cools to white over
-  the first second; embers (36 points sampled on the glyph's own pixels, mostly warm) lift off at
-  0.2 s and drift up for 1 to 2 s; the flash eases down to a steady glow with a slight breath (to
+  the first second; the flash eases down to a steady glow with a slight breath (to
   1.5 s), then settles (by 2.3 s) to a **resting glow that stays lit** while the dice are on the
   table, at 75% intensity with a tighter spill. A resting glow needs no new frames, so the frame
   loop stops. Dice light in a 60 ms cascade, capped at 180 ms. With `prefers-reduced-motion`: no
-  front, heat, flash or embers, only a fade in to the resting glow.
+  front, heat or flash, only a fade in to the resting glow.
 - **Bloom.** The overlay is on layer 1 and carries a white `emissive`, which is what makes DSN run
   its selective bloom pass. In that pass (`globalBloom` = 1) it outputs only a dim core and spill:
   at full strength the bloom swallowed the digit.

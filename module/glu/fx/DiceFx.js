@@ -5,8 +5,8 @@
 // its own copy with the sound list, so noteSimulation() keeps the raw one. While a throw
 // replays, every frame spawns the impacts of the frames it passed. When the replay reaches its
 // last frame, the number on the face that landed up is "forged": it ignites from its centre,
-// flashes, cools from warm to white with embers lifting off the glyph, and keeps a steady white
-// glow while the die stays on the board.
+// flashes, cools from warm to white, and keeps a steady white glow while the die stays on the
+// board.
 //
 // Everything here is drawn by our own objects in the board scene: no dice material is changed,
 // so it works with every system, preset and material. tick() is driven from Smoothness.shouldRender.
@@ -93,7 +93,6 @@ class ParticlePool {
         this.life = new Float32Array(n);
         this.maxLife = new Float32Array(n);
         this.drag = new Float32Array(n);
-        this.grav = new Float32Array(n);
         this.next = 0;
         this.alive = 0;
         const g = new BufferGeometry();
@@ -115,7 +114,7 @@ class ParticlePool {
         this.points.name = 'gluniverse-dice-fx';
     }
 
-    spawn(x, y, z, vx, vy, vz, color, size, life, drag = 1.5, gravity = GRAVITY) {
+    spawn(x, y, z, vx, vy, vz, color, size, life, drag = 1.5) {
         const i = this.next;
         this.next = (this.next + 1) % MAX_PARTICLES;
         this.pos[i * 3] = x; this.pos[i * 3 + 1] = y; this.pos[i * 3 + 2] = z;
@@ -125,7 +124,6 @@ class ParticlePool {
         this.life[i] = life;
         this.maxLife[i] = life;
         this.drag[i] = drag;
-        this.grav[i] = gravity;
         this.alpha[i] = 1;
         this.spawned = true;
     }
@@ -142,7 +140,7 @@ class ParticlePool {
             alive++;
             const k = Math.exp(-this.drag[i] * dt);
             this.vel[i * 3] *= k; this.vel[i * 3 + 2] *= k;
-            this.vel[i * 3 + 1] = this.vel[i * 3 + 1] * k + this.grav[i] * dt;
+            this.vel[i * 3 + 1] = this.vel[i * 3 + 1] * k + GRAVITY * dt;
             this.pos[i * 3] += this.vel[i * 3] * dt;
             this.pos[i * 3 + 1] = Math.max(0.001, this.pos[i * 3 + 1] + this.vel[i * 3 + 1] * dt);
             this.pos[i * 3 + 2] += this.vel[i * 3 + 2] * dt;
@@ -346,86 +344,16 @@ function addGlow(box, mesh) {
     const order = glows.filter(g => g.t < 0.05).length;
     const calm = reducedMotion();
     glows.push({
-        overlay, mesh, mask, t: 0, calm, resting: false,
-        delay: Math.min(STAGGER_MAX, order * STAGGER),
-        embers: !calm && setting(PARTICLES_SETTING) ? 0 : -1
+        overlay, mesh, t: 0, calm, resting: false,
+        delay: Math.min(STAGGER_MAX, order * STAGGER)
     });
-}
-
-// Points on the number itself, in world space: lit pixels of the face's mask, mapped back
-// through the face's triangles. Used to lift embers off the glyph.
-function numberPoints(mesh, geo, mask, count) {
-    const img = mask.image;
-    if (!img?.width || !img.getContext) return [];
-    const uvs = geo.attributes.uv.array;
-    const pos = geo.attributes.position.array;
-    let u0 = 1, v0 = 1, u1 = 0, v1 = 0;
-    for (let i = 0; i < uvs.length; i += 2) {
-        u0 = Math.min(u0, uvs[i]); v0 = Math.min(v0, uvs[i + 1]);
-        u1 = Math.max(u1, uvs[i]); v1 = Math.max(v1, uvs[i + 1]);
-    }
-    //flipY = false: uv (0,0) is the canvas' top-left pixel
-    const x0 = Math.floor(u0 * img.width), y0 = Math.floor(v0 * img.height);
-    const w = Math.max(1, Math.ceil((u1 - u0) * img.width)), h = Math.max(1, Math.ceil((v1 - v0) * img.height));
-    let data;
-    try {
-        data = img.getContext('2d').getImageData(x0, y0, w, h).data;
-    } catch {
-        return [];
-    }
-    const lit = [];
-    const step = Math.max(1, Math.floor(Math.sqrt((w * h) / 6000)));
-    for (let y = 0; y < h; y += step) for (let x = 0; x < w; x += step) {
-        if (data[(y * w + x) * 4] > 70) lit.push((x0 + x + 0.5) / img.width, (y0 + y + 0.5) / img.height);
-    }
-    if (!lit.length) return [];
-    const out = [];
-    const p = new Vector3();
-    mesh.updateWorldMatrix(true, false);
-    for (let k = 0; k < count; k++) {
-        const j = Math.floor(Math.random() * (lit.length / 2)) * 2;
-        const u = lit[j], v = lit[j + 1];
-        //find the triangle holding (u, v) and interpolate its corners
-        for (let t = 0; t < uvs.length / 6; t++) {
-            const ax = uvs[t * 6], ay = uvs[t * 6 + 1], bx = uvs[t * 6 + 2], by = uvs[t * 6 + 3], cx = uvs[t * 6 + 4], cy = uvs[t * 6 + 5];
-            const den = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
-            if (Math.abs(den) < 1e-12) continue;
-            const l1 = ((by - cy) * (u - cx) + (cx - bx) * (v - cy)) / den;
-            const l2 = ((cy - ay) * (u - cx) + (ax - cx) * (v - cy)) / den;
-            const l3 = 1 - l1 - l2;
-            if (l1 < -1e-4 || l2 < -1e-4 || l3 < -1e-4) continue;
-            p.set(
-                pos[t * 9] * l1 + pos[t * 9 + 3] * l2 + pos[t * 9 + 6] * l3,
-                pos[t * 9 + 1] * l1 + pos[t * 9 + 4] * l2 + pos[t * 9 + 7] * l3,
-                pos[t * 9 + 2] * l1 + pos[t * 9 + 5] * l2 + pos[t * 9 + 8] * l3
-            );
-            out.push(mesh.localToWorld(p.clone()));
-            break;
-        }
-    }
-    return out;
-}
-
-const EMBER_WARM = new Color(1.0, 0.6, 0.25);
-const EMBER_WHITE = new Color(1.0, 0.96, 0.9);
-
-function spawnEmbers(box, g) {
-    const pts = numberPoints(g.mesh, g.overlay.geometry, g.mask, 36);
-    if (!pts.length) return;
-    const P = pool(box);
-    for (const p of pts) {
-        P.spawn(p.x, p.y + 0.0008, p.z,
-            (Math.random() - 0.5) * 0.06, 0.04 + Math.random() * 0.09, (Math.random() - 0.5) * 0.06,
-            Math.random() < 0.7 ? EMBER_WARM : EMBER_WHITE,
-            0.0028 + Math.random() * 0.003, 0.9 + Math.random() * 1.1, 0.8, 0.18 + Math.random() * 0.16);
-    }
 }
 
 // The result moment, "forged": the digit ignites at its centre and the light runs out through
 // its strokes behind a hot front, flashes, cools from warm to white, and settles to a steady
 // glow that stays while the die is on the table. Times in s from the die's own start (after its
 // cascade delay).
-const REVEAL = 0.42, SETTLE = 0.85, HOLD = 1.5, REST_AT = 2.3, FLASH = 1.5, REST = 0.75, EMBERS_AT = 0.2;
+const REVEAL = 0.42, SETTLE = 0.85, HOLD = 1.5, REST_AT = 2.3, FLASH = 1.5, REST = 0.75;
 const easeOutCubic = (x) => 1 - Math.pow(1 - x, 3);
 const easeInOutSine = (x) => -(Math.cos(Math.PI * x) - 1) / 2;
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
@@ -442,7 +370,7 @@ function reducedMotion() {
 function glowEnvelope(t, calm) {
     if (t <= 0) return { intensity: 0, spread: 0, reveal: 0, heat: 1, resting: false };
     if (calm) {
-        //reduced motion: no front, heat, flash or embers: fade in, then ease to the resting glow
+        //reduced motion: no front, heat or flash: fade in, then ease to the resting glow
         const intensity = t < 0.35 ? easeInOutSine(t / 0.35) : 1 + (REST - 1) * easeInOutSine(clamp01((t - 0.35) / 1.2));
         return { intensity, spread: 0.7, reveal: 1, heat: 0, resting: t >= 1.55 };
     }
@@ -481,7 +409,6 @@ function updateGlows(box, dt) {
         if (g.resting) continue;
         g.t += dt;
         const local = g.t - g.delay;
-        if (g.embers === 0 && local >= EMBERS_AT) { g.embers = 1; spawnEmbers(box, g); }
         const e = glowEnvelope(local, g.calm);
         const u = g.overlay.material.uniforms;
         u.uIntensity.value = e.intensity;
