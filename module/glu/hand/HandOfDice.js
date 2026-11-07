@@ -40,13 +40,16 @@ const POINTER_FRESH_MS = 20000;
 const HAND_ABOVE_POINTER_PX = 80;
 const DEFAULT_SPOT_Y = 0.78;
 //sizes in die sizes (DiceFactory.baseScale: DSN scales the dice to the board)
-//The dice sit in a pile, touching, like dice gathered into a ball in a hand: each one is pulled
-//to the hand's centre and pushed off its neighbours. A die's contact radius is this share of
-//its bounding sphere (between a d6's inradius and its corners; a d20 is nearly round). Held,
-//the pull is stronger and the pile squeezes tight; floating, it breathes a little looser.
+//Floating, the dice are spread out in a flat hex cluster, each on its own spot (LOOSE: centre
+//to centre in diameters of the largest die's bounding sphere). Grabbed, they gather into a pile
+//that touches, like dice pulled into a ball in a hand: each is pulled to the hand's centre and
+//pushed off its neighbours. A die's contact radius is this share of its bounding sphere
+//(between a d6's inradius and its corners; a d20 is nearly round). Let go without a throw, they
+//spread back out.
+const LOOSE = 1.4;
 const CONTACT = 0.8;
-const PULL_HELD = 900, PULL_FLOAT = 120;
-const GAP_HELD = 1.0, GAP_FLOAT = 1.06;
+const PULL_HELD = 900, PULL_FLOAT = 60;
+const GAP_HELD = 1.0;
 //how much of the hand's acceleration the dice feel (inertia: they lag, bunch and jostle)
 const INERTIA = 0.9;
 //at the release the dice part to their bounding spheres, so the physics never starts with two
@@ -359,13 +362,13 @@ async function openHand(messageId, entry) {
         });
     }
     if (!h.dice.length) throw new Error("no dice meshes");
-    //start as a loose hex cluster with a little height, then let the pile settle into a ball
-    const step = 2 * CONTACT * Math.max(...h.dice.map(d => d.radius));
+    //each die's spot in the spread-out cluster; a little height so a pile gathers as a ball
+    const spot = LOOSE * 2 * Math.max(...h.dice.map(d => d.radius));
     for (const d of h.dice) {
         d.contact = d.radius * CONTACT;
-        d.holder.position.set(d.off.x * step * 1.05, (Math.random() - 0.5) * step * 0.5, d.off.z * step * 1.05);
+        d.home = new Vector3(d.off.x * spot, (Math.random() - 0.5) * spot * 0.15, d.off.z * spot);
+        d.holder.position.copy(d.home);
     }
-    for (let i = 0; i < 40; i++) settlePile(h, 1 / 120, false, null);
     box.scene.add(h.group);
     h.ready = true;
     showBoard();
@@ -470,18 +473,19 @@ function animateHand(dt) {
     for (let i = 0; i < steps2; i++) settlePile(h, dt / steps2, !!grab, _v);
 }
 
-// One step of the pile, in the hand's frame: a pull to the centre (plus the hand's inertia),
-// damped, then each pair that overlaps pushed apart along the line between them.
+// One step, in the hand's frame. Held: a pull to the centre (plus the hand's inertia), damped,
+// then each pair that overlaps pushed apart along the line between them. Floating: each die
+// drifts back to its own spot and bobs there.
 function settlePile(h, dt, held, inertia) {
     const pull = held ? PULL_HELD : PULL_FLOAT;
-    const gap = held ? GAP_HELD : GAP_FLOAT;
-    const damping = 2 * Math.sqrt(pull) * 0.9;
+    const gap = GAP_HELD;
+    const damping = 2 * Math.sqrt(pull) * (held ? 0.9 : 1);
     const t = h.t;
     for (const d of h.dice) {
         const p = d.holder.position;
-        //floating, the pile breathes: a slow bob per die
-        const bob = held ? 0 : Math.sin(t * 2.1 + d.phase) * d.contact * 0.08;
-        _pf.set(-p.x, bob - p.y, -p.z).multiplyScalar(pull).addScaledVector(d.vel, -damping);
+        if (held) _pg.set(0, 0, 0);
+        else _pg.copy(d.home).setY(d.home.y + Math.sin(t * 2.1 + d.phase) * d.contact * 0.12);
+        _pf.subVectors(_pg, p).multiplyScalar(pull).addScaledVector(d.vel, -damping);
         if (inertia) _pf.add(inertia);
         d.vel.addScaledVector(_pf, dt);
         p.addScaledVector(d.vel, dt);
@@ -506,6 +510,7 @@ function settlePile(h, dt, held, inertia) {
     }
 }
 const _pf = new Vector3();
+const _pg = new Vector3();
 const _pd = new Vector3();
 
 // ---------------------------------------------------------------------------------------------

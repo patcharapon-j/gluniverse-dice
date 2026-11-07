@@ -405,10 +405,11 @@ with many dice.
   user watching (the socket path), and how it feels at full frame rate (the test window ran at
   9 fps).
 - **Weight.** The hand follows the pointer on a damped spring (stiff while held, soft while
-  floating), leans into its motion (up to 0.42 rad) and turns to face it. The dice sit in a pile
-  that touches, like dice gathered into a ball: each one is pulled to the hand's centre and pushed
-  off its neighbours (contact radius 0.8 of its bounding sphere), held tighter while grabbed, and
-  the pile feels the hand's acceleration, so the dice lag, bunch and jostle. At the release the
+  floating), leans into its motion (up to 0.42 rad) and turns to face it. Floating, the dice are
+  spread out, each bobbing on its own spot (1.4 bounding diameters apart). Grabbed, they gather
+  into a pile that touches, like dice pulled into a ball: each one is pulled to the hand's centre
+  and pushed off its neighbours (contact radius 0.8 of its bounding sphere); let go without a
+  throw, they spread back out. The pile feels the hand's acceleration, so the dice lag, bunch and jostle. At the release the
   dice part to their full bounding spheres (so the physics never starts with two dice inside each
   other) and the flying dice ease from the pile into that within a few frames. The local flight
   uses the active engine's gravity. Lean and inertia are off with prefers-reduced-motion.
@@ -508,12 +509,11 @@ Mapping and deliberate differences:
   0.5, dice 0.6. Bench, 100 trials, 1920x1080: sliding share of desk travel 66% → 25%, d6 face
   chi² 114 → 8.7 (fair below 11.07), mixed dice cocked >15° 3.4% → 3.0%; 2d20 cocked 0% → 3%;
   throws 0.5 s longer (still shorter than cannon). `npm run bench` reports the sliding share.
-- **Gravity, twice the legacy value** (`rapier/gravity.js`, ~5 m/s²), for weight: dice land
-  sooner, bounce lower and friction stops them twice as fast. Bench, 40 trials: settle 2d20
-  2.45 → 1.62 s median (p95 3.48 → 2.42), 10 mixed 2.88 → 2.02, 10d6 → 1.73; cocked dice not
-  more. The d6 face spread widens (chi² about 20 to 30, face 6 most common); that is cosmetic, as
-  DSN's `swapDiceFace` shows Foundry's result whatever face lands up. The file is separate so the
-  main thread (the hand's flight) reads the same number without loading the engine. A rolling
+- **Gravity, 1.25x the legacy value** (`rapier/gravity.js`, ~3.1 m/s²): the same rolling,
+  tumbling feel, settling a little sooner. Bench, 40 trials, median settle: 2d20 2.45 → 2.13 s,
+  10 mixed 2.88 → 2.50, 10d6 → 2.23; cocked dice not more. Twice the gravity settled faster
+  (2d20 1.62 s) but felt heavy, with little tumble. The file is separate so the main thread
+  (the hand's flight) reads the same number without loading the engine. A rolling
   resistance (`rollDrag`, off) was tried: no faster settle, more cocked dice.
 - **Grab** is a spherical impulse joint to a kinematic anchor (cannon: `PointToPointConstraint`
   to a mass-0 body). The anchor moves through `setNextKinematicTranslation`, so a held die is
