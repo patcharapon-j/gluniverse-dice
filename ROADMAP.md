@@ -102,8 +102,8 @@ local cluster floating next to the pointer that only the roller sees; click, fli
 throws it, and every client plays the throw from the hand through DSN's normal pipeline. Built
 beside DSN's pending throw rather than on it, because its guest dice are physics bodies synced to
 every client and it posts a progress card, which the table did not want. Which rolls are held is
-still DSN's rule. The hand has weight (spring follow, lean, cupped dice that jostle), hard
-impacts shake the camera a little, and the dice burn away in a white dissolve after a world
+still DSN's rule. The hand has weight (spring follow, lean, cupped dice that jostle), and
+the dice burn away in a white dissolve after a world
 linger time (default 5 s). Open: check with a second user watching; tune the feel at full frame
 rate.
 

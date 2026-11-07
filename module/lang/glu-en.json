@@ -24,8 +24,6 @@
     "GLUDICE.Settings.DiceLinger.Hint": "How long thrown dice stay after they land before they leave, for every player. 0 uses each player's own Dice So Nice setting.",
     "GLUDICE.Settings.BurnAway.Name": "Dice burn away",
     "GLUDICE.Settings.BurnAway.Hint": "When thrown dice leave the table, they burn away in spreading white-edged holes, the glowing result number with them. Off: Dice So Nice's own fade or instant hide.",
-    "GLUDICE.Settings.ImpactShake.Name": "Shake on hard hits",
-    "GLUDICE.Settings.ImpactShake.Hint": "The dice board shakes by a few pixels when dice hit the table or each other hard (the rest of the screen stays still). Always off when your system asks for reduced motion.",
     "GLUDICE.Settings.GlowHue.Name": "Glowing number colour",
     "GLUDICE.Settings.GlowHue.Hint": "The colour the result number glows in once it has cooled: the die's own colour, or white. A system can pick a colour per die; dice without a real colour (white, grey, black) glow white.",
     "GLUDICE.Settings.GlowHue.Die": "The die's colour",
