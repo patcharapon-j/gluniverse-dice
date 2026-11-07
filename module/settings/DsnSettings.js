@@ -1,6 +1,7 @@
 import { Utils } from '../Utils.js';
 import { DiceLibrary } from '../engine/DiceLibrary.js';
 import { DiceSFXManager } from '../sfx/DiceSFXManager.js';
+import { applyRollAreaOverride } from '../glu/stream/RollArea.js'; //GLUniverse Dice
 
 //resolves the effective dsn settings of a user: options, appearance, role scopes and special effects
 //reads game.dice3d lazily for the factory defaults and the box, so it works before the facade exists
@@ -184,7 +185,7 @@ export class DsnSettings {
         let config = foundry.utils.mergeObject(DsnSettings.DEFAULT_OPTIONS, userSettings, { applyOperators: true });
         delete config.appearance;
         delete config.sfxLine;
-        return config;
+        return applyRollAreaOverride(config, user); //GLUniverse Dice: M7 transient roll area
     }
 
     static APPEARANCE(user = game.user, actor = null) {

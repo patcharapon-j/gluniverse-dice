@@ -79,6 +79,7 @@ export default defineConfig({
 								{ label: 'Roll API', slug: 'api/roll' },
 								{ label: 'Companion Messages', slug: 'api/companion-messages' },
 								{ label: 'Interactive Throws', slug: 'api/interactive-throws' },
+								{ label: 'Roll Area', slug: 'api/roll-area' },
 							],
 						},
 						{

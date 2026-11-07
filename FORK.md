@@ -15,6 +15,7 @@ Changes from Dice So Nice, newest last:
 | 2026-11-07 | Package renamed to `gluniverse-dice` / "GLUniverse Dice", declared as conflicting with `dice-so-nice`. The `dice-so-nice` identity stays reachable (see [Identity](#identity)). |
 | 2026-11-07 | Optional Rapier physics backend (`module/web-workers/RapierPhysicsWorker.js`), chosen by a world setting. cannon-es stays the default. |
 | 2026-11-07 | Daggerheart pass (M8): dice can be tagged and emphasised (`term.options.gluDice`, hook `gluDiceSettle`, `api.presentation`); the result-number glow cools to the die's own colour (client setting `glowHue`); the M4 number mask is a copy of the emissive canvas, so a system's `diceSoNiceOnMaterialReady` art no longer glows as the number. See [Daggerheart pass](#daggerheart-pass-m8). |
+| 2026-11-07 | Stream roll area (M7): `game.dice3d.rollArea` gets, sets and previews DSN's per-client roll area, applies it live, and lets a GM drive it on another user's client (the Stream Client). See [Stream roll area](#stream-roll-area-m7). |
 | 2026-11-07 | Grab and roll (M5): an interactive roll waits in the roller's hand, a local floating cluster at the pointer; click, flick or shake throws it; other clients see nothing until the throw, and DSN's pending card is not used. See [Grab and roll](#grab-and-roll-m5). |
 | 2026-11-07 | Glow and particles (M4): sparks on impacts, the result number lights up (forged: ignites, flashes, cools) and stays lit. Worker contract: `detectedCollides` entries gain a 5th element, the contact position. See [Glow and particles](#glow-and-particles-m4). |
 | 2026-11-07 | Materials (M3): gemstone, inner galaxy and pearlescent materials; "Enhanced materials" client setting for the built-in ones; Nice more Dice 1.4.2 (CC BY 4.0, LyncsCwtsh) bundled. See [Materials](#materials-m3). |
@@ -66,6 +67,8 @@ works unchanged. To keep rebasing onto upstream cheap:
 | `module/ui/DiceConfig.js`, `module/ui/DiceEditor.js` | One import each; `...gluMaterialChoices()` appended to the material picker list | Show the new materials. |
 | `module/Dice3D.js` | One import; `prewarmBoard(this)` after `persistent.restoreAll()` at the end of the load chain | Shader prewarm once fonts, presets and the dice library are loaded. |
 | `docs/astro.config.mjs` (M8) | One sidebar entry, "Tags and Emphasis" (`api/dice-presentation`), under Dice Systems | The page for the M8 API. |
+| `module/settings/DsnSettings.js` (M7) | One import; `CONFIG()` returns `applyRollAreaOverride(config, user)` | A transient roll area (`persist: false`) reaches every reader of `rollingArea` (`_buildCanvas`, `_computeDimensions`, the resize rebuild) without touching them. A no-op unless one is set. |
+| `docs/astro.config.mjs`, `docs/src/content/docs/api/roll-area.md` (M7) | One sidebar entry; a new page | Documents `game.dice3d.rollArea`. |
 | `module/Dice3D.js` (M5) | One more import; in `_afterShow`'s hide timer, `if (burnAwayDice(this)) return;` first, and the delay wrapped in `hideDelayMs(…)` | The dice burn away instead of DSN's fade, after the world linger time. |
 
 Files that are entirely ours: `FORK.md`, `ROADMAP.md`, `CREDITS.md`, `CLAUDE.md`, `module/glu/*`,
@@ -495,6 +498,45 @@ Tests: `tests/glowHue.test.mjs`, `tests/dicePresentation.test.mjs`,
 Foundry can confirm**: the tinted glow and the emphasis on real dice (the overlay shader was not
 compiled outside Foundry this time), the Hope/Fear cut no longer glowing at settle, the setting in
 the config dialog, and a duality roll seen from a second client.
+## Stream roll area (M7)
+
+`module/glu/stream/RollArea.js` (runtime) and `module/glu/stream/rollAreaMath.js` (validation and
+conversion, tested by `tests/rollArea.test.mjs`). Docs:
+[api/roll-area](./docs/src/content/docs/api/roll-area.md).
+
+- **Same store as DSN.** The area is DSN's `rollingArea` in the user flag
+  `dice-so-nice.settings`: `{ left, top, width, height }` in CSS px of the client window, or
+  `false` for the whole window. The API speaks the same pixels, and accepts fractions of the
+  window (`units: "fraction"`), which the target converts once, against its own window, when it
+  applies them. No new setting.
+- **API**, added to `game.dice3d` in `diceSoNiceInit` (no existing member changes), and on
+  `game.modules.get("gluniverse-dice").api`: `get()`, `set(rect, { units, persist })`,
+  `clear({ persist })`, `preview(on)`, `viewport()`; GM only: `setFor(userId, …)`,
+  `clearFor(userId, …)`, `previewFor(userId, on)`; any user: `query(userId, { timeout })`.
+  Hooks `gluDiceRollAreaChanged(state)` (this client rebuilt) and
+  `gluDiceRollAreaReport(state, fromUserId)` (another client reported).
+- **Live apply** reuses DSN's window-resize path: after a 150 ms debounce and
+  `queue.idle()`, `Dice3D.resizeAndRebuild()` rebuilds the canvas, renderer, camera and physics
+  walls (`init` with the new size) from `CONFIG()`, then `prewarmBoard` compiles shaders again.
+  `resizePlayArea`/`updateBoundaries` was not enough: it moves the walls but not the canvas
+  element, its renderer size or the camera. Like a resize, the rebuild clears dice lying on the
+  board (persistent dice return at the next load).
+- **Transient areas** (`persist: false`) live in memory and reach the rebuild through the one
+  `DsnSettings.CONFIG` seam. Saving DSN's settings dialog while one is in effect would save it.
+- **Remote writes are attested by the server**, not by a payload field. The GM writes
+  `flags.gluniverse-dice.rollAreaRequest = { action, rect, units, persist, on, at, by }` on the
+  target User. Only a GM or that user may update it. The target acts in `updateUser` when the
+  hook's `userId` (the author, as the server reports it) is a GM or itself, re-validates, and,
+  with `persist`, saves the area in its own `dice-so-nice.settings`. Requests are acted on when
+  they change, never at load, so a stale preview cannot come back after a reload. A direct edit of
+  the target's `rollingArea` flag by a GM also applies live.
+- **Reads** go over the module socket (`gluRollAreaQuery` / `gluRollAreaState`), unattested and
+  read-only. After each rebuild the client also broadcasts its state.
+- **Preview** is a plain `div.glu-dice-roll-area-preview` on `document.body`, absolutely
+  positioned in the same coordinates as `#dice-box-canvas`, `pointer-events: none`, z-index 10000.
+- Not yet verified in Foundry: the live rebuild on a real board (canvas, camera and walls line up
+  with the outline), the preview on a capture login with the UI hidden, the GM to stream client
+  flag path, and the `updateUser` author id for an Assistant GM.
 
 ## Materials (M3)
 
