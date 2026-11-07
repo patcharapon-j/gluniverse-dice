@@ -8,6 +8,7 @@ import { registerMaterialSettings } from "./materials/GluMaterials.js";
 import { registerNiceMoreDice } from "./vendor/niceMoreDice.js";
 import { registerFxSettings } from "./fx/DiceFx.js";
 import { registerHandSetting } from "./hand/HandOfDice.js";
+import { registerRollArea } from "./stream/RollArea.js";
 
 Hooks.once("init", () => {
     registerPhysicsEngineSetting();
@@ -17,6 +18,9 @@ Hooks.once("init", () => {
     registerFxSettings();
     registerHandSetting();
 });
+
+//M7: game.dice3d.rollArea, live and remote roll area for the Stream Client
+registerRollArea();
 
 //bundled Nice more Dice (CC BY 4.0, LyncsCwtsh); skipped when that module is itself active
 Hooks.on("diceSoNiceReady", registerNiceMoreDice);

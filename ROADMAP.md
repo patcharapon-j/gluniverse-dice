@@ -126,6 +126,15 @@ state), and a showcase in progress when the next throw starts.
 
 ## M7 Stream client roll area
 
+**Dice side built, Foundry check pending.** Delivered (FORK.md
+[Stream roll area](./FORK.md#stream-roll-area-m7)): `game.dice3d.rollArea` gets, sets and
+previews the per-client roll area (DSN's `rollable-area`, CSS px or fractions), applies it live
+through DSN's resize rebuild, and lets a GM set and preview it on the Stream Client through a
+server-attested user flag; reads go over the socket. Open: check the live rebuild and the
+outline in a running Foundry with a capture login; the Stream Control Room side (draw the area
+over the shot, call `setFor`/`previewFor`/`query`) is a separate change in
+`gluniverse-foundry-modules`; M6 takes `get().rect` as its target rectangle.
+
 Findings so far:
 
 - `ThrowPipeline.renderRolls` skips 3D dice when `game.view == "stream"` unless `0streamutils` or
