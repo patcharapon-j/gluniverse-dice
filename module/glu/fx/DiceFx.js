@@ -4,14 +4,13 @@
 // position (meters) as the 5th element of each `detectedCollides` entry. ThrowEngine replaces
 // its own copy with the sound list, so noteSimulation() keeps the raw one. While a throw
 // replays, every frame spawns the impacts of the frames it passed. When the replay reaches its
-// last frame, each die gets a glow on the face that landed up (its label lights up most) and a
-// small burst of sparkles in its label colour.
+// last frame, the number on the face that landed up glows white, and a small burst of white
+// sparkles rises around each die.
 //
 // Everything here is drawn by our own objects in the board scene: no dice material is changed,
 // so it works with every system, preset and material. tick() is driven from Smoothness.shouldRender.
 import {
-    AdditiveBlending, BufferAttribute, BufferGeometry, CanvasTexture, Color, Mesh, Points, ShaderMaterial, Sprite,
-    SpriteMaterial, Vector3, Matrix3
+    AdditiveBlending, BufferAttribute, BufferGeometry, Color, Mesh, Points, ShaderMaterial, Vector3, Matrix3
 } from 'three';
 import { MODULE_ID } from '../LegacyIdentity.js';
 
@@ -46,7 +45,11 @@ function setting(key) {
 
 // === particle pool =========================================================================
 
+// DSN's renderer uses logarithmicDepthBuffer: custom shaders must write log depth too, or they
+// fail the depth test against the dice and the desk.
 const POINTS_VERTEX = /* glsl */`
+#include <common>
+#include <logdepthbuf_pars_vertex>
 attribute float aSize;
 attribute float aAlpha;
 attribute vec3 aColor;
@@ -59,9 +62,12 @@ void main() {
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
     gl_Position = projectionMatrix * mv;
     gl_PointSize = aSize * uPixelRatio * 900.0 / max(-mv.z, 0.01);
+    #include <logdepthbuf_vertex>
 }`;
 
 const POINTS_FRAGMENT = /* glsl */`
+#include <common>
+#include <logdepthbuf_pars_fragment>
 varying float vAlpha;
 varying vec3 vColor;
 void main() {
@@ -70,6 +76,7 @@ void main() {
     float a = vAlpha * smoothstep(1.0, 0.0, r);
     a *= a;
     if (a < 0.003) discard;
+    #include <logdepthbuf_fragment>
     gl_FragColor = vec4(vColor * a, a);
 }`;
 
@@ -162,7 +169,7 @@ function pool(box) {
 
 const IMPACT_DICE = new Color(1.0, 0.85, 0.55);
 const IMPACT_TABLE = new Color(0.75, 0.78, 0.85);
-const tmpColor = new Color();
+const SPARKLE = new Color(1, 1, 1);
 
 function spawnImpact(box, entry) {
     const [source, , , strength, p] = entry;
@@ -184,40 +191,41 @@ function spawnImpact(box, entry) {
 // === settle glow ===========================================================================
 
 const GLOW_VERTEX = /* glsl */`
+#include <common>
+#include <logdepthbuf_pars_vertex>
 varying vec2 vUv;
 void main() {
     vUv = uv;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    #include <logdepthbuf_vertex>
 }`;
 
 const GLOW_FRAGMENT = /* glsl */`
-uniform vec3 uColor;
+#include <common>
+#include <logdepthbuf_pars_fragment>
 uniform float uIntensity;
 uniform sampler2D uMask;
-uniform float uHasMask;
 varying vec2 vUv;
-void main() {
-    float label = uHasMask > 0.5 ? 1.0 - smoothstep(0.6, 0.9, texture2D(uMask, vUv).r) : 0.0;
-    float a = uIntensity * (0.12 + 1.6 * label);
-    //the label core runs toward white, like a hot emissive
-    vec3 c = mix(uColor, vec3(1.0), 0.4 * label * min(uIntensity, 1.0));
-    gl_FragColor = vec4(c * a, min(a, 1.0));
-}`;
-
-function labelColor(mesh) {
-    const mat = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
-    const fg = mat?.userData?.materialData?.foreground;
-    try {
-        if (fg) {
-            const c = new Color(fg);
-            const hsl = c.getHSL({});
-            //a dark label colour would not glow: brighten it, keeping the hue
-            if (hsl.l < 0.55) c.setHSL(hsl.h, Math.max(hsl.s, 0.6), 0.65);
-            return c;
-        }
-    } catch { /* fall through */ }
-    return new Color(1, 0.92, 0.7);
+float gluLabel(vec2 uv) {
+    //DSN's emissive canvas: black face, numbers in grey (#999)
+    return smoothstep(0.08, 0.45, texture2D(uMask, uv).r);
 }
+void main() {
+    //only the number: its core, plus a soft white bloom spilling just around the glyph
+    vec2 px = 1.0 / vec2(textureSize(uMask, 0));
+    float core = gluLabel(vUv);
+    float spill = 0.0;
+    for (int i = 0; i < 12; i++) {
+        float a = 6.2831853 * float(i) / 12.0;
+        vec2 d = vec2(cos(a), sin(a));
+        spill += gluLabel(vUv + d * px * 3.0) + gluLabel(vUv + d * px * 7.0) * 0.6;
+    }
+    spill /= 19.2;
+    float a = uIntensity * (core * 1.2 + spill * 0.9);
+    if (a < 0.003) discard;
+    #include <logdepthbuf_fragment>
+    gl_FragColor = vec4(vec3(a), min(a, 1.0));
+}`;
 
 function upFaceGeometry(mesh) {
     const geo = mesh.geometry;
@@ -256,50 +264,23 @@ function upFaceGeometry(mesh) {
     const g = new BufferGeometry();
     g.setAttribute('position', new BufferAttribute(out, 3));
     if (outUv) g.setAttribute('uv', new BufferAttribute(outUv, 2));
-    //face centre, size and outward normal in object space, for the halo
-    const centre = new Vector3();
-    for (let i = 0; i < out.length; i += 3) centre.x += out[i], centre.y += out[i + 1], centre.z += out[i + 2];
-    centre.multiplyScalar(3 / out.length);
-    let radius = 0;
-    for (let i = 0; i < out.length; i += 3) radius = Math.max(radius, Math.hypot(out[i] - centre.x, out[i + 1] - centre.y, out[i + 2] - centre.z));
-    a.fromArray(out, 0); b.fromArray(out, 3); c.fromArray(out, 6);
-    const normal = new Vector3().subVectors(c, b).cross(a.sub(b)).normalize();
-    g.userData.face = { centre, radius, normal };
     return g;
-}
-
-let haloTexture = null;
-function halo() {
-    if (haloTexture) return haloTexture;
-    const cv = document.createElement('canvas');
-    cv.width = cv.height = 128;
-    const ctx = cv.getContext('2d');
-    const grd = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-    grd.addColorStop(0, 'rgba(255,255,255,1)');
-    grd.addColorStop(0.25, 'rgba(255,255,255,0.55)');
-    grd.addColorStop(0.6, 'rgba(255,255,255,0.12)');
-    grd.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = grd;
-    ctx.fillRect(0, 0, 128, 128);
-    haloTexture = new CanvasTexture(cv);
-    return haloTexture;
 }
 
 function addGlow(box, mesh) {
     if (!mesh?.isMesh || mesh.shape === 'd4' || mesh.notation?.type === 'd4') return;
-    const geo = upFaceGeometry(mesh);
-    if (!geo) return;
     const mat = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
-    const mask = mat?.userData?.gluLabelMask ?? null;
-    const color = labelColor(mesh);
+    //without the number mask there is no way to tell the number from the face: no glow
+    const mask = mat?.userData?.gluNumberMask;
+    if (!mask) return;
+    const geo = upFaceGeometry(mesh);
+    if (!geo?.attributes.uv) return;
     const glowMat = new ShaderMaterial({
         vertexShader: GLOW_VERTEX,
         fragmentShader: GLOW_FRAGMENT,
         uniforms: {
-            uColor: { value: color },
             uIntensity: { value: 0 },
-            uMask: { value: mask },
-            uHasMask: { value: mask ? 1 : 0 }
+            uMask: { value: mask }
         },
         transparent: true,
         depthWrite: false,
@@ -311,19 +292,12 @@ function addGlow(box, mesh) {
     const overlay = new Mesh(geo, glowMat);
     overlay.name = 'gluniverse-dice-glow';
     overlay.renderOrder = 9;
-    //a soft halo over the face, in the label colour: reads as a glow with or without bloom
-    const face = geo.userData.face;
-    const haloSprite = new Sprite(new SpriteMaterial({
-        map: halo(), color, transparent: true, depthWrite: false, depthTest: false, blending: AdditiveBlending, opacity: 0
-    }));
-    haloSprite.position.copy(face.centre).addScaledVector(face.normal, face.radius * 0.6);
-    haloSprite.scale.setScalar(face.radius * 4.2);
-    haloSprite.renderOrder = 11;
-    overlay.add(haloSprite);
+    //DSN's selective bloom only keeps objects on layer 1; the white number should bloom
+    overlay.layers.enable(1);
     mesh.add(overlay);
-    fxState(box).glows.push({ overlay, halo: haloSprite, t: 0 });
+    fxState(box).glows.push({ overlay, t: 0 });
 
-    //sparkles around the die, in the label colour
+    //sparkles around the die
     if (setting(PARTICLES_SETTING)) {
         const P = pool(box);
         const wp = new Vector3();
@@ -331,10 +305,9 @@ function addGlow(box, mesh) {
         for (let k = 0; k < 14; k++) {
             const a = (k / 14) * Math.PI * 2 + Math.random() * 0.3;
             const r = 0.025 + Math.random() * 0.015;
-            tmpColor.copy(color).lerp(new Color(1, 1, 1), 0.35);
             P.spawn(wp.x + Math.cos(a) * r, Math.max(0.004, wp.y - 0.01), wp.z + Math.sin(a) * r,
                 Math.cos(a) * 0.05, 0.18 + Math.random() * 0.12, Math.sin(a) * 0.05,
-                tmpColor, 0.003 + Math.random() * 0.002, 0.7 + Math.random() * 0.4, 1.2);
+                SPARKLE, 0.003 + Math.random() * 0.002, 0.7 + Math.random() * 0.4, 1.2);
         }
     }
 }
@@ -354,13 +327,10 @@ function updateGlows(box, dt) {
             g.overlay.removeFromParent();
             g.overlay.geometry.dispose();
             g.overlay.material.dispose();
-            g.halo.material.dispose();
             s.glows.splice(i, 1);
             continue;
         }
-        const k = glowIntensity(g.t);
-        g.overlay.material.uniforms.uIntensity.value = k;
-        g.halo.material.opacity = Math.min(1, k * 0.55);
+        g.overlay.material.uniforms.uIntensity.value = glowIntensity(g.t);
     }
     return s.glows.length > 0;
 }
@@ -438,7 +408,6 @@ function clearFx(box) {
         g.overlay.removeFromParent();
         g.overlay.geometry.dispose();
         g.overlay.material.dispose();
-        g.halo.material.dispose();
     }
     s.glows.length = 0;
     if (s.pool) { s.pool.life.fill(0); s.pool.alpha.fill(0); s.pool.alive = 0; s.pool.spawned = true; }

@@ -148,13 +148,22 @@ export function extendMaterialOptions(factory) {
 /**
  * Called in DiceFactory.createMaterial right after `mat.onBeforeCompile` is set.
  * @param {HTMLCanvasElement} canvasBump the label mask (white body, darker labels)
+ * @param {HTMLCanvasElement} [canvasEmissive] DSN's emissive canvas: black, with the text
+ *        labels (and any emissive face art) in grey. Unlike the bump canvas it holds no texture
+ *        bump, so it isolates the numbers.
  */
-export function decorateMaterial(factory, mat, materialData, canvasBump) {
-    //label mask for every material: M4's settle glow lights the labels up through it
+export function decorateMaterial(factory, mat, materialData, canvasBump, canvasEmissive) {
+    //label mask for every material (galaxy and pearlescent)
     if (canvasBump && !mat.userData.gluLabelMask) {
         const mask = new CanvasTexture(canvasBump);
         mask.flipY = false;
         mat.userData.gluLabelMask = mask;
+    }
+    //number mask: M4's settle glow lights only the numbers through it
+    if (canvasEmissive && !mat.userData.gluNumberMask) {
+        const numbers = new CanvasTexture(canvasEmissive);
+        numbers.flipY = false;
+        mat.userData.gluNumberMask = numbers;
     }
     const selected = factory.material_options?.[materialData?.material];
     if (!selected) return;

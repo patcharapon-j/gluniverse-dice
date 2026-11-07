@@ -1549,7 +1549,7 @@ export class DiceFactory {
 		}
 
 		mat.onBeforeCompile = ShaderUtils.applyDiceSoNiceShader;
-		decorateMaterial(this, mat, materialData, canvasBump); //GLUniverse Dice: M3 materials
+		decorateMaterial(this, mat, materialData, canvasBump, canvasEmissive); //GLUniverse Dice: M3 materials, M4 number mask
 
 		// deprecated shader hook
 		Hooks.callAll("diceSoNiceOnMaterialReady", mat, baseMaterialCacheString);

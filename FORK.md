@@ -314,14 +314,18 @@ the board rendering while an effect is alive.
   sparks, table impacts grey puffs, and the count and speed follow the impact strength. Strength
   0, which marks a secret roll with muted sounds, spawns nothing. A replay that jumps more than
   120 frames (fast-forward) skips its impacts.
-- **Settle glow.** When the replay reaches its last frame, the dice in `throwEngine.diceList`
-  get an additive overlay on the triangles facing up (the result face, since `swapDiceFace` has
-  run). Through the label mask that `decorateMaterial` now stores on every material
-  (`userData.gluLabelMask`, DSN's bump canvas), the number glows most and the face a little. The
-  colour is the die's label colour, brightened if it is dark. It rises in 0.18 s, pulses, and is
-  gone after 2.6 s. A soft halo sprite in the same colour sits over the face, so it reads as a
-  glow without bloom. Not on d4 (its result reads from the bottom). A small ring of sparkles in
-  the same colour rises around each die.
+- **Result number glow.** When the replay reaches its last frame, the dice in
+  `throwEngine.diceList` get an additive overlay on the triangles facing up (the result face, since
+  `swapDiceFace` has run). It draws **only the number**, in white: a core plus a soft spill just
+  around the glyph, masked by DSN's emissive canvas (black, with the text labels in grey), which
+  `decorateMaterial` now keeps on every material as `userData.gluNumberMask`. The bump canvas is
+  not usable for this: DSN paints the texture's own bump into it, so on textured dice the whole
+  face reads as label. The overlay is on layer 1, so DSN's selective bloom keeps it. It rises in
+  0.18 s, pulses, and is gone after 2.6 s. Not on d4 (its result reads from the bottom), and not
+  on image faces that have no emissive art. A small ring of white sparkles rises around each die.
+- **Log depth.** DSN's renderer uses `logarithmicDepthBuffer`, so both custom shaders include
+  three's `logdepthbuf` chunks; without them the overlay failed the depth test against its own die
+  and was never drawn.
 - **Own frame loop.** DiceBox removes its ticker on the frame the result is in, unless something
   else animates, so upstream draws nothing after it. The first build created the glow on that
   frame at intensity 0 and nothing ever showed (found in a live Foundry). While an effect is
