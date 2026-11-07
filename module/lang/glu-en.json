@@ -3,6 +3,7 @@
     "GLUDICE.Settings.PhysicsEngine.Hint": "Which physics engine simulates the throws. Rapier is new and still being tested; cannon-es is the original Dice So Nice engine. Every client reloads when this changes.",
     "GLUDICE.Settings.PhysicsEngine.Cannon": "cannon-es (Dice So Nice default)",
     "GLUDICE.Settings.PhysicsEngine.Rapier": "Rapier (experimental)",
+    "GLUDICE.RollArea.Preview": "Dice roll area",
     "GLUDICE.Notifications.RapierFallback": "GLUniverse Dice: the Rapier physics engine could not start, so dice use cannon-es for this session. See the console for details.",
     "GLUDICE.Settings.IdleRenderSkip.Name": "Skip idle frames",
     "GLUDICE.Settings.IdleRenderSkip.Hint": "Stop redrawing the dice board while every die is at rest and you are not touching the mouse or keyboard. Saves GPU time while persistent dice sit on the table. Turn it off if dice on the board stop updating.",
