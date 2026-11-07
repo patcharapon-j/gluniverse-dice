@@ -14,6 +14,7 @@ Changes from Dice So Nice, newest last:
 |---|---|
 | 2026-11-07 | Package renamed to `gluniverse-dice` / "GLUniverse Dice", declared as conflicting with `dice-so-nice`. The `dice-so-nice` identity stays reachable (see [Identity](#identity)). |
 | 2026-11-07 | Optional Rapier physics backend (`module/web-workers/RapierPhysicsWorker.js`), chosen by a world setting. cannon-es stays the default. |
+| 2026-11-07 | Materials (M3): gemstone, inner galaxy and pearlescent materials; "Enhanced materials" client setting for the built-in ones; Nice more Dice 1.4.2 (CC BY 4.0, LyncsCwtsh) bundled. See [Materials](#materials-m3). |
 | 2026-11-07 | Smoothness (M2): interpolated replay and live dice, real frame delta for live stepping, idle frames skipped, shader prewarm at load, cannon's `worldAsleep` fixed, Rapier coin settle and topple. See [Smoothness](#smoothness-m2). |
 
 The AGPL requires the corresponding source to be offered to everyone who receives the module.
@@ -49,13 +50,16 @@ works unchanged. To keep rebasing onto upstream cheap:
 | `module/module.json` | id, title, description, authors (GLUniverse added, DSN authors kept), URLs, `relationships.conflicts`, extra `lang/glu-en.json` entry | Package identity. |
 | `rollup.config.js` | Import `tools/rollup-glu.js`; add `gluIdentityReplace()`; export `[config, rapierWorkerConfig]`; GitHub download URL | Build-time id rewrite and the Rapier worker bundle. |
 | `package.json`, `package-lock.json` | name, version, repository URLs, scripts; deps `@dimforge/rapier3d-compat`, `@rollup/plugin-replace` | Package metadata and the two new dependencies. |
-| `README.md` | Fork section at the top; Rapier added to "Built on" | AGPL notice and credits. Everything upstream wrote is kept. |
+| `README.md` | Fork section at the top; Rapier and the bundled Nice more Dice added to "Built on" | AGPL notice and credits. Everything upstream wrote is kept. |
 | `.gitignore` | `tools/physics-bench/.build/` | Benchmark scratch bundles. |
 | `module/rendering/DiceBox.js` | One import (`glu/Smoothness.js`); in `animateThrow`: a `gluMoved` local, a `smoothFrame` call while a throw replays, the live `playStep` payload from `livePlayStepPayload`, a `noteLiveResult` call in its `.then`, and the render condition wrapped in `shouldRender` | Replay and live interpolation, render every moving frame, skip idle ones. |
 | `module/web-workers/PhysicsWorker.js` | `playStep` takes `frame_dt` and `interpolate` (returns `interpolatedPosition`/`Quaternion`); its `worldAsleep` test skips static bodies; `setBodyPosition(s)` also reset `previousPosition`/`interpolatedPosition` | Contract change shared with the Rapier worker. Without the static-body skip the desk kept cannon awake forever. |
+| `module/engine/DiceFactory.js` (M3) | One more import; `extendMaterialOptions(this)` at the end of `initializeMaterials`; `decorateMaterial(this, mat, materialData, canvasBump)` right after `mat.onBeforeCompile` is set in `createMaterial` | New material ids and the enhanced variants. Runs before `diceSoNiceOnMaterialReady`, so systems still patch the result. |
+| `module/ui/DiceConfig.js`, `module/ui/DiceEditor.js` | One import each; `...gluMaterialChoices()` appended to the material picker list | Show the new materials. |
 | `module/Dice3D.js` | One import; `prewarmBoard(this)` after `persistent.restoreAll()` at the end of the load chain | Shader prewarm once fonts, presets and the dice library are loaded. |
 
 Files that are entirely ours: `FORK.md`, `ROADMAP.md`, `CREDITS.md`, `CLAUDE.md`, `module/glu/*`,
+`module/textures/glu/*` (bundled third-party assets, CREDITS.md),
 `module/lang/glu-en.json`, `module/web-workers/RapierPhysicsWorker.js`,
 `module/web-workers/rapier/*`, `tools/*`, `tests/*`, `docs/fork/*`, `docs/mocks/*`.
 `docs/mocks/` holds design mocks. They are not part of the module: the build copies only
@@ -294,6 +298,39 @@ standard `@dimforge/rapier3d-compat` package is used.
 pose, teleports, cannon reporting asleep) is covered by `tests/workerContract.test.mjs`; the
 DiceBox side and the prewarm only run in a browser. The first-throw hitch before and after has
 not been measured.
+
+## Materials (M3)
+
+`module/glu/materials/GluMaterials.js`, `galaxyShader.js`.
+
+- **New ids**: `gemstone` (transmission, IOR 2.0, dispersion 4, tinted by the background colour
+  like DSN's resin; a polished non-transmissive fallback without advanced glass), `galaxy` (dark
+  clear shell, a nebula and stars inside, sampled in object space at four depths along the view
+  ray, so it has parallax and turns with the die; tinted by the background colour), and
+  `pearlescent` (clear coat, thin-film iridescence, sheen, plus a "nacre" pastel hue that shifts
+  with the viewing angle). Labels are masked with DSN's own bump canvas (white body, darker
+  labels, the same mask advanced glass uses), so they keep their colour. All three have phong
+  fallbacks for non-realistic lighting.
+- Galaxy and pearlescent wrap upstream's `onBeforeCompile` (`applyDiceSoNiceShader` still runs
+  first) and extend `customProgramCacheKey` with `|glu-galaxy` / `|glu-pearl`. A system that
+  replaces `onBeforeCompile` in `diceSoNiceOnMaterialReady` drops the inner effect; it does not
+  break the material.
+- **Enhanced materials** (client setting `gluniverse-dice.enhancedMaterials`, default on, reload):
+  plastic gets a clear coat (0.5), wood a varnish (0.25), pristine a sharper coat, velvet a denser
+  sheen, glass/resin/frosted chromatic dispersion (with advanced glass), metal and chrome
+  `envMapIntensity` 1.25. Off renders every upstream id exactly as Dice So Nice does. Only with
+  realistic lighting.
+- Not changed: `DiceColors`' random-material list (the `random` colorset still picks from DSN's
+  eleven), the material ids themselves, colorsets.
+- **Nice more Dice** is bundled (CREDITS.md). `module/glu/vendor/niceMoreDice.js` is the original
+  script wrapped in a function, registered on `diceSoNiceReady`, skipped when `nice-more-dice` is
+  active. Assets in `module/textures/glu/nice-more-dice/`, copied by the existing `textures` rule.
+
+Checked outside Foundry: every new and enhanced material, in all four lighting/glass
+combinations, compiles in headless Chromium (three r184, SwiftShader) with no shader errors, and a
+test render shows the three new looks. **Not yet verified in a running Foundry**: the looks on
+real dice under DSN's lights and HDRIs, GPU cost on low-end hardware, the pickers, and the
+bundled Nice more Dice entries.
 
 ## Rapier backend
 

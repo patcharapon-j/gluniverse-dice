@@ -32,6 +32,28 @@ headers. Where it says *likely*, it is an inference to confirm with the owner.
 | `module/sfx/textures/{glassimpact_color,glow_point_red_gold,magic01,sparks_core}.webp` | webp | particle sprites for special effects | not credited (added with the SFX system, 2021) | permission pending (user handling) |
 | `src/textures/texturepacker_projects/` | not shipped | TexturePacker project files | DSN build sources | DSN project file (AGPL with the code) |
 
+## Bundled third-party add-on: Nice more Dice (M3)
+
+`module/textures/glu/nice-more-dice/` (959 webp, 13 MB) and `module/glu/vendor/niceMoreDice.js`
+are **Nice more Dice 1.4.2 by LyncsCwtsh**
+([repository](https://github.com/LyncsCwtsh/fvtt-module-nice-more-dice), commit `9f01afd`,
+also on [itch.io](https://lyncscwtsh.itch.io/nice-more-dice)), bundled at the maintainer's
+request. Its licence is **Creative Commons Attribution 4.0 International**; the LICENSE, README
+and "Used Assets Credits.txt" are copied next to the assets unchanged. Every texture, system and
+preset keeps its original id and its ⁂-marked name. The script is the original, wrapped in a
+function, with paths pointing at our copy. It is skipped when the real `nice-more-dice` module
+is active.
+
+The author's credits file names the sources inside the art:
+
+| Source | Used in | Licence | Status |
+|---|---|---|---|
+| game-icons.net (lorc, delapouite, sbed, darkzaitzev, caro-asercion, starseeker, carl-olsen, skoll) | Gears texture; Flamestalker, GM Dice, Maze, Grifter, Halloween sets | CC BY 3.0, credited in the credits file | OK with attribution |
+| Unsplash (Bruno Ramos, Max Kleinen, Pawel Czerwinski, Ray Mallick, Alex Perez, Susan Wilkinson, Daniel Olah, NASA, Neven Krcmarek, Solen Feyissa, New York Public Library, Yu Kato, Raimond Klavins, Gioele Fazzeri) | Bark, BwBlood, Lavash, Orbs, Rainbow, Redwave, Cosmic, Roman marble textures; Planetary and Roman Superiority sets | Unsplash License (free use, no attribution required; no selling unmodified copies, no compiling into a competing service) | OK as modified art |
+| brusheezy.com brushes | Claws texture | varies per brush pack | permission pending (user handling) |
+| obsidiandawn.com brushes | Paws texture | obsidiandawn terms (free use, credit requested) | permission pending (user handling) |
+| Celtic Border Brushes by Nathies-stock (DeviantArt) | Celtic Lynx set | stock artist's own terms | permission pending (user handling) |
+
 ## Sounds
 
 | Path | Contents | Source / credit | Status |

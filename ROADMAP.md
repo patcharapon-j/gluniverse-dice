@@ -54,7 +54,13 @@ compatibility smoke test. Interpolation is hooked from `DiceBox.animateThrow`, n
 Risks: interpolation across the face-swap frame (the swap is applied once to the child, so it
 is safe), and across a die's spawn frame (do not interpolate from the hidden origin).
 
-## M3 Materials, shaders, textures
+## M3 Materials, shaders, textures: built, Foundry check pending
+
+Delivered (FORK.md [Materials](./FORK.md#materials-m3)): gemstone, inner galaxy and pearlescent
+materials; an "Enhanced materials" client setting for the built-in ones (off = exactly DSN);
+Nice more Dice 1.4.2 bundled with credits. Open: tune the looks on real dice in Foundry, measure
+GPU cost on a low-end machine, and settle the three "permission pending" brush sources in
+CREDITS.md.
 
 | Item | Seam |
 |---|---|

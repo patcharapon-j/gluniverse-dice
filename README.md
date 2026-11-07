@@ -86,7 +86,7 @@ v2 of "Dice So Nice" was based on Anton's fork from MajorVictory, with his direc
 
 d10 geometry created by Greewi who did all the maths for our custom "Pentagonal Trapezohedron". You can find his homebrewed (French) TTRPG Feerie/Solaires here: https://feerie.net
 
-Built on [Three.js](https://threejs.org/), [cannon-es](https://pmndrs.github.io/cannon-es/), and [Proton](https://github.com/drawcall/three.proton). GLUniverse Dice adds an optional [Rapier](https://rapier.rs/) physics backend (Apache-2.0).
+Built on [Three.js](https://threejs.org/), [cannon-es](https://pmndrs.github.io/cannon-es/), and [Proton](https://github.com/drawcall/three.proton). GLUniverse Dice adds an optional [Rapier](https://rapier.rs/) physics backend (Apache-2.0). It also bundles [Nice more Dice](https://github.com/LyncsCwtsh/fvtt-module-nice-more-dice) by LyncsCwtsh (textures and dice faces, CC BY 4.0); see [CREDITS.md](./CREDITS.md) for the sources inside it.
 
 ## Theme and model credits
 

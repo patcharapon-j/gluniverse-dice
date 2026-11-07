@@ -1,4 +1,5 @@
 import { DiceEditorPreview } from '../rendering/DiceEditorPreview.js';
+import { gluMaterialChoices } from '../glu/materials/GluMaterials.js'; //GLUniverse Dice: M3 materials
 import { DiceLibrary } from '../engine/DiceLibrary.js';
 import { DiceColors, TEXTURELIST } from '../engine/DiceColors.js';
 import { DiceShapeLibrary } from '../engine/DiceShapeLibrary.js';
@@ -201,7 +202,8 @@ export class DiceEditor extends HandlebarsApplicationMixin(ApplicationV2) {
             "resin": "DICESONICE.MaterialResin",
             "stone": "DICESONICE.MaterialStone",
             "velvet": "DICESONICE.MaterialVelvet",
-            "wood": "DICESONICE.MaterialWood"
+            "wood": "DICESONICE.MaterialWood",
+            ...gluMaterialChoices() //GLUniverse Dice: M3 materials
         });
         data.fontList = Utils.prepareFontList();
 
