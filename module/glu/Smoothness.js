@@ -10,6 +10,7 @@
 import { MODULE_ID } from './LegacyIdentity.js';
 import { interpolateReplay } from './ReplayInterpolator.js';
 import { DiceSFXManager } from '../sfx/DiceSFXManager.js';
+import { tickFx } from './fx/DiceFx.js';
 
 const LIVE_DT_CAP = 0.25;      // s: after a hidden tab or a long hitch, don't fast-forward the world
 const INPUT_AWAKE_MS = 750;    // keep rendering this long after any pointer, wheel or key input
@@ -104,6 +105,8 @@ function boardIsIdle(box) {
  * @param {boolean} moved          smoothFrame's result
  */
 export function shouldRender(box, upstreamWants, moved) {
+    //M4 particles and glow update every frame and keep the board rendering while alive
+    if (tickFx(box)) return true;
     if (moved) return true;
     if (!upstreamWants) return false;
     if (!idleSkipEnabled()) return true;

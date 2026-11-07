@@ -647,7 +647,9 @@ export class RapierPhysicsEngine {
         const shouldMute = this.muteSoundSecretRolls && (body.secretRoll || target.secretRoll);
         const finalStrength = shouldMute ? 0 : strength;
         if (this.animstate === "simulate") {
-            this.detectedCollides[this.iteration] = ["dice", body.diceType, body.diceMaterial, finalStrength];
+            const a = body.body.translation(), b = target.body.translation();
+            //5th element: contact position in meters (midpoint of the two dice)
+            this.detectedCollides[this.iteration] = ["dice", body.diceType, body.diceMaterial, finalStrength, [(a.x + b.x) * 0.5, (a.y + b.y) * 0.5, (a.z + b.z) * 0.5]];
         } else {
             this.host.emit("collide", { source: "dice", type: body.diceType, material: body.diceMaterial, strength: finalStrength });
         }
@@ -661,7 +663,9 @@ export class RapierPhysicsEngine {
         const shouldMute = this.muteSoundSecretRolls && target.secretRoll;
         const finalStrength = shouldMute ? 0 : strength;
         if (this.animstate === "simulate") {
-            this.detectedCollides[this.iteration] = ["table", null, null, finalStrength];
+            const p = target.body.translation();
+            //5th element: the die's position in meters
+            this.detectedCollides[this.iteration] = ["table", null, null, finalStrength, [p.x, p.y, p.z]];
         } else {
             this.host.emit("collide", { source: "table", type: null, material: null, strength: finalStrength });
         }

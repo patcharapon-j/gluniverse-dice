@@ -12,5 +12,9 @@
     "GLUDICE.Material.Galaxy": "Inner galaxy",
     "GLUDICE.Material.Pearlescent": "Pearlescent",
     "GLUDICE.Settings.EnhancedMaterials.Name": "Enhanced materials",
-    "GLUDICE.Settings.EnhancedMaterials.Hint": "Richer versions of the built-in materials: a clear coat on plastic and wood, colour dispersion in glass and resin, denser velvet, brighter metal. Turn it off to render them exactly as Dice So Nice does. Needs realistic lighting."
+    "GLUDICE.Settings.EnhancedMaterials.Hint": "Richer versions of the built-in materials: a clear coat on plastic and wood, colour dispersion in glass and resin, denser velvet, brighter metal. Turn it off to render them exactly as Dice So Nice does. Needs realistic lighting.",
+    "GLUDICE.Settings.ImpactParticles.Name": "Impact sparks",
+    "GLUDICE.Settings.ImpactParticles.Hint": "Small sparks where dice hit each other and puffs where they hit the table, plus a burst around each die when it settles.",
+    "GLUDICE.Settings.SettleGlow.Name": "Glow on the result",
+    "GLUDICE.Settings.SettleGlow.Hint": "When the dice stop, the face that landed up glows for a moment, its number brightest, in the die's label colour. Not on d4."
 }

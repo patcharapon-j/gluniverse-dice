@@ -150,6 +150,12 @@ export function extendMaterialOptions(factory) {
  * @param {HTMLCanvasElement} canvasBump the label mask (white body, darker labels)
  */
 export function decorateMaterial(factory, mat, materialData, canvasBump) {
+    //label mask for every material: M4's settle glow lights the labels up through it
+    if (canvasBump && !mat.userData.gluLabelMask) {
+        const mask = new CanvasTexture(canvasBump);
+        mask.flipY = false;
+        mat.userData.gluLabelMask = mask;
+    }
     const selected = factory.material_options?.[materialData?.material];
     if (!selected) return;
 
@@ -166,8 +172,7 @@ export function decorateMaterial(factory, mat, materialData, canvasBump) {
 
 //wraps upstream's onBeforeCompile with object-space varyings, the label mask and two chunks
 function addInnerShader(mat, canvasBump, kind, mapChunk, outputChunk) {
-    const mask = new CanvasTexture(canvasBump);
-    mask.flipY = false;
+    const mask = mat.userData.gluLabelMask;
     mat.userData.gluInner = kind;
     const seed = Math.random() * 100;
     const upstream = mat.onBeforeCompile;

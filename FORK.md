@@ -14,6 +14,7 @@ Changes from Dice So Nice, newest last:
 |---|---|
 | 2026-11-07 | Package renamed to `gluniverse-dice` / "GLUniverse Dice", declared as conflicting with `dice-so-nice`. The `dice-so-nice` identity stays reachable (see [Identity](#identity)). |
 | 2026-11-07 | Optional Rapier physics backend (`module/web-workers/RapierPhysicsWorker.js`), chosen by a world setting. cannon-es stays the default. |
+| 2026-11-07 | Glow and particles (M4): sparks on impacts, a glow on the face that landed up, sparkles on settle. Worker contract: `detectedCollides` entries gain a 5th element, the contact position. See [Glow and particles](#glow-and-particles-m4). |
 | 2026-11-07 | Materials (M3): gemstone, inner galaxy and pearlescent materials; "Enhanced materials" client setting for the built-in ones; Nice more Dice 1.4.2 (CC BY 4.0, LyncsCwtsh) bundled. See [Materials](#materials-m3). |
 | 2026-11-07 | Smoothness (M2): interpolated replay and live dice, real frame delta for live stepping, idle frames skipped, shader prewarm at load, cannon's `worldAsleep` fixed, Rapier coin settle and topple. See [Smoothness](#smoothness-m2). |
 
@@ -54,6 +55,8 @@ works unchanged. To keep rebasing onto upstream cheap:
 | `.gitignore` | `tools/physics-bench/.build/` | Benchmark scratch bundles. |
 | `module/rendering/DiceBox.js` | One import (`glu/Smoothness.js`); in `animateThrow`: a `gluMoved` local, a `smoothFrame` call while a throw replays, the live `playStep` payload from `livePlayStepPayload`, a `noteLiveResult` call in its `.then`, and the render condition wrapped in `shouldRender` | Replay and live interpolation, render every moving frame, skip idle ones. |
 | `module/web-workers/PhysicsWorker.js` | `playStep` takes `frame_dt` and `interpolate` (returns `interpolatedPosition`/`Quaternion`); its `worldAsleep` test skips static bodies; `setBodyPosition(s)` also reset `previousPosition`/`interpolatedPosition` | Contract change shared with the Rapier worker. Without the static-body skip the desk kept cannon awake forever. |
+| `module/engine/ThrowEngine.js` (M4) | One import; `noteSimulation(this, detectedCollides)` after the sound list replaces the raw collisions | Keeps the impact timeline with positions for the particles. |
+| `module/web-workers/PhysicsWorker.js` (M4) | `handleDiceCollision` / `handleTableCollision` append the contact position as the 5th tuple element | Contract change shared with the Rapier worker. |
 | `module/engine/DiceFactory.js` (M3) | One more import; `extendMaterialOptions(this)` at the end of `initializeMaterials`; `decorateMaterial(this, mat, materialData, canvasBump)` right after `mat.onBeforeCompile` is set in `createMaterial` | New material ids and the enhanced variants. Runs before `diceSoNiceOnMaterialReady`, so systems still patch the result. |
 | `module/ui/DiceConfig.js`, `module/ui/DiceEditor.js` | One import each; `...gluMaterialChoices()` appended to the material picker list | Show the new materials. |
 | `module/Dice3D.js` | One import; `prewarmBoard(this)` after `persistent.restoreAll()` at the end of the load chain | Shader prewarm once fonts, presets and the dice library are loaded. |
@@ -193,6 +196,7 @@ meters natively.
 | `getBodyQuaternion` | `id` | `{x,y,z,w}` or `null` | no in-repo caller |
 | `getDiceValue` | `id` | face value (cached until the die moves again) or `null` | `dicemesh.getValue()` (public, no in-repo caller) |
 | `playStep` | `{ time_diff, frame_dt?, interpolate? }` in seconds; fixed 1/60 s steps with an accumulator, at most 10 per call; ignored while a throw is simulating. `frame_dt`, when given, is the real time since the previous call and is used instead of `time_diff` (see below). `interpolate: true` returns each pose blended between the last two fixed steps by the leftover time; a teleport (`setBodyPosition(s)`) is never blended | `{ ids, quaternionsBuffers: ArrayBuffer, positionsBuffers: ArrayBuffer, worldAsleep }`: flat Float32 arrays, 4 resp. 3 floats per id, dead dice excluded; `ids` empty when `worldAsleep`. `worldAsleep` ignores static bodies | `DiceBox.animateThrow`, every frame while no replay is playing |
+| `simulateThrow` (M4 note) | `detectedCollides[i]` is `[source, type, material, strength, [x, y, z]]`: the 5th element (meters) is the midpoint of the two dice for `"dice"`, the die's centre for `"table"`. `SoundManager.generateCollisionSounds` reads the first four only | | |
 | `simulateThrow` | `{ minIterations, nbIterationsBetweenRolls, framerate, canBeFlipped, impulses: {[id]: {velocity, angularVelocity}} \| null }` | see below | `ThrowEngine.startUnifiedBatch` |
 | `updateBarriers` | same shape as `init`'s size | – | `DiceBox` on resize |
 | `getWorldInfo` | – | logs the world | debugging only |
@@ -298,6 +302,35 @@ standard `@dimforge/rapier3d-compat` package is used.
 pose, teleports, cannon reporting asleep) is covered by `tests/workerContract.test.mjs`; the
 DiceBox side and the prewarm only run in a browser. The first-throw hitch before and after has
 not been measured.
+
+## Glow and particles (M4)
+
+`module/glu/fx/DiceFx.js`, driven every frame from `Smoothness.shouldRender`, which also keeps
+the board rendering while an effect is alive.
+
+- **Impact sparks.** `noteSimulation` keeps the raw collision timeline (ThrowEngine overwrites
+  its own copy with the sound list, which is empty when sounds are off). While a throw replays,
+  each frame spawns the impacts of every simulation frame it passed. Dice-on-dice impacts are warm
+  sparks, table impacts grey puffs, and the count and speed follow the impact strength. Strength
+  0, which marks a secret roll with muted sounds, spawns nothing. A replay that jumps more than
+  120 frames (fast-forward) skips its impacts.
+- **Settle glow.** When the replay reaches its last frame, the dice in `throwEngine.diceList`
+  get an additive overlay on the triangles facing up (the result face, since `swapDiceFace` has
+  run). Through the label mask that `decorateMaterial` now stores on every material
+  (`userData.gluLabelMask`, DSN's bump canvas), the number glows most and the face a little. The
+  colour is the die's label colour, brightened if it is dark. It rises in 0.18 s, pulses, and is
+  gone after 2.6 s. Not on d4 (its result reads from the bottom). A small ring of sparkles in the
+  same colour rises around each die.
+- **Particles** are one pooled `THREE.Points` (768 particles, additive, no depth write) in the board
+  scene, not Proton: one draw call whatever the dice count, and no per-emitter objects.
+- Client settings `gluniverse-dice.impactParticles` and `gluniverse-dice.settleGlow`, default on.
+  No dice material is modified, so every system, preset and material gets the effects.
+
+Checked outside Foundry: both workers emit the position (contract test), and a headless-Chromium
+render with stand-in dice shows sparks at the impact points, the glowing top labels aligned with
+the label texture, and no shader errors. **Not yet verified in a running Foundry**: the look with
+DSN's bloom and lighting, d10/d12/d20 and custom-model faces, persistent dice, and cost with many
+dice.
 
 ## Materials (M3)
 
