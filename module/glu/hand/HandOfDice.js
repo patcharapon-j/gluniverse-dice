@@ -414,6 +414,19 @@ function keepAboveWindows(dice3d) {
     if (z <= top) dice3d.canvas.style.zIndex = String(++api._maxZ);
 }
 
+// DSN rebuilds the whole board on a window resize (and M7's roll area reuses that rebuild): a
+// new DiceBox and scene, the old scene emptied. A hand still waiting moves into the new scene,
+// inside its walls, so it stays visible and grabbable.
+function adoptRebuiltBoard() {
+    const h = hand;
+    const box = board();
+    if (!h || h.thrown || h.flight || !box?.scene || h.group.parent === box.scene) return;
+    box.scene.add(h.group);
+    const inside = clampToBoard(box, { x: h.target.x, z: h.target.z }, h.size);
+    h.target.x = inside.x;
+    h.target.z = inside.z;
+}
+
 function startLoop() {
     if (loopId) return;
     let last = performance.now();
@@ -422,6 +435,7 @@ function startLoop() {
         if (!hand?.ready) return;
         const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
         last = now;
+        adoptRebuiltBoard();
         animateHand(dt);
         if (!hand.thrown) showBoard();
         board()?.renderScene?.();
