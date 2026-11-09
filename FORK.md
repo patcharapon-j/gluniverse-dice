@@ -20,7 +20,7 @@ Changes from Dice So Nice, newest last:
 | 2026-11-07 | Glow and particles (M4): sparks on impacts, the result number lights up (forged: ignites, flashes, cools) and stays lit. Worker contract: `detectedCollides` entries gain a 5th element, the contact position. See [Glow and particles](#glow-and-particles-m4). |
 | 2026-11-07 | Materials (M3): gemstone, inner galaxy and pearlescent materials; "Enhanced materials" client setting for the built-in ones; Nice more Dice 1.4.2 (CC BY 4.0, LyncsCwtsh) bundled. See [Materials](#materials-m3). |
 | 2026-11-07 | Smoothness (M2): interpolated replay and live dice, real frame delta for live stepping, idle frames skipped, shader prewarm at load, cannon's `worldAsleep` fixed, Rapier coin settle and topple. See [Smoothness](#smoothness-m2). |
-| 2026-11-09 | Rapier dice tumble and roll out longer (restitution 0.75, low damping, gravity 1.125x), and hand throws spin harder. The hand shows the character owner's dice when DSN's owner-appearance setting picks them for the throw. See [Rapier backend](#rapier-backend) and [Grab and roll](#grab-and-roll-m5). |
+| 2026-11-09 | The hand shows the character owner's dice when DSN's owner-appearance setting picks them for the throw. Rapier's tuning is fitted to cannon-es's motion (low rebound, cannon's gravity and damping) and settles sooner. See [Rapier backend](#rapier-backend) and [Grab and roll](#grab-and-roll-m5). |
 
 The AGPL requires the corresponding source to be offered to everyone who receives the module.
 The repository was made public for the first release (2026-11-07), so the source is offered next
@@ -438,7 +438,7 @@ with many dice.
   thrown dice do. The pile feels the hand's acceleration, so the dice lag, bunch and jostle. At the release the
   dice part to their full bounding spheres (so the physics never starts with two dice inside each
   other) and the flying dice ease from the pile into that within a few frames. The local flight
-  uses the active engine's gravity and damping. A thrown die spins at 14 to 25 rad/s about the
+  uses the active engine's gravity and damping. A thrown die spins at 10 to 18 rad/s about the
   axis it rolls on (more with a shake). Lean and inertia are off with prefers-reduced-motion.
 - **Whose dice.** The hand shows the dice the throw will use: `HandOwner.js` asks DSN's
   `RollRules.diceOwner` as `ThrowPipeline.animateRolls` does, so with "use the character owner's
@@ -616,25 +616,29 @@ Mapping and deliberate differences:
   per-pair contact materials. cannon's friction 0.01 relies on its own friction model; in Rapier
   dice would slide forever. DSN's legacy gravity is light (about 2.5 m/s²) and friction slows a
   die by μ·g, so the first fit (0.4 everywhere) let dice skid flat across the board, and the d6
-  faces came out uneven. Now: desk friction 1.0 with the **Max** combine rule (the desk grips),
-  dice 0.3 (die on die stays slippery, fewer dice cocked against each other), restitution desk
-  0.5, dice 0.6. Bench, 100 trials, 1920x1080: sliding share of desk travel 66% → 25%, d6 face
-  chi² 114 → 8.7 (fair below 11.07), mixed dice cocked >15° 3.4% → 3.0%; 2d20 cocked 0% → 3%;
-  throws 0.5 s longer (still shorter than cannon). `npm run bench` reports the sliding share.
-- **Tumble** (2026-11-09, "too heavy, stops with a snap"): restitution 0.75 for dice and desk
-  (coins keep 0.5, `coinRestitution`: a bouncy coin rang on its rim, p95 4.6 → 9.9 s), damping
-  0.05 linear and 0.02 angular instead of cannon's 0.105, gravity 1.125x. Spin barely matters
-  once a die lands, because the gripping desk turns spin into travel; what stopped dice early
-  was the energy each face slap took. Hand throws, 40 each: turns on the desk 1.7 → 3.0 (1d20)
-  and 1.8 → 3.1 (2d6), roll-out after landing 1.5 → 2.4 s and 1.3 → 2.1 s, the last 50 ms
-  speed drop before rest 250 → 210 and 440 → 320 °/s. Bench (DSN's throws, 100 trials): 10 mixed
-  cocked 3.6% → 1.9%, 10d6 chi² 31 → 7.9, replays 0.6 to 1 s longer, none out of bounds.
-- **Gravity, 1.125x the legacy value** (`rapier/gravity.js`, ~2.8 m/s²). Twice the gravity
-  settled fast (2d20 1.62 s) but felt heavy, with little tumble; 1.25x still read as heavy.
-  The file is separate (with the damping) so the main thread (the hand's flight) reads the same
-  numbers without loading the engine: with a damping that differs from the worker's, the flight
-  and the replay part by 6 mm and 8° at the handoff, a visible jump. A rolling resistance
-  (`rollDrag`, off) was tried: no faster settle, more cocked dice.
+  faces came out uneven. A second fit (desk friction 1.0 with the **Max** combine rule, dice
+  0.3, restitution 0.5 / 0.6) rolled more than it skidded (sliding 25%), but bounced and stopped
+  harder than cannon. The current values are in the next item; the desk keeps the Max friction
+  rule and the Min restitution rule. Face fairness does not matter: `swapDiceFace` shows
+  Foundry's result. `npm run bench` reports the sliding share.
+- **Fitted to cannon-es** (2026-11-09). A first pass for more tumble (restitution 0.75, little
+  damping) bounced like rubber; the user prefers cannon-es's feel. So Rapier is now fitted to
+  cannon's motion, measured with hand throws through both real workers. cannon's own numbers do
+  not carry over: its contacts are soft, Rapier's rigid, so restitution 0.5 bounced Rapier dice
+  2-5x higher. Desk restitution 0.1 (Min rule) gives cannon's ~2 cm rebound; desk friction 0.55
+  and die-on-die 0.1 skid about as much as cannon (DSN throws: 38-50% of desk travel sliding,
+  cannon 51-56%); cannon's gravity and linear damping; spin damping at half cannon's, so a die
+  rolls out its last face. Hand throws, 60 each, Rapier vs cannon: rebound 24/26/16 mm vs
+  19/19/17 (1d20, 2d6, mixed), turns on the desk 1.4/1.4/0.9 vs 1.4/1.5/1.0, roll-out after
+  landing 1.5/1.0/1.0 s vs 1.8/1.0/1.3. Rapier settles sooner: its settle test ends the replay
+  0.25 s after the last motion where cannon sleeps after 0.9 s, so DSN's throws end 0.8-1.1 s
+  earlier (bench medians 1.8-2.6 s vs 2.6-3.6), cocked dice no more than cannon's, none out of
+  bounds. Still different: a Rapier die's final face slap stops it a little more abruptly.
+- **Gravity** (`rapier/gravity.js`): cannon's, ~2.5 m/s². 2x, 1.25x and 1.125x were tried and
+  read as heavy. The file is separate (with the damping) so the main thread (the hand's flight)
+  reads the same numbers without loading the engine: with a damping that differs from the
+  worker's, the flight and the replay part by millimetres and degrees at the handoff. A rolling
+  resistance (`rollDrag`, off) was tried twice: no softer stop, more cocked dice.
 - **Grab** is a spherical impulse joint to a kinematic anchor (cannon: `PointToPointConstraint`
   to a mass-0 body). The anchor moves through `setNextKinematicTranslation`, so a held die is
   pulled rather than teleported.
