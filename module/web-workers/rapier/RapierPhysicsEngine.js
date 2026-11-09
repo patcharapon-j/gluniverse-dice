@@ -11,31 +11,38 @@
 // Licence: AGPL-3.0, like the rest of the module. Rapier itself is Apache-2.0.
 
 import { buildShapeGeometry, readFace } from './shapeGeometry.js';
-import { RAPIER_GRAVITY } from './gravity.js';
+import { RAPIER_GRAVITY, RAPIER_LINEAR_DAMPING, RAPIER_ANGULAR_DAMPING } from './gravity.js';
 
 // legacy (cannon-es worker) units per meter: TARGET_D6_EDGE_METERS / 50
 const LEGACY_TO_METERS = 0.016 / 50;
 const L = LEGACY_TO_METERS;
 
 export const DEFAULT_TUNING = Object.freeze({
-    // twice the cannon-es worker's gravity, for weight (gravity.js)
+    // a little more than the cannon-es worker's gravity (gravity.js)
     gravity: RAPIER_GRAVITY,
     // Rapier tolerances scale with this. Dice are ~3-6 cm across.
     lengthUnit: 0.05,
     solverIterations: 8,
     pgsIterations: 1,
-    // cannon-es damping 0.1 means v *= 0.9 per second; Rapier uses v /= (1 + dt*c), c = -ln(0.9)
-    linearDamping: -Math.log(0.9),
-    angularDamping: -Math.log(0.9),
+    // Rapier uses v /= (1 + dt*c). cannon-es damping 0.1 would be c = -ln(0.9) = 0.105; less, so
+    // dice keep their tumble between impacts (gravity.js)
+    linearDamping: RAPIER_LINEAR_DAMPING,
+    angularDamping: RAPIER_ANGULAR_DAMPING,
     // materials. Rapier has per-collider coefficients plus a combine rule (Max > Multiply > Min > Average)
     // The desk grips (desk-die friction 1.0, Max rule) and dice slip on each other (0.3). With
     // DSN's light legacy gravity (~2.5 m/s^2) friction only slows a die by mu*g, so at 0.4 dice
     // skidded flat across the board: 66% of their desk travel was sliding, and the d6 faces came
     // out uneven (bench chi^2 114). These values: 25% sliding, chi^2 8.7, fewer cocked dice.
+    // Restitution 0.75 (was 0.6 dice, 0.5 desk, Min rule): each face slap keeps more of the roll,
+    // so dice tumble on and rock before they stop instead of landing dead. Bench, 100 throws:
+    // 10 mixed cocked 3.6% -> 1.9%, 10d6 chi^2 31 -> 7.9, replay median +0.6-1 s.
     diceFriction: 0.3,
-    diceRestitution: 0.6,
+    diceRestitution: 0.75,
     deskFriction: 1.0,
-    deskRestitution: 0.5,
+    deskRestitution: 0.75,
+    // d2: a bouncy coin rings on its rim for seconds (bench p95 4.6 -> 9.9 s), so it keeps the
+    // previous restitution
+    coinRestitution: 0.5,
     deskFrictionRule: "max",
     barrierFriction: 0,
     barrierRestitution: 0.85,
@@ -335,7 +342,7 @@ export class RapierPhysicsEngine {
         colliderDesc
             .setMass(Math.max(die.mass, 1e-6))
             .setFriction(t.diceFriction)
-            .setRestitution(t.diceRestitution)
+            .setRestitution(die.geometry.collider?.kind === "cylinder" ? t.coinRestitution : t.diceRestitution)
             .setActiveEvents(R.ActiveEvents.COLLISION_EVENTS)
             .setSolverGroups(die.collisionResponse ? ALL_GROUPS : NO_GROUPS);
         die.collider = this.world.createCollider(colliderDesc, die.body);

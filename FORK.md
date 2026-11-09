@@ -20,6 +20,7 @@ Changes from Dice So Nice, newest last:
 | 2026-11-07 | Glow and particles (M4): sparks on impacts, the result number lights up (forged: ignites, flashes, cools) and stays lit. Worker contract: `detectedCollides` entries gain a 5th element, the contact position. See [Glow and particles](#glow-and-particles-m4). |
 | 2026-11-07 | Materials (M3): gemstone, inner galaxy and pearlescent materials; "Enhanced materials" client setting for the built-in ones; Nice more Dice 1.4.2 (CC BY 4.0, LyncsCwtsh) bundled. See [Materials](#materials-m3). |
 | 2026-11-07 | Smoothness (M2): interpolated replay and live dice, real frame delta for live stepping, idle frames skipped, shader prewarm at load, cannon's `worldAsleep` fixed, Rapier coin settle and topple. See [Smoothness](#smoothness-m2). |
+| 2026-11-09 | Rapier dice tumble and roll out longer (restitution 0.75, low damping, gravity 1.125x), and hand throws spin harder. The hand shows the character owner's dice when DSN's owner-appearance setting picks them for the throw. See [Rapier backend](#rapier-backend) and [Grab and roll](#grab-and-roll-m5). |
 
 The AGPL requires the corresponding source to be offered to everyone who receives the module.
 The repository was made public for the first release (2026-11-07), so the source is offered next
@@ -437,7 +438,12 @@ with many dice.
   thrown dice do. The pile feels the hand's acceleration, so the dice lag, bunch and jostle. At the release the
   dice part to their full bounding spheres (so the physics never starts with two dice inside each
   other) and the flying dice ease from the pile into that within a few frames. The local flight
-  uses the active engine's gravity. Lean and inertia are off with prefers-reduced-motion.
+  uses the active engine's gravity and damping. A thrown die spins at 14 to 25 rad/s about the
+  axis it rolls on (more with a shake). Lean and inertia are off with prefers-reduced-motion.
+- **Whose dice.** The hand shows the dice the throw will use: `HandOwner.js` asks DSN's
+  `RollRules.diceOwner` as `ThrowPipeline.animateRolls` does, so with "use the character owner's
+  appearance" a roll from a player's character (by the GM or another player) floats in that
+  player's dice from the start instead of switching at the throw.
 
 ### Burn away
 
@@ -615,12 +621,20 @@ Mapping and deliberate differences:
   0.5, dice 0.6. Bench, 100 trials, 1920x1080: sliding share of desk travel 66% → 25%, d6 face
   chi² 114 → 8.7 (fair below 11.07), mixed dice cocked >15° 3.4% → 3.0%; 2d20 cocked 0% → 3%;
   throws 0.5 s longer (still shorter than cannon). `npm run bench` reports the sliding share.
-- **Gravity, 1.25x the legacy value** (`rapier/gravity.js`, ~3.1 m/s²): the same rolling,
-  tumbling feel, settling a little sooner. Bench, 40 trials, median settle: 2d20 2.45 → 2.13 s,
-  10 mixed 2.88 → 2.50, 10d6 → 2.23; cocked dice not more. Twice the gravity settled faster
-  (2d20 1.62 s) but felt heavy, with little tumble. The file is separate so the main thread
-  (the hand's flight) reads the same number without loading the engine. A rolling
-  resistance (`rollDrag`, off) was tried: no faster settle, more cocked dice.
+- **Tumble** (2026-11-09, "too heavy, stops with a snap"): restitution 0.75 for dice and desk
+  (coins keep 0.5, `coinRestitution`: a bouncy coin rang on its rim, p95 4.6 → 9.9 s), damping
+  0.05 linear and 0.02 angular instead of cannon's 0.105, gravity 1.125x. Spin barely matters
+  once a die lands, because the gripping desk turns spin into travel; what stopped dice early
+  was the energy each face slap took. Hand throws, 40 each: turns on the desk 1.7 → 3.0 (1d20)
+  and 1.8 → 3.1 (2d6), roll-out after landing 1.5 → 2.4 s and 1.3 → 2.1 s, the last 50 ms
+  speed drop before rest 250 → 210 and 440 → 320 °/s. Bench (DSN's throws, 100 trials): 10 mixed
+  cocked 3.6% → 1.9%, 10d6 chi² 31 → 7.9, replays 0.6 to 1 s longer, none out of bounds.
+- **Gravity, 1.125x the legacy value** (`rapier/gravity.js`, ~2.8 m/s²). Twice the gravity
+  settled fast (2d20 1.62 s) but felt heavy, with little tumble; 1.25x still read as heavy.
+  The file is separate (with the damping) so the main thread (the hand's flight) reads the same
+  numbers without loading the engine: with a damping that differs from the worker's, the flight
+  and the replay part by 6 mm and 8° at the handoff, a visible jump. A rolling resistance
+  (`rollDrag`, off) was tried: no faster settle, more cocked dice.
 - **Grab** is a spherical impulse joint to a kinematic anchor (cannon: `PointToPointConstraint`
   to a mass-0 body). The anchor moves through `setNextKinematicTranslation`, so a held die is
   pulled rather than teleported.

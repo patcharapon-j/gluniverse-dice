@@ -24,10 +24,12 @@ import { Group, Plane, Quaternion, Vector2, Vector3 } from 'three';
 import { MODULE_ID } from '../LegacyIdentity.js';
 import { DiceNotation } from '../../DiceNotation.js';
 import { DsnSettings } from '../../settings/DsnSettings.js';
+import { RollRules } from '../../throw/RollRules.js';
 import { LEGACY_TO_METERS, TARGET_D6_EDGE_METERS } from '../../engine/SceneConstants.js';
 import { activePhysicsEngine, PHYSICS_ENGINES } from '../PhysicsEngine.js';
-import { RAPIER_GRAVITY } from '../../web-workers/rapier/gravity.js';
+import { RAPIER_GRAVITY, RAPIER_LINEAR_DAMPING, RAPIER_ANGULAR_DAMPING } from '../../web-workers/rapier/gravity.js';
 import { fitInside, convexHull, distanceToHull } from './HandLayout.js';
+import { handOwner } from './HandOwner.js';
 
 export const HAND_SETTING = "grabAndRoll";
 const FLAG = "hand";
@@ -77,13 +79,17 @@ const LOFT = 0.55;
 const SHAKE_REVERSALS = 3;
 const SHAKE_STROKE_MS = 300;
 const HOLD_LIMIT_MS = 10 * 60 * 1000;
-//after the release the hand flies on as the simulation will (both workers: gravity
-//-9.8 * 800 legacy units/s^2, damping 0.1), until the replay takes over; it never flies longer
-//than this, nor into the desk or a wall, where the two would part
-//the flight before the simulation takes over falls as the engine in use does
+//after the release the hand flies on as the simulation will (the gravity and damping of the
+//engine in use), until the replay takes over; it never flies longer than this, nor into the
+//desk or a wall, where the two would part
 const CANNON_GRAVITY = -9.8 * 800 * LEGACY_TO_METERS;
-const gravity = () => activePhysicsEngine === PHYSICS_ENGINES.RAPIER ? RAPIER_GRAVITY : CANNON_GRAVITY;
-const DAMPING = -Math.log(0.9);
+const CANNON_DAMPING = -Math.log(0.9);
+const isRapier = () => activePhysicsEngine === PHYSICS_ENGINES.RAPIER;
+const gravity = () => isRapier() ? RAPIER_GRAVITY : CANNON_GRAVITY;
+const linearDamping = () => isRapier() ? RAPIER_LINEAR_DAMPING : CANNON_DAMPING;
+const angularDamping = () => isRapier() ? RAPIER_ANGULAR_DAMPING : CANNON_DAMPING;
+//spin of a thrown die about the axis it rolls on (rad/s, before the shake's extra tumble)
+const SPIN_MIN = 14, SPIN_RANGE = 11;
 const FLIGHT_MAX = 0.6;
 
 const _plane = new Plane(new Vector3(0, 1, 0), 0);
@@ -308,18 +314,18 @@ function handDice(entry) {
     const pipeline = game.dice3d.pipeline;
     const factory = game.dice3d.DiceFactory;
     const message = entry.message;
-    const user = message.author ?? game.user;
-    const actor = ChatMessage.getSpeakerActor(message.speaker);
-    const config = DsnSettings.ALL_CONFIG(user, actor);
-    const custom = DsnSettings.ALL_CUSTOMIZATION(user, factory, actor);
     //work on copies: DSN stamps and flattens the rolls it animates
     const rolls = entry.rolls.map(r => foundry.dice.Roll.fromData(JSON.parse(JSON.stringify(r))));
     for (const roll of rolls) {
         pipeline._stampRole(roll);
         pipeline._stampAppearance(roll);
     }
+    const rollList = pipeline._buildRollList(rolls);
+    const { user, actor } = handOwner(message, rollList, RollRules);
+    const config = DsnSettings.ALL_CONFIG(user, actor);
+    const custom = DsnSettings.ALL_CUSTOMIZATION(user, factory, actor);
     const out = [];
-    for (const roll of pipeline._buildRollList(rolls)) {
+    for (const roll of rollList) {
         const notation = new DiceNotation(roll, config, user);
         for (const t of notation.throws) {
             for (const die of t.dice) {
@@ -752,7 +758,7 @@ function throwHand(v) {
         const vx = (v.dir.x * Math.cos(a) - v.dir.z * Math.sin(a)) * v.speed * s;
         const vz = (v.dir.x * Math.sin(a) + v.dir.z * Math.cos(a)) * v.speed * s;
         //spin about the axis the die would roll on, plus some wobble
-        const spin = new Vector3(vz, 0, -vx).normalize().multiplyScalar((10 + Math.random() * 8) * v.tumble)
+        const spin = new Vector3(vz, 0, -vx).normalize().multiplyScalar((SPIN_MIN + Math.random() * SPIN_RANGE) * v.tumble)
             .add(new Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(8));
         dice.push({
             index: d.index,
@@ -835,14 +841,16 @@ function startFlight(h, dice, W, parted) {
 function flyHand(h) {
     const f = h.flight;
     const t = Math.min(f.tMax, (performance.now() - f.t0) / 1000);
-    //linear damping integrates to (1 - e^-ct) / c; gravity is left undamped (a small error)
-    const k = DAMPING > 0 ? (1 - Math.exp(-DAMPING * t)) / DAMPING : t;
+    //damping integrates to (1 - e^-ct) / c; gravity is left undamped (a small error)
+    const damped = (c) => c > 0 ? (1 - Math.exp(-c * t)) / c : t;
+    const k = damped(linearDamping());
+    const ka = damped(angularDamping());
     for (const d of f.dice) {
         d.holder.position.set(d.p0.x + d.v.x * k, d.p0.y + d.v.y * k + gravity() * t * t / 2, d.p0.z + d.v.z * k)
             .addScaledVector(d.part, Math.exp(-t / PART_TAU));
         if (d.wLen > 1e-6) {
             _axis.copy(d.w).divideScalar(d.wLen);
-            _q.setFromAxisAngle(_axis, d.wLen * k);
+            _q.setFromAxisAngle(_axis, d.wLen * ka);
             d.holder.quaternion.copy(d.q0).premultiply(_q);
         }
     }
