@@ -89,7 +89,7 @@ const gravity = () => isRapier() ? RAPIER_GRAVITY : CANNON_GRAVITY;
 const linearDamping = () => isRapier() ? RAPIER_LINEAR_DAMPING : CANNON_DAMPING;
 const angularDamping = () => isRapier() ? RAPIER_ANGULAR_DAMPING : CANNON_DAMPING;
 //spin of a thrown die about the axis it rolls on (rad/s, before the shake's extra tumble)
-const SPIN_MIN = 14, SPIN_RANGE = 11;
+const SPIN_MIN = 10, SPIN_RANGE = 8;
 const FLIGHT_MAX = 0.6;
 
 const _plane = new Plane(new Vector3(0, 1, 0), 0);
