@@ -1,7 +1,7 @@
 {
   "name": "gluniverse-dice",
   "type": "module",
-  "version": "6.4.5-glu.2",
+  "version": "6.4.5-glu.3",
   "description": "GLUniverse Dice: a modified version of Dice So Nice! (3D dice for Foundry VTT).",
   "main": "index.js",
   "scripts": {
