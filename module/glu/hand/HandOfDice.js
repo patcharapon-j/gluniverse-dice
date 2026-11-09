@@ -27,6 +27,7 @@ import { DsnSettings } from '../../settings/DsnSettings.js';
 import { LEGACY_TO_METERS, TARGET_D6_EDGE_METERS } from '../../engine/SceneConstants.js';
 import { activePhysicsEngine, PHYSICS_ENGINES } from '../PhysicsEngine.js';
 import { RAPIER_GRAVITY } from '../../web-workers/rapier/gravity.js';
+import { fitInside, convexHull, distanceToHull } from './HandLayout.js';
 
 export const HAND_SETTING = "grabAndRoll";
 const FLAG = "hand";
@@ -41,12 +42,13 @@ const HAND_ABOVE_POINTER_PX = 80;
 const DEFAULT_SPOT_Y = 0.78;
 //sizes in die sizes (DiceFactory.baseScale: DSN scales the dice to the board)
 //Floating, the dice are spread out in a flat hex cluster, each on its own spot (LOOSE: centre
-//to centre in diameters of the largest die's bounding sphere). Grabbed, they gather into a pile
+//to centre in diameters of the largest die's bounding sphere; above 1 they never touch, close
+//enough to read as one group, apart enough to count). Grabbed, they gather into a pile
 //that touches, like dice pulled into a ball in a hand: each is pulled to the hand's centre and
 //pushed off its neighbours. A die's contact radius is this share of its bounding sphere
 //(between a d6's inradius and its corners; a d20 is nearly round). Let go without a throw, they
 //spread back out.
-const LOOSE = 1.4;
+const LOOSE = 1.15;
 const CONTACT = 0.8;
 const PULL_HELD = 900, PULL_FLOAT = 60;
 const GAP_HELD = 1.0;
@@ -56,6 +58,8 @@ const INERTIA = 0.9;
 //dice inside each other; the flying dice ease from the pile into that over this time constant
 const PART_TAU = 0.035;
 const HOVER_HEIGHT = 1.6;
+//the floating cluster keeps this far inside the screen's edges
+const SCREEN_PAD_PX = 12;
 const GRAB_HEIGHT = 2.4;
 const BOB = 0.12;
 //a release this quick and this still is a click
@@ -251,6 +255,36 @@ function clampToBoard(box, p, margin) {
     return clampToWalls(box.diceScene.display, p, margin);
 }
 
+// How far the floating cluster reaches around its centre, whichever way it has turned, and how
+// high its top gets (the camera looks straight down: the higher, the bigger on screen).
+function floatExtent(h) {
+    let reach = h.size, top = 0;
+    for (const d of h.dice) {
+        reach = Math.max(reach, Math.hypot(d.home.x, d.home.z) + d.radius);
+        top = Math.max(top, d.home.y + d.radius);
+    }
+    return { reach, top: h.size * (HOVER_HEIGHT + BOB) + top };
+}
+
+// Move a floating hand's centre so the whole cluster is inside the screen (the window and the
+// board's canvas, whichever is smaller). The board's walls can lie past the screen's edges.
+function fitOnScreen(box, h, p) {
+    const rect = boardRect();
+    if (!rect) return p;
+    const left = Math.max(rect.left, 0) + SCREEN_PAD_PX;
+    const top = Math.max(rect.top, 0) + SCREEN_PAD_PX;
+    const right = Math.min(rect.left + rect.width, window.innerWidth || Infinity) - SCREEN_PAD_PX;
+    const bottom = Math.min(rect.top + rect.height, window.innerHeight || Infinity) - SCREEN_PAD_PX;
+    const { reach, top: y } = floatExtent(h);
+    const a = pointAt(box, left, top, y);
+    const b = pointAt(box, right, bottom, y);
+    if (!a || !b || right <= left || bottom <= top) return p;
+    return fitInside(p, reach, {
+        minX: Math.min(a.x, b.x), maxX: Math.max(a.x, b.x),
+        minZ: Math.min(a.z, b.z), maxZ: Math.max(a.z, b.z)
+    });
+}
+
 // Hex rings around the centre: 0 is the centre, then 6 around it, then 12, ...
 function ringOffset(index) {
     if (index === 0) return { x: 0, z: 0 };
@@ -369,6 +403,10 @@ async function openHand(messageId, entry) {
         d.home = new Vector3(d.off.x * spot, (Math.random() - 0.5) * spot * 0.15, d.off.z * spot);
         d.holder.position.copy(d.home);
     }
+    //now that the cluster's size is known, all of it floats on screen
+    const fitted = fitOnScreen(box, h, centre);
+    h.group.position.x = h.target.x = fitted.x;
+    h.group.position.z = h.target.z = fitted.z;
     box.scene.add(h.group);
     h.ready = true;
     showBoard();
@@ -422,7 +460,7 @@ function adoptRebuiltBoard() {
     const box = board();
     if (!h || h.thrown || h.flight || !box?.scene || h.group.parent === box.scene) return;
     box.scene.add(h.group);
-    const inside = clampToBoard(box, { x: h.target.x, z: h.target.z }, h.size);
+    const inside = fitOnScreen(box, h, clampToBoard(box, { x: h.target.x, z: h.target.z }, h.size));
     h.target.x = inside.x;
     h.target.z = inside.z;
 }
@@ -551,13 +589,31 @@ const _pd = new Vector3();
 // ---------------------------------------------------------------------------------------------
 // Input
 
+// On the hand: on a die, or anywhere in the area the dice cover on screen (the gaps between
+// them, and a die's radius around the group's outline), so a press at the group's middle grabs it.
 function hitHand(event) {
     if (!hand?.ready || hand.thrown) return false;
     const box = board();
     const rect = boardRect();
-    if (!box || !rect) return false;
-    box.diceScene.raycaster.setFromCamera(ndcOf(rect, event.clientX, event.clientY), box.diceScene.camera);
-    return box.diceScene.raycaster.intersectObject(hand.group, true).length > 0;
+    const camera = box?.diceScene?.camera;
+    if (!box || !rect || !camera) return false;
+    box.diceScene.raycaster.setFromCamera(ndcOf(rect, event.clientX, event.clientY), camera);
+    if (box.diceScene.raycaster.intersectObject(hand.group, true).length > 0) return true;
+    hand.group.updateMatrixWorld(true);
+    const toScreen = (v) => {
+        v.project(camera);
+        return { x: rect.left + (v.x + 1) / 2 * rect.width, y: rect.top + (1 - v.y) / 2 * rect.height };
+    };
+    const centres = [];
+    let radius = 0;
+    for (const d of hand.dice) {
+        const w = d.mesh.getWorldPosition(new Vector3());
+        const c = toScreen(w.clone());
+        const edge = toScreen(w.setX(w.x + d.radius));
+        centres.push(c);
+        radius = Math.max(radius, Math.hypot(edge.x - c.x, edge.y - c.y));
+    }
+    return distanceToHull({ x: event.clientX, y: event.clientY }, convexHull(centres)) <= radius;
 }
 
 function onPointerDown(event) {
@@ -638,8 +694,9 @@ function onPointerUp(event) {
         const throwSpeed = Math.min(W * THROW_MAX, Math.max(W * THROW_MIN, speed * 1.15));
         return throwHand(velocityFrom({ x: v.x / speed, z: v.z / speed }, throwSpeed, 0));
     }
-    //a slow release puts the hand down where it is
-    hand.target.y = hand.size * HOVER_HEIGHT;
+    //a slow release puts the hand down where it is, spread out again and on screen
+    const down = fitOnScreen(board(), hand, { x: hand.target.x, z: hand.target.z });
+    hand.target.set(down.x, hand.size * HOVER_HEIGHT, down.z);
 }
 
 // World velocity over the last ~80 ms of the drag, or null when the drag had stopped.

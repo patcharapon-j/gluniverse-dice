@@ -393,10 +393,16 @@ with many dice.
   `DiceNotation` of the rolls, with term colorsets, roles and the speaker's actor), built through
   `ThrowEngine.createDiceMesh`, in a hex cluster that floats 1.6 die sizes above the table next to
   the pointer (80 px above it, so the clicked button stays free; bottom centre when the pointer has
-  not moved for 20 s). No physics bodies, no sockets: nobody else sees it. It bobs and each die
-  turns slowly; it has its own frame loop and keeps the board shown.
+  not moved for 20 s). The dice sit 1.15 bounding-sphere diameters apart, centre to centre (apart,
+  but one group), and the whole cluster is moved inside the screen (12 px in from the window and
+  the board's canvas), so a roll button by an edge never puts dice off screen; the same fit
+  applies when the hand is put down or the board is rebuilt. No physics bodies, no sockets:
+  nobody else sees it. It bobs and each die turns slowly; it has its own frame loop and keeps the
+  board shown.
 - **Input.** Our window capture listeners are added when the file loads, before DSN's, so a press
-  on the hand stops there. Grabbing lifts the hand to 2.4 die sizes and it follows the pointer.
+  on the hand stops there. A press is on the hand when it hits a die or lands within a die's
+  radius of the convex hull of the dice on screen, so the gaps between them grab it too
+  (`HandLayout.js`). Grabbing lifts the hand to 2.4 die sizes and it follows the pointer.
   On release: a click (under 350 ms, under 8 px) throws towards the board's centre, give or take
   30 degrees; a flick (faster than 0.7 board widths per second over the last 80 ms) throws the way
   it went; three quick reversals (strokes under 300 ms) are a shake and throw hard with more
