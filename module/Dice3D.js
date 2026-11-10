@@ -19,6 +19,7 @@ import { RollRules } from './throw/RollRules.js';
 import { LEGACY_TO_METERS } from './engine/SceneConstants.js';
 import { prewarmBoard } from './glu/ShaderPrewarm.js'; //GLUniverse Dice: M2 shader prewarm
 import { burnAwayDice, hideDelayMs } from './glu/fx/DiceBurn.js'; //GLUniverse Dice
+import { retireBoard } from './glu/RetireBoard.js'; //GLUniverse Dice: a rebuilt board lets go of the old one
 /**
  * Main class to handle 3D Dice animations.
  */
@@ -524,6 +525,7 @@ export class Dice3D {
     //Only used after a window resize
     resizeAndRebuild() {
         if (!this.box.initialized) return;
+        retireBoard(this); //GLUniverse Dice: free the old worker and WebGL context
 
         this.canvas.remove();
         this.dice3dRenderers.board.dispose();

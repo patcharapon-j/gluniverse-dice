@@ -15,6 +15,7 @@ import {
 } from 'three';
 import { MODULE_ID } from '../LegacyIdentity.js';
 import { settlePresentation } from './DicePresentation.js'; //M8: glow hue and emphasis
+import { retireMaterial } from '../ProgramKeeper.js';
 
 export const PARTICLES_SETTING = "impactParticles";
 export const GLOW_SETTING = "settleGlow";
@@ -400,10 +401,11 @@ function inScene(obj) {
     return false;
 }
 
-function disposeGlow(g) {
+function disposeGlow(box, g) {
     g.overlay.removeFromParent();
     g.overlay.geometry.dispose();
-    g.overlay.material.dispose();
+    //disposed, but its program (and the burn's variant) stays compiled for the next roll
+    retireMaterial(box.renderer, g.overlay.material);
 }
 
 /** @returns {boolean} a glow is still animating (a resting glow needs no new frames) */
@@ -413,7 +415,7 @@ function updateGlows(box, dt) {
     for (let i = s.glows.length - 1; i >= 0; i--) {
         const g = s.glows[i];
         //the die left the board (cleared, faded, rerolled): its glow goes with it
-        if (!inScene(g.overlay)) { disposeGlow(g); s.glows.splice(i, 1); continue; }
+        if (!inScene(g.overlay)) { disposeGlow(box, g); s.glows.splice(i, 1); continue; }
         if (g.resting) continue;
         g.t += dt;
         const local = g.t - g.delay;
@@ -502,7 +504,7 @@ function ensureLoop(box) {
 
 function clearFx(box) {
     const s = fxState(box);
-    for (const g of s.glows) disposeGlow(g);
+    for (const g of s.glows) disposeGlow(box, g);
     s.glows.length = 0;
     if (s.pool) { s.pool.life.fill(0); s.pool.alpha.fill(0); s.pool.alive = 0; s.pool.spawned = true; }
 }

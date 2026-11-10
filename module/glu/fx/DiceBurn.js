@@ -15,6 +15,8 @@
 // burns, the die is on layer 1 so DSN's selective bloom catches the white edge.
 import { Color, Group, Mesh, MeshDepthMaterial, RGBADepthPacking, Vector3 } from 'three';
 import { MODULE_ID } from '../LegacyIdentity.js';
+import { renderBoard, warnFrameOnce } from '../RenderBoard.js';
+import { retireMaterial } from '../ProgramKeeper.js';
 
 export const LINGER_SETTING = "diceLinger";
 export const BURN_SETTING = "burnAway";
@@ -285,6 +287,7 @@ export function burnAwayDice(dice3d) {
         entries.push({
             mesh, originals, clones, uniforms, state, calm, glows,
             container: mesh.parent,
+            renderer: box.renderer,
             delay: order[i] / Math.max(1, dice.length - 1) * STAGGER_S * (dice.length > 1 ? 1 : 0),
             castShadow: mesh.castShadow,
             depth,
@@ -366,9 +369,10 @@ function updateEntry(e, now) {
     e.mesh.material = Array.isArray(e.mesh.material) ? e.originals : e.originals[0];
     e.mesh.castShadow = e.castShadow;
     e.mesh.customDepthMaterial = e.depthBefore;
-    e.depth.dispose();
     if (!e.layer1) e.mesh.layers.disable(1);
-    for (const c of e.clones) c?.dispose();
+    //disposed, but their programs stay compiled for the next roll (ProgramKeeper.js)
+    retireMaterial(e.renderer, e.depth);
+    for (const c of e.clones) retireMaterial(e.renderer, c);
     return true;
 }
 
@@ -377,20 +381,37 @@ function startLoop(dice3d) {
     const step = (now) => {
         loopId = 0;
         const box = dice3d.box;
+        //a failed frame must not stop the burn halfway, with the board never hidden (RenderBoard.js)
         for (let i = burning.length - 1; i >= 0; i--) {
-            if (updateEntry(burning[i], now)) burning.splice(i, 1);
+            let done;
+            try {
+                done = updateEntry(burning[i], now);
+            } catch (err) {
+                warnFrameOnce("burn", err);
+                burning[i].container?.removeFromParent();
+                done = true;
+            }
+            if (done) burning.splice(i, 1);
         }
-        box?.renderScene?.();
+        try {
+            renderBoard(box);
+        } catch (err) {
+            warnFrameOnce("burn", err);
+        }
         if (burning.length) {
             loopId = requestAnimationFrame(step);
             return;
         }
         //the last die is gone: hide the board as DSN would, unless something else uses it now
-        const te = box.throwEngine;
-        const busy = te.rolling || te.diceList.length || te.deadDiceList.length || box.persistentDiceList.length
-            || box.fadingDice?.length || box.scene.getObjectByName('gluniverse-dice-hand');
+        const te = box?.throwEngine;
+        const busy = te?.rolling || te?.diceList?.length || te?.deadDiceList?.length || box?.persistentDiceList?.length
+            || box?.fadingDice?.length || box?.scene?.getObjectByName('gluniverse-dice-hand');
         if (!busy) {
-            box.clearAll?.();
+            try {
+                box?.clearAll?.();
+            } catch (err) {
+                warnFrameOnce("burn", err);
+            }
             dice3d.canvas.style.display = "none";
         }
     };
