@@ -15,7 +15,7 @@
 // burns, the die is on layer 1 so DSN's selective bloom catches the white edge.
 import { Color, Group, Mesh, MeshDepthMaterial, RGBADepthPacking, Vector3 } from 'three';
 import { MODULE_ID } from '../LegacyIdentity.js';
-import { renderBoard, warnFrameOnce } from '../RenderBoard.js';
+import { renderBoard, warnFrameOnce, compileForBoard, frameDue } from '../RenderBoard.js';
 import { retireMaterial } from '../ProgramKeeper.js';
 
 export const LINGER_SETTING = "diceLinger";
@@ -194,6 +194,8 @@ function burnMaterial(mat, uniforms, state) {
         mat.userData = userData;
     }
     clone.userData = userData;
+    //it shares the die material's textures: that material stays in use (MaterialBudget.js)
+    clone.gluBurnOf = mat;
     //DSN only runs its bloom pass when some visible material has a non-black emissive
     if (clone.emissive?.equals?.(BLACK)) clone.emissive.setScalar(1e-4);
     const upstream = mat.onBeforeCompile;
@@ -336,7 +338,7 @@ export function burnAwayDice(dice3d) {
     };
     const renderer = box.renderer;
     const camera = box.diceScene?.camera;
-    if (renderer?.compileAsync && camera) renderer.compileAsync(proxies, camera, box.scene).then(start, start);
+    if (renderer?.compileAsync && camera) compileForBoard(box, proxies).then(start, start);
     else start();
     return true;
 }
@@ -380,6 +382,10 @@ function startLoop(dice3d) {
     if (loopId) return;
     const step = (now) => {
         loopId = 0;
+        if (!frameDue("burn", now)) {
+            loopId = requestAnimationFrame(step);
+            return;
+        }
         const box = dice3d.box;
         //a failed frame must not stop the burn halfway, with the board never hidden (RenderBoard.js)
         for (let i = burning.length - 1; i >= 0; i--) {
