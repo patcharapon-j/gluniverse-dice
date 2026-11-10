@@ -30,6 +30,7 @@ import { activePhysicsEngine, PHYSICS_ENGINES } from '../PhysicsEngine.js';
 import { RAPIER_GRAVITY, RAPIER_LINEAR_DAMPING, RAPIER_ANGULAR_DAMPING } from '../../web-workers/rapier/gravity.js';
 import { fitInside, convexHull, distanceToHull } from './HandLayout.js';
 import { handOwner } from './HandOwner.js';
+import { renderBoard, warnFrameOnce } from '../RenderBoard.js';
 
 export const HAND_SETTING = "grabAndRoll";
 const FLAG = "hand";
@@ -427,7 +428,11 @@ function closeHand() {
     hand = null;
     grab = null;
     document.documentElement.style.removeProperty("cursor");
-    board()?.renderScene?.();
+    try {
+        renderBoard(board());
+    } catch (err) {
+        warnFrameOnce("hand", err);
+    }
     if (queue.length) openNext();
 }
 
@@ -477,13 +482,18 @@ function startLoop() {
     const step = (now) => {
         loopId = 0;
         if (!hand?.ready) return;
+        //the next frame first: one failed frame must not stop the hand (RenderBoard.js)
+        loopId = requestAnimationFrame(step);
         const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
         last = now;
-        adoptRebuiltBoard();
-        animateHand(dt);
-        if (!hand.thrown) showBoard();
-        board()?.renderScene?.();
-        loopId = requestAnimationFrame(step);
+        try {
+            adoptRebuiltBoard();
+            animateHand(dt);
+            if (!hand.thrown) showBoard();
+            renderBoard(board());
+        } catch (err) {
+            warnFrameOnce("hand", err);
+        }
     };
     loopId = requestAnimationFrame(step);
 }

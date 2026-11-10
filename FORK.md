@@ -78,6 +78,7 @@ works unchanged. To keep rebasing onto upstream cheap:
 | `module/settings/DsnSettings.js` (M7) | One import; `CONFIG()` returns `applyRollAreaOverride(config, user)` | A transient roll area (`persist: false`) reaches every reader of `rollingArea` (`_buildCanvas`, `_computeDimensions`, the resize rebuild) without touching them. A no-op unless one is set. |
 | `docs/astro.config.mjs`, `docs/src/content/docs/api/roll-area.md` (M7) | One sidebar entry; a new page | Documents `game.dice3d.rollArea`. |
 | `module/Dice3D.js` (M5) | One more import; in `_afterShow`'s hide timer, `if (burnAwayDice(this)) return;` first, and the delay wrapped in `hideDelayMs(…)` | The dice burn away instead of DSN's fade, after the world linger time. |
+| `module/Dice3D.js` | One more import; `retireBoard(this)` at the top of `resizeAndRebuild`, after the `initialized` check | Upstream never terminated the old factory's physics worker on a rebuild. The live worker's `collide` listener kept the old DiceBox, renderer, canvas and WebGL context alive: one more per window resize, until Chrome dropped contexts. `glu/RetireBoard.js` terminates the worker and releases the context. |
 
 Files that are entirely ours: `FORK.md`, `ROADMAP.md`, `CREDITS.md`, `CLAUDE.md`, `module/glu/*`,
 `module/textures/glu/*` (bundled third-party assets, CREDITS.md),

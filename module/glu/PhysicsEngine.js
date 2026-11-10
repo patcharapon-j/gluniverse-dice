@@ -40,7 +40,7 @@ export let activePhysicsEngine = null;
  * Same surface as a WebworkerPromise (exec / on / off), resolving to a Rapier worker or, if it
  * cannot start, to a cannon-es one. Calls made before the choice is settled are queued in order.
  */
-class DeferredPhysicsWorker {
+export class DeferredPhysicsWorker {
     constructor(workerPromise) {
         this._ready = workerPromise;
     }
@@ -80,6 +80,33 @@ function startRapierWorker() {
             resolve(worker);
         }, fail);
     });
+}
+
+/**
+ * Stop the physics worker of a board that is being replaced (RetireBoard.js). A terminated
+ * worker never answers: calls already sent to it, and any made later, are rejected instead of
+ * left pending forever (a hand opening during the rebuild awaits createShape).
+ * @param {WebworkerPromise|DeferredPhysicsWorker|null} worker
+ */
+export function retirePhysicsWorker(worker) {
+    if (!worker || worker._gluRetired) return;
+    worker._gluRetired = true;
+    const retired = new Error(`${MODULE_ID} | the physics worker of a rebuilt board was retired`);
+    if (worker instanceof DeferredPhysicsWorker) {
+        //calls queued before this run first, then the started worker is retired with them pending
+        worker._ready.then(retirePhysicsWorker, () => { /* never started */ });
+    } else {
+        try {
+            worker.terminate?.();
+        } catch (err) {
+            console.warn(`${MODULE_ID} | the old physics worker could not be stopped`, err);
+        }
+        //webworker-promise keeps each pending call's [resolve, reject] by message id
+        for (const [, reject] of worker._messages?.values?.() ?? []) reject(retired);
+        worker._messages?.clear?.();
+    }
+    worker.exec = () => Promise.reject(retired);
+    worker.on = worker.off = function () { return this; };
 }
 
 /**
