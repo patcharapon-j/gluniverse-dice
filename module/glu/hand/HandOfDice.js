@@ -30,7 +30,7 @@ import { activePhysicsEngine, PHYSICS_ENGINES } from '../PhysicsEngine.js';
 import { RAPIER_GRAVITY, RAPIER_LINEAR_DAMPING, RAPIER_ANGULAR_DAMPING } from '../../web-workers/rapier/gravity.js';
 import { fitInside, convexHull, distanceToHull } from './HandLayout.js';
 import { handOwner } from './HandOwner.js';
-import { renderBoard, warnFrameOnce } from '../RenderBoard.js';
+import { renderBoard, warnFrameOnce, frameDue } from '../RenderBoard.js';
 
 export const HAND_SETTING = "grabAndRoll";
 const FLAG = "hand";
@@ -484,7 +484,9 @@ function startLoop() {
         if (!hand?.ready) return;
         //the next frame first: one failed frame must not stop the hand (RenderBoard.js)
         loopId = requestAnimationFrame(step);
-        const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+        if (!frameDue("hand", now)) return;
+        //up to Foundry's lowest Max FPS (10) between frames; longer is a pause (a hidden tab)
+        const dt = Math.min(0.12, Math.max(0, (now - last) / 1000));
         last = now;
         try {
             adoptRebuiltBoard();

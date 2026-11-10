@@ -3,12 +3,15 @@
 // three.js compiles a material's shader program the first time it renders, so the first throw
 // with a new appearance hitches while the GPU driver compiles. Once Dice3D has loaded fonts,
 // presets and the dice library, build the current user's dice once (through the same
-// DiceFactory.create path a throw uses, so the materials land in the factory's caches), and let
-// renderer.compileAsync build their programs off the critical path.
+// DiceFactory.create path a throw uses, so the materials land in the factory's caches), let
+// renderer.compileAsync build their programs off the critical path, then draw one unseen frame
+// of them, for the texture uploads and the post-processing passes.
 //
 // Called once from the end of Dice3D.init's load chain. It never throws.
 import { MODULE_ID } from './LegacyIdentity.js';
+import { BoxGeometry, Group, Mesh, MeshStandardMaterial } from 'three';
 import { DsnSettings } from '../settings/DsnSettings.js';
+import { compileForBoard, renderBoard } from './RenderBoard.js';
 
 export const PREWARM_SETTING = "shaderPrewarm";
 const TYPES = ["d4", "d6", "d8", "d10", "d12", "d20"];
@@ -50,8 +53,10 @@ export async function prewarmBoard(dice3d) {
 
         const t0 = performance.now();
         const before = renderer.info.programs?.length ?? 0;
+        const size = factory.baseScale || 0.016;
         const appearances = DsnSettings.APPEARANCE(game.user);
         const added = [];
+        const group = new Group();
         for (const type of TYPES) {
             let appearance;
             try {
@@ -62,17 +67,38 @@ export async function prewarmBoard(dice3d) {
             if (!factory.resolvePreset(type, appearance)) continue;
             const mesh = await factory.create(renderer.scopedTextureCache, type, appearance);
             if (!mesh) continue;
-            //compileAsync ignores the frustum; keep it out of sight anyway in case a frame
-            //renders while the programs compile
-            mesh.position.set(0, -1000, 0);
-            scene.add(mesh);
+            //in a row on the desk, in view of the camera for the unseen frame below
+            mesh.position.set((added.length - TYPES.length / 2) * size * 3, size, 0);
+            group.add(mesh);
             added.push(mesh);
         }
+        //something glowing, so the frame below also builds the bloom chain
+        const glow = new Mesh(new BoxGeometry(size, size, size), new MeshStandardMaterial({ emissive: 0xffffff }));
+        glow.layers.enable(1);
+        glow.position.set(0, size, size * 3);
+        group.add(glow);
         try {
-            if (added.length) await renderer.compileAsync(scene, camera);
+            if (added.length) {
+                //compiled detached, against the board's lights: nothing of it is in the scene
+                //while this waits, in case the board draws meanwhile (persistent dice, a roll)
+                await compileForBoard(box, group, scene);
+                //one real frame of them: it uploads the dice textures and compiles every pass,
+                //which compileAsync does not, so the first roll doesn't. The board is drawn
+                //again without them in the same task, so the screen only shows that frame.
+                if (!box.throwEngine?.rolling) {
+                    scene.add(group);
+                    try {
+                        renderBoard(box);
+                    } finally {
+                        scene.remove(group);
+                        renderBoard(box);
+                    }
+                }
+            }
         } finally {
-            //the materials and geometries are the factory's caches: remove, don't dispose
-            for (const mesh of added) scene.remove(mesh);
+            //the dice materials and geometries are the factory's caches: don't dispose them
+            glow.geometry.dispose();
+            glow.material.dispose();
         }
         const result = { ms: Math.round(performance.now() - t0), programs: (renderer.info.programs?.length ?? 0) - before };
         console.debug(`${MODULE_ID} | shader prewarm: ${added.length} dice, ${result.programs} new programs, ${result.ms} ms`);

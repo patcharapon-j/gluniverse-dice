@@ -34,6 +34,7 @@ import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
 import { LEGACY_TO_METERS } from './SceneConstants.js';
+import { tuneComposers } from '../glu/ComposerTuning.js'; //GLUniverse Dice: post-processing buffers
 
 //shared rendering foundation: scene, renderer, camera, lighting, shadow plane, display
 export class DiceScene {
@@ -503,6 +504,7 @@ export class DiceScene {
 		}
 
 		this.finalComposer.addPass(this.gammaPass);
+		tuneComposers(this); //GLUniverse Dice: half-float buffers, passes sized once
 
 		//set the compositor render delegate
 		this.compositorRender = () => {

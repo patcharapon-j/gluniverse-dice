@@ -16,6 +16,7 @@ import {
 import { MODULE_ID } from '../LegacyIdentity.js';
 import { settlePresentation } from './DicePresentation.js'; //M8: glow hue and emphasis
 import { retireMaterial } from '../ProgramKeeper.js';
+import { frameDue } from '../RenderBoard.js';
 
 export const PARTICLES_SETTING = "impactParticles";
 export const GLOW_SETTING = "settleGlow";
@@ -485,10 +486,10 @@ function advance(box) {
 function ensureLoop(box) {
     const s = fxState(box);
     if (s.loop) return;
-    const step = () => {
+    const step = (now) => {
         s.loop = 0;
         if (!box.isVisible) { clearFx(box); return; }
-        if (performance.now() - (s.lastBoxTick || 0) < 50) { s.loop = requestAnimationFrame(step); return; }
+        if (performance.now() - (s.lastBoxTick || 0) < 50 || !frameDue("fx", now)) { s.loop = requestAnimationFrame(step); return; }
         const alive = advance(box);
         try {
             box.renderScene();

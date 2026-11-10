@@ -22,6 +22,7 @@ import PhysicsWorker from 'web-worker:../web-workers/PhysicsWorker.js';
 import WebworkerPromise from 'webworker-promise';
 import { createPhysicsWorker } from '../glu/PhysicsEngine.js'; //GLUniverse Dice
 import { extendMaterialOptions, decorateMaterial } from '../glu/materials/GluMaterials.js'; //GLUniverse Dice: M3 materials
+import { trimMaterialCache } from '../glu/MaterialBudget.js'; //GLUniverse Dice: texture budget
 
 import {
 	MixOperation,
@@ -1555,6 +1556,7 @@ export class DiceFactory {
 		Hooks.callAll("diceSoNiceOnMaterialReady", mat, baseMaterialCacheString);
 
 		this.baseMaterialCache[baseMaterialCacheString] = mat;
+		trimMaterialCache(this, baseMaterialCacheString); //GLUniverse Dice: texture budget
 		return mat;
 	}
 	

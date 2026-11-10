@@ -10,6 +10,7 @@ import { CanvasTexture, Color, DoubleSide, MixOperation, AddOperation } from 'th
 import { MODULE_ID } from '../LegacyIdentity.js';
 import { TARGET_D6_EDGE_METERS } from '../../engine/SceneConstants.js';
 import { GALAXY_VERTEX_PARS, GALAXY_VERTEX, GALAXY_FRAGMENT_PARS, GALAXY_MAP_FRAGMENT, GALAXY_OUTPUT_FRAGMENT, PEARL_MAP_FRAGMENT, PEARL_OUTPUT_FRAGMENT } from './galaxyShader.js';
+import { memoizeNormalMaps } from '../NormalMapMemo.js';
 
 export const ENHANCED_SETTING = "enhancedMaterials";
 export const GLU_MATERIAL_IDS = ["gemstone", "galaxy", "pearlescent"];
@@ -135,6 +136,7 @@ function enhance(options, advancedGlass) {
 
 /** Called at the end of DiceFactory.initializeMaterials. */
 export function extendMaterialOptions(factory) {
+    memoizeNormalMaps(factory);
     const options = factory.material_options;
     if (!options) return;
     if (factory.realisticLighting) {
